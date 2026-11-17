@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-17
+
 ### Added
 
 - A real terminal for each command, in the chat and in the panel, like the Copilot agent. The chat shows the command in a terminal (xterm.js) with the colors of your VS Code terminal theme, and the terminal of the chat in the panel, **Phew: <chat>**, shows the same output; it opens with the first command. You can type an answer, press Ctrl+C to stop the command, or Ctrl+D to end its input in either one. Commands of a chat work like one shell: `cd` and exported variables carry over. Above each terminal the chat shows what the command does in plain words, the command, and the result, with **Stop**, **Show terminal**, and **Copy**; a quiet command asks whether it waits for an answer. It works with any shell. `phew.commands.terminal` opens the panel terminal by itself (default), only on request, or never.
@@ -128,6 +130,7 @@ The first public preview of Phew.
 - Phew Wrapped: a weekly or monthly card with bugs fixed, time saved, tasks, and the streak, which you can save as an image, and eight local achievements.
 - A getting started walkthrough and a settings page.
 
-[Unreleased]: https://github.com/LF3551/phew/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/LF3551/phew/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/LF3551/phew/compare/v0.1.4...v0.2.0
 [0.1.4]: https://github.com/LF3551/phew/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/LF3551/phew/releases/tag/v0.1.3

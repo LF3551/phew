@@ -2,7 +2,7 @@
   "name": "phew",
   "displayName": "Phew",
   "description": "Bug fixed. Phew. Open-source AI coding agent for VS Code: one-click fixes, review in the editor, checkpoints, chat history, worktree agents, and any model.",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "publisher": "alekseialeinikov",
   "author": {
     "name": "Aleksei Aleinikov",
