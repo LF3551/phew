@@ -1,3 +1,4 @@
+import * as path from "node:path";
 import { describe, expect, test } from "vitest";
 import { attachmentLabel, extractMentions, formatContext, parseAttachment } from "../src/core/attachments";
 import { CheckpointStore } from "../src/core/checkpoints";
@@ -290,8 +291,9 @@ describe("worktrees", () => {
     expect(isValidBranch("phew/fix-login")).toBe(true);
     expect(isValidBranch("bad..name")).toBe(false);
     expect(isValidBranch("-x")).toBe(false);
-    expect(worktreeFolder("/repo/app", "phew/fix")).toBe("/repo/app.phew-worktrees/phew-fix");
-    expect(worktreeFolder("/repo/app", "x", "../trees")).toBe("/repo/trees/x");
+    const repo = path.resolve("repo", "app");
+    expect(worktreeFolder(repo, "phew/fix")).toBe(path.join(path.dirname(repo), "app.phew-worktrees", "phew-fix"));
+    expect(worktreeFolder(repo, "x", "../trees")).toBe(path.join(path.dirname(repo), "trees", "x"));
   });
 
   test("parses the worktree list", () => {
