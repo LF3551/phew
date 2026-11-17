@@ -12,6 +12,7 @@ import { git, gitOrThrow, repositoryRoot } from "./git";
 import { providerNames } from "./models";
 import { AgentSession, type SessionDependencies, type TaskRequest, type WorktreeInfo } from "./session";
 import { readSettings, updateSetting } from "./settings";
+import type { SuggestionProvider } from "./suggestions";
 
 export type { AgentSession };
 
@@ -479,6 +480,29 @@ export class SessionManager implements vscode.Disposable {
     }
     await this.deps.context.globalState.update("phew.assistantIntroduced", true);
     this.postState();
+  }
+
+  /** Tasks for the welcome screen. The extension sets it after the commands exist. */
+  suggestions: SuggestionProvider | undefined;
+
+  /** Keep, Undo, or Review from the summary card of a task. */
+  async taskAction(
+    session: AgentSession | undefined,
+    action: "keep" | "undo" | "review",
+    checkpointId: string,
+  ): Promise<void> {
+    const pending = this.deps.reviews.pendingFiles.length > 0;
+    if (action === "review") {
+      if (pending) await vscode.commands.executeCommand("phew.review.next");
+      return;
+    }
+    if (action === "keep") {
+      if (pending) await this.deps.reviews.keepAll();
+      return;
+    }
+    // Undo: pending changes are undone in the editor; changes that were kept go back through the checkpoint.
+    if (pending) await this.deps.reviews.undoAll();
+    else await session?.restoreCheckpoint(checkpointId);
   }
 
   /** The data for the Phew Wrapped card. */

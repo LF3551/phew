@@ -1,5 +1,6 @@
 import { accentPresets } from "../core/appearance";
 import type { Attachment } from "../core/attachments";
+import { summaryHeadline, summaryTotals } from "../core/summary";
 import { icon } from "../shared/icons";
 import type {
   HistoryItem,
@@ -8,6 +9,7 @@ import type {
   PlanView,
   QueuedView,
   SessionSummary,
+  Suggestion,
   ViewState,
   WebviewMessage,
 } from "../shared/protocol";
@@ -15,6 +17,7 @@ import { renderMarkdown } from "./markdown";
 import {
   avatar,
   type MascotState,
+  mascot,
   playSound,
   setMascotState,
   showAchievementToast,
@@ -310,6 +313,8 @@ function renderResume(next: ViewState): void {
 
 function applyState(next: ViewState): void {
   state = next;
+  if (latestCard) renderCardActions(latestCard);
+  requestSuggestions();
   document.body.classList.toggle("in-sidebar", !next.pinned);
   renderStatus();
   applyAssistant(next);
@@ -375,8 +380,7 @@ function applyState(next: ViewState): void {
   context.style.setProperty("--fill", `${percent * 3.6}deg`);
   $("contextLabel").textContent = `${percent}%`;
   context.title = `${next.contextLabel}${percent >= 50 && !next.busy ? ". Click to compact the chat." : ""}${next.tokens !== "0" ? `\nThis chat: ${next.tokens} tokens${next.cost ? `, ${next.cost}` : ""}` : ""}`;
-  const banner = $("reviewBanner");
-  banner.hidden = next.reviewFiles === 0;
+  updateReviewBanner();
   $("reviewText").textContent =
     `${next.reviewFiles} ${next.reviewFiles === 1 ? "file has" : "files have"} changes to keep or undo.`;
 }
@@ -593,6 +597,118 @@ function updateTool(message: Extract<HostMessage, { type: "tool" }>): void {
   setActivity(running ? `${label}…` : "Thinking…");
 }
 
+// The summary card: what changed, whether the check passes, and Keep or Undo in one place.
+
+let latestCard: HTMLElement | undefined;
+let cardVisible = false;
+
+// The review banner repeats the card, so it shows only while the card with the actions is out of view.
+const cardObserver = new IntersectionObserver((entries) => {
+  cardVisible = entries.some((entry) => entry.isIntersecting);
+  updateReviewBanner();
+});
+
+function updateReviewBanner(): void {
+  const pending = state?.reviewFiles ?? 0;
+  $("reviewBanner").hidden = pending === 0 || (cardVisible && latestCard?.isConnected === true);
+}
+let cardThisTask = false;
+
+function renderCardActions(card: HTMLElement): void {
+  const actions = card.querySelector<HTMLElement>(".task-actions");
+  if (!actions) return;
+  const checkpointId = card.dataset.checkpoint ?? "";
+  const pending = (state?.reviewFiles ?? 0) > 0;
+  const act = (action: "keep" | "undo" | "review") => vscode.postMessage({ type: "taskAction", action, checkpointId });
+  const buttons: HTMLButtonElement[] = [];
+  if (pending) {
+    buttons.push(button("Review", "secondary", () => act("review"), "Go to the next change in the editor"));
+    buttons.push(button("Undo all", "secondary", () => act("undo"), "Undo all changes of this task"));
+    buttons.push(button("Keep all", "primary", () => act("keep"), "Keep all changes of this task"));
+  } else {
+    buttons.push(button("Undo", "secondary", () => act("undo"), "Restore the files to their state before this task"));
+  }
+  actions.replaceChildren(...buttons);
+}
+
+function addSummary(message: Extract<HostMessage, { type: "summary" }>): void {
+  // Only the newest card has actions, so an old card cannot undo newer work by surprise.
+  latestCard?.querySelector(".task-actions")?.replaceChildren();
+  const card = element("section", "task-card");
+  card.dataset.status = message.status;
+  card.dataset.checkpoint = message.checkpointId;
+  const success = message.status === "done" && message.check?.passed !== false;
+  const icon = mascot(success ? "done" : message.status === "aborted" ? "idle" : "failed");
+  icon.classList.add("task-mascot", "again");
+  const header = element("header", "task-head");
+  header.append(icon, element("strong", undefined, summaryHeadline(message)));
+  card.append(header);
+  if (message.check) {
+    const check = element(
+      "p",
+      `task-check ${message.check.passed ? "passed" : "failed"}`,
+      message.check.passed
+        ? `✓ ${message.check.command} passes${message.check.attempts > 1 ? ` after ${message.check.attempts} attempts` : ""}`
+        : `✕ ${message.check.command} still fails after ${message.check.attempts} ${message.check.attempts === 1 ? "attempt" : "attempts"}`,
+    );
+    card.append(check);
+  }
+  const list = element("ul", "task-files");
+  for (const file of message.files.slice(0, 8)) {
+    const row = element("li");
+    const name = element("button", "task-file", file.path);
+    name.type = "button";
+    name.title = `Open ${file.path}`;
+    const filePath = file.path;
+    if (file.kind !== "deleted")
+      name.addEventListener("click", () => vscode.postMessage({ type: "openFile", path: filePath }));
+    else name.disabled = true;
+    row.append(name);
+    if (file.kind !== "modified") row.append(element("span", "task-kind", file.kind === "added" ? "new" : "deleted"));
+    const counts = element("span", "task-counts");
+    if (file.added) counts.append(element("span", "plus", `+${file.added}`));
+    if (file.removed) counts.append(element("span", "minus", `−${file.removed}`));
+    row.append(counts);
+    list.append(row);
+  }
+  if (message.files.length > 8) list.append(element("li", "task-more", `and ${message.files.length - 8} more`));
+  card.append(list);
+  const footer = element("footer", "task-foot");
+  footer.append(element("span", "task-totals", summaryTotals(message.files)), element("div", "task-actions"));
+  card.append(footer);
+  latestCard = card;
+  cardThisTask = true;
+  cardObserver.disconnect();
+  cardObserver.observe(card);
+  renderCardActions(card);
+  append(card);
+}
+
+// The welcome screen offers real tasks from the project.
+
+let suggestedAt = 0;
+
+function requestSuggestions(): void {
+  if (welcome.hidden || Date.now() - suggestedAt < 4000) return;
+  suggestedAt = Date.now();
+  vscode.postMessage({ type: "suggest" });
+}
+
+function renderSuggestions(items: readonly Suggestion[]): void {
+  const box = $("suggestions");
+  box.replaceChildren(
+    ...items.map((item) => {
+      const row = element("button", "suggestion");
+      row.type = "button";
+      const text = element("span", "suggestion-text");
+      text.append(element("strong", undefined, item.title), element("span", undefined, item.detail));
+      row.append(iconNode(item.icon), text);
+      row.addEventListener("click", () => vscode.postMessage({ type: "runSuggestion", id: item.id }));
+      return row;
+    }),
+  );
+}
+
 // The live status line: one calm sentence about what the agent does now.
 
 let activity: string | undefined;
@@ -777,6 +893,9 @@ function celebrate(): void {
 }
 
 function clearTranscript(): void {
+  latestCard = undefined;
+  cardVisible = false;
+  cardObserver.disconnect();
   for (const node of [...transcript.children]) if (node !== welcome) node.remove();
   assistants.clear();
   thoughts.clear();
@@ -1028,8 +1147,10 @@ function handle(message: HostMessage): void {
     }
     case "taskEnd":
       moveMascot(message.status === "done" ? "done" : message.status === "aborted" ? "idle" : "failed", 2600);
-      if (message.status !== "done" && message.message) append(element("p", "notice warning", message.message));
-      if (message.verified) append(element("p", "notice success", "Phew! All checks pass."));
+      if (message.status !== "done" && message.message && !cardThisTask)
+        append(element("p", "notice warning", message.message));
+      if (message.verified && !cardThisTask) append(element("p", "notice success", "Phew! All checks pass."));
+      cardThisTask = false;
       if (message.celebrate && state?.celebrate !== false) celebrate();
       break;
     case "notice": {
@@ -1075,6 +1196,12 @@ function handle(message: HostMessage): void {
       append(node);
       break;
     }
+    case "summary":
+      addSummary(message);
+      break;
+    case "suggestions":
+      renderSuggestions(message.items);
+      break;
     case "showAppearance":
       togglePopover("appearance");
       break;
@@ -1382,3 +1509,5 @@ jump.addEventListener("click", () => {
   transcript.scrollTo({ top: transcript.scrollHeight, behavior: "smooth" });
   jump.hidden = true;
 });
+
+window.addEventListener("focus", requestSuggestions);

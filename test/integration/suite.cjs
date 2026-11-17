@@ -207,6 +207,14 @@ async function run() {
     const message = await vscode.commands.executeCommand("phew.generateCommitMessage");
     assert.match(message, /Signed-off-by: Test User <test@example.com>$/);
     assert.doesNotMatch(message, /Co-authored-by/);
+    const card = sessions.active.transcript.all().find((item) => item.type === "summary");
+    assert.ok(card, "the task ends with a summary card");
+    assert.deepEqual(
+      card.files.map((item) => `${item.path} +${item.added} -${item.removed}`),
+      ["main/math.js +1 -1"],
+      "paths are relative to the workspace, with the folder name in a multi-root workspace",
+    );
+    assert.equal(card.pending, 1, "the card knows the change waits for Keep or Undo");
     await api.reviews.keepAll();
     await api.restoreLatest();
     assert.equal(fs.readFileSync(file, "utf8"), "exports.add = (a, b) => a - b;\n", "the checkpoint restored the file");
@@ -299,6 +307,8 @@ async function run() {
       new vscode.Range(0, 0, 0, 5),
     );
     assert.ok(actions.some((action) => action.title === "Phew it! Fix with Phew"));
+    const suggested = await sessions.suggestions.list();
+    assert.equal(suggested[0]?.title, "Fix 1 error in math.js", "the welcome screen offers to fix the errors");
     diagnostics.dispose();
     void secondFolder;
 
@@ -347,7 +357,7 @@ async function run() {
     );
 
     console.log(
-      "PHEW_INTEGRATION_OK: fix, review, commit, checkpoint, ask_user, skills, MCP HTTP, multi-root, plan, queue, btw, parallel chats, rename, approvals, context, Phew it!, handoff",
+      "PHEW_INTEGRATION_OK: fix, review, commit, checkpoint, ask_user, skills, MCP HTTP, multi-root, plan, queue, btw, parallel chats, rename, approvals, context, Phew it!, handoff, summary, suggestions",
     );
   } finally {
     server.close();

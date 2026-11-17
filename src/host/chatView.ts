@@ -161,6 +161,15 @@ class ChatController implements ChatViewHandle {
       case "saveAssistant":
         await sessions.introduceAssistant(message);
         return;
+      case "taskAction":
+        await sessions.taskAction(session, message.action, message.checkpointId);
+        return;
+      case "suggest":
+        this.post({ type: "suggestions", items: (await sessions.suggestions?.list()) ?? [] });
+        return;
+      case "runSuggestion":
+        await sessions.suggestions?.run(message.id);
+        return;
       case "continueHandoff": {
         const target = session?.isEmpty && !session.busy ? session : sessions.newSession();
         await target?.continueFrom(message.path);

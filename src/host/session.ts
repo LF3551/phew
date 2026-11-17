@@ -22,6 +22,7 @@ import { emptyPlan, type Plan, planPrompt } from "../core/plan";
 import { buildSystemPrompt } from "../core/prompts";
 import { RootSet } from "../core/roots";
 import { skillsPrompt } from "../core/skills";
+import { type FileChange, fileChange } from "../core/summary";
 import type { ModelProfile } from "../providers/profile";
 import type { CommandSetting, HostMessage, ReviewSetting } from "../shared/protocol";
 import { ApprovalBroker } from "./approvals";
@@ -399,6 +400,7 @@ export class AgentSession {
 
     const meter = new CostMeter(profile.price, settings.budget);
     this.verifyAttempts = 0;
+    const startedAt = Date.now();
     let result: AgentResult | undefined;
     try {
       result = await this.execute(request, profile, mode, settings, meter, controller.signal);
@@ -416,7 +418,7 @@ export class AgentSession {
       this.updatedAt = Date.now();
       this.deps.claims.release(this.id);
     }
-    await this.finish(request, result, controller.signal.aborted, meter, settings);
+    await this.finish(request, result, controller.signal.aborted, meter, settings, startedAt);
     this.deps.onChange(this);
     await this.deps
       .persist(this)
@@ -505,6 +507,29 @@ export class AgentSession {
     );
     if (answer !== "Restore") return;
     await this.restore(checkpointId, files);
+  }
+
+  /** Line counts of the files that a task changed, from the checkpoint and the current text. */
+  private async changesOf(originals: ReadonlyMap<string, string | null>): Promise<FileChange[]> {
+    const changes: FileChange[] = [];
+    for (const [path, before] of [...originals].slice(0, 50)) {
+      const absolute = this.roots.resolve(path);
+      if (!absolute) continue;
+      const uri = vscode.Uri.file(absolute);
+      let after: string | null;
+      const open = vscode.workspace.textDocuments.find((document) => document.uri.fsPath === uri.fsPath);
+      if (open) after = open.getText();
+      else {
+        try {
+          after = new TextDecoder().decode(await vscode.workspace.fs.readFile(uri));
+        } catch {
+          after = null;
+        }
+      }
+      const change = fileChange(path, before, after);
+      if (change) changes.push(change);
+    }
+    return changes;
   }
 
   private handoffHint(settings: Settings): string {
@@ -900,6 +925,7 @@ export class AgentSession {
     aborted: boolean,
     meter: CostMeter,
     settings: Settings,
+    startedAt = Date.now(),
   ): Promise<void> {
     const status = aborted ? "aborted" : (result?.status ?? "error");
     const success = status === "done";
@@ -926,6 +952,28 @@ export class AgentSession {
     for (const id of fresh) {
       const achievement = achievementList.find((item) => item.id === id);
       if (achievement) this.emit({ type: "achievement", achievement });
+    }
+    const checkpoint = this.checkpoints.list().at(-1);
+    if (checkpoint && changedFiles.length > 0) {
+      const files = await this.changesOf(checkpoint.files);
+      if (files.length > 0)
+        this.emit({
+          type: "summary",
+          checkpointId: checkpoint.id,
+          status,
+          seconds: (Date.now() - startedAt) / 1000,
+          files,
+          ...(settings.verifyCommand && this.verifyAttempts > 0
+            ? {
+                check: {
+                  command: settings.verifyCommand,
+                  passed: result?.verified === true,
+                  attempts: this.verifyAttempts,
+                },
+              }
+            : {}),
+          pending: this.deps.reviews.pendingFiles.length,
+        });
     }
     this.emit({
       type: "taskEnd",

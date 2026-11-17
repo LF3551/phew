@@ -3,6 +3,7 @@ import type { Appearance } from "../core/appearance";
 import { type Attachment, attachmentLabel, maximumAttachments, parseAttachment } from "../core/attachments";
 import { isModeId, type Mode } from "../core/modes";
 import { type Persona, personas } from "../core/persona";
+import type { FileChange } from "../core/summary";
 
 export interface ModeView {
   readonly id: Mode;
@@ -104,6 +105,14 @@ export interface MentionItem {
   readonly attachment: Attachment;
 }
 
+/** A task that the welcome screen offers, from the state of the project. */
+export interface Suggestion {
+  readonly id: string;
+  readonly title: string;
+  readonly detail: string;
+  readonly icon: "bug" | "terminal" | "git" | "file" | "book";
+}
+
 export type ApprovalKind = "command" | "edit" | "mcp" | "question";
 
 export type HostMessage = (
@@ -132,6 +141,17 @@ export type HostMessage = (
     }
   | { readonly type: "showOnboarding" }
   | { readonly type: "showAppearance" }
+  | {
+      readonly type: "summary";
+      readonly checkpointId: string;
+      readonly status: string;
+      readonly seconds: number;
+      readonly files: readonly FileChange[];
+      readonly check?: { readonly command: string; readonly passed: boolean; readonly attempts: number };
+      /** Files with changes that still wait for Keep or Undo in the editor. */
+      readonly pending: number;
+    }
+  | { readonly type: "suggestions"; readonly items: readonly Suggestion[] }
   | { readonly type: "handoff"; readonly path: string; readonly manual: boolean }
   | {
       readonly type: "tool";
@@ -232,6 +252,9 @@ export type WebviewMessage =
     }
   | { readonly type: "skipOnboarding" }
   | { readonly type: "continueHandoff"; readonly path?: string }
+  | { readonly type: "taskAction"; readonly action: "keep" | "undo" | "review"; readonly checkpointId: string }
+  | { readonly type: "suggest" }
+  | { readonly type: "runSuggestion"; readonly id: string }
   | { readonly type: "showWrapped"; readonly period: "week" | "month" }
   | { readonly type: "saveImage"; readonly dataUrl: string; readonly fileName: string };
 
@@ -276,6 +299,18 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
         language: text("language", 40),
       };
     }
+    case "taskAction":
+      return (message.action === "keep" || message.action === "undo" || message.action === "review") &&
+        typeof message.checkpointId === "string" &&
+        /^[\w-]{1,80}$/.test(message.checkpointId)
+        ? { type: "taskAction", action: message.action, checkpointId: message.checkpointId }
+        : undefined;
+    case "suggest":
+      return { type: "suggest" };
+    case "runSuggestion":
+      return typeof message.id === "string" && /^[\w:-]{1,40}$/.test(message.id)
+        ? { type: "runSuggestion", id: message.id }
+        : undefined;
     case "continueHandoff":
       if (message.path === undefined) return { type: "continueHandoff" };
       return typeof message.path === "string" && /^\.phew\/handoff\/[\w.-]{1,120}\.md$/.test(message.path)

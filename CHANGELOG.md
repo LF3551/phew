@@ -14,6 +14,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - The model button shows the model, such as `gpt-5.1`, and the context meter appears from 50%.
 - **Chat Appearance** in the title of the view.
 
+### Added
+
+- A summary card at the end of each task that changed files: the time, whether the check passes, each file with lines added and removed, and **Keep all**, **Undo all**, and **Review** in one place. After you keep the changes, **Undo** restores the files from the checkpoint. The review banner appears only when the card is out of view.
+- The welcome screen offers up to three real tasks from your project: fix the file with the most errors in Problems, fix the last failed terminal command, review your uncommitted changes, explain the open file, or explain the project.
+
 ## [0.1.3] - 2026-11-17
 
 The first public preview of Phew.

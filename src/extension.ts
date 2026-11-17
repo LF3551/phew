@@ -23,6 +23,7 @@ import { readSettings, section } from "./host/settings";
 import { SettingsPanel } from "./host/settingsPanel";
 import { SkillStore } from "./host/skillStore";
 import { StatsStore } from "./host/statsStore";
+import { SuggestionProvider } from "./host/suggestions";
 import { type FailedCommand, TerminalWatcher } from "./host/terminalWatcher";
 
 /** A small API for the integration tests. It exists only when VS Code runs the extension in test mode. */
@@ -112,6 +113,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<PhewTe
       kind: "fix",
       mode: "code",
     });
+
+  manager.suggestions = new SuggestionProvider(terminal, start, fixFailedCommand);
 
   const addToChat = async (attachment: Attachment) => {
     await view.reveal();

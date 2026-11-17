@@ -92,12 +92,8 @@ export function renderChatHtml(options: ChatHtmlOptions): string {
       <h1 id="welcomeName">Phew</h1>
       <p class="tagline" id="welcomeTagline">Bug fixed. Phew.</p>
       <div class="resume-card" id="resumeCard" hidden></div>
-      <ul class="tips">
-        <li>Ask about your code, or describe a change.</li>
-        <li>Type <kbd>@</kbd> to attach files, problems, Git changes, or the terminal.</li>
-        <li>Click <strong>Phew it!</strong> on any error in the editor.</li>
-        <li>Keep or undo each change in the editor. Restore a checkpoint at any time.</li>
-      </ul>
+      <div class="suggestions" id="suggestions" aria-label="Suggested tasks"></div>
+      <p class="welcome-hint">Or describe a change. Type <kbd>@</kbd> to attach files and <kbd>/</kbd> for commands.</p>
       <div class="welcome-actions">
         <button type="button" class="primary" id="setup" hidden>Connect a model</button>
         <button type="button" class="secondary" id="guide">Get started</button>
