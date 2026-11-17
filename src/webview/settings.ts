@@ -230,6 +230,10 @@ function render(data: Init): void {
       identity.append(el("strong", undefined, "How commits look now"), el("p", undefined, data.identity));
       section.append(identity);
     }
+    if (category.title === "Assistant")
+      section.append(
+        button("Open the assistant card", () => vscode.postMessage({ type: "command", command: "phew.editAssistant" })),
+      );
     if (category.title === "Code Index")
       section.append(
         el("p", "hint", `Index: ${data.index}`),
@@ -254,6 +258,7 @@ function render(data: Init): void {
   statistics.id = "statistics";
   statistics.append(el("h2", undefined, "Statistics"), el("pre", "stats", data.stats));
   statistics.append(
+    button("Open Phew Wrapped", () => vscode.postMessage({ type: "command", command: "phew.showWrapped" })),
     button("Open the getting started guide", () =>
       vscode.postMessage({ type: "command", command: "phew.openWalkthrough" }),
     ),

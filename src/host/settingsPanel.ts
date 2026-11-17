@@ -38,6 +38,8 @@ const commands = new Set([
   "phew.showStats",
   "phew.openChat",
   "phew.manageMcp",
+  "phew.editAssistant",
+  "phew.showWrapped",
 ]);
 
 const hiddenKeys = new Set(["phew.models", "phew.activeModel"]);

@@ -14,10 +14,15 @@
   <img alt="Status: preview" src="https://img.shields.io/badge/status-preview-orange.svg">
 </p>
 
+<p align="center">
+  <img src="docs/images/chat.png" alt="The Phew chat in VS Code" width="300">
+  <img src="docs/images/assistant.png" alt="Naming your assistant and choosing its character" width="300">
+</p>
+
 > [!NOTE]
 > Phew is in preview.
-> There is no Marketplace release yet.
-> To try it, build it from source (see [Development](#development)).
+> Download `phew-<version>.vsix` from the [latest release](https://github.com/LF3551/phew/releases/latest), then run **Extensions: Install from VSIX…** in VS Code.
+> You can also build it from source (see [Development](#development)).
 
 ## Why Phew
 
@@ -52,6 +57,11 @@
 - **A living drop.** The Phew mascot sweats while it works and sighs with relief when your bug is fixed.
 - **Your chat.** Bubbles, Classic, or Compact style, your accent color, font, and text size: click **Aa** in the chat.
 - **Phew Wrapped.** A weekly card with bugs fixed and time saved, ready to share, and achievements. All stats stay on your computer.
+
+<p align="center">
+  <img src="docs/images/appearance.png" alt="Quick appearance settings: style, accent color, and text size" width="300">
+  <img src="docs/images/wrapped.png" alt="A Phew Wrapped card with bugs fixed, time saved, tasks done, and the streak" width="520">
+</p>
 
 ## Get started
 
@@ -121,6 +131,10 @@ npm run package          # create phew.vsix
 
 Press `F5` in VS Code to start an Extension Development Host.
 The architecture is described in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Releasing
+
+See [docs/RELEASING.md](docs/RELEASING.md).
 
 ## Contributing
 
