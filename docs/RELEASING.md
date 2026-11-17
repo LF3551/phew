@@ -1,44 +1,44 @@
 # Releasing Phew
 
-Releases are built by [`.github/workflows/release.yml`](../.github/workflows/release.yml) when a version tag is pushed.
+Releases run in GitHub Actions with one click. No tokens are stored: the stores trust this repository through OIDC.
 
-## Steps
+## Release
 
-1. Update `version` in `package.json` and `package-lock.json` (`npm version <x.y.z> --no-git-tag-version`).
-2. In `CHANGELOG.md`, move the items from **Unreleased** into a new `## [x.y.z] - YYYY-MM-DD` section and update the links at the bottom.
-3. Check locally:
+1. Make sure the changes are listed under **Unreleased** in `CHANGELOG.md` and CI on `main` is green.
+   CI checks Ubuntu and Windows on every push; check macOS by hand before a release (**Actions → CI → Run workflow**).
+2. Open **Actions → Release → Run workflow** on `main`.
+   - **bump**: `patch`, `minor`, or `major`. It is used only when the version in `package.json` already has a tag.
+   - **dry_run**: check and build only.
+3. The workflow:
+   - chooses the version, moves **Unreleased** in `CHANGELOG.md` to it, and runs all checks;
+   - builds `phew-x.y.z.vsix` with a SHA-256 checksum;
+   - commits `chore: release x.y.z`, tags `vx.y.z`, and pushes both to `main`;
+   - creates the GitHub release with the changelog section as notes (0.x versions are pre-releases);
+   - publishes to the Visual Studio Marketplace and Open VSX, when they are turned on (see below).
 
-   ```bash
-   npm run package                 # types, lint, unit tests, production build, VSIX
-   npm run test:integration        # needs a display; on Linux run Xvfb and set DISPLAY
-   node scripts/release-notes.mjs x.y.z
-   ```
+From the command line: `gh workflow run Release --ref main -f bump=patch`.
 
-4. Commit with sign-off and push to `main`. Wait for green CI. CI checks Ubuntu and Windows on every push; check macOS by hand before a release (**Actions → CI → Run workflow**, or `gh workflow run CI --ref main`).
+## Store setup (one time)
 
-   ```bash
-   git commit -s -m "chore: release x.y.z"
-   git push origin main
-   ```
+Both stores use trusted publishing: the workflow gets a short-lived token from GitHub (OIDC) and exchanges it with the store.
 
-5. Tag and push the tag:
+### Visual Studio Marketplace
 
-   ```bash
-   git tag -s vx.y.z -m "Phew x.y.z"   # or -a if you do not sign tags
-   git push origin vx.y.z
-   ```
+1. <https://marketplace.visualstudio.com/manage> → publisher `alekseialeinikov` → **Trusted Publishing** → **Create**:
+   - Policy name: `Phew release`
+   - Provider: GitHub Actions
+   - Repository owner: `LF3551`
+   - Repository: `phew`
+   - Workflow: `release.yml`
+   - Environment: `release`
+2. In GitHub: **Settings → Secrets and variables → Actions → Variables** → add `PUBLISH_MARKETPLACE` = `true`.
 
-The workflow then:
+### Open VSX (VSCodium, Cursor, Windsurf, and others)
 
-- checks that the tag matches `package.json` and that `CHANGELOG.md` has the section;
-- runs all checks and builds `phew-x.y.z.vsix` with a SHA-256 checksum;
-- creates the GitHub release with the changelog section as notes (0.x versions are marked as pre-releases);
-- publishes to the Visual Studio Marketplace if the `VSCE_PAT` secret is set;
-- publishes to Open VSX if the `OVSX_PAT` secret is set.
+1. Sign in at <https://open-vsx.org> with GitHub, sign the publisher agreement, and create the namespace `alekseialeinikov`.
+2. Set up trusted publishing for the namespace with the same repository, workflow, and environment.
+3. Add the variable `PUBLISH_OPEN_VSX` = `true`.
 
-## Store accounts (one time)
+### Optional: approve each publication
 
-- **Visual Studio Marketplace:** create the publisher `alekseialeinikov` at <https://marketplace.visualstudio.com/manage>, create an Azure DevOps personal access token with the **Marketplace → Manage** scope, and save it as the repository secret `VSCE_PAT`.
-- **Open VSX** (VSCodium, Cursor, Windsurf, and others): sign in at <https://open-vsx.org> with GitHub, sign the publisher agreement, create the namespace `alekseialeinikov` (`npx ovsx create-namespace alekseialeinikov -p <token>`), and save the token as `OVSX_PAT`.
-
-Without these secrets, the workflow only creates the GitHub release with the VSIX.
+**Settings → Environments → release → Required reviewers**: add yourself. Then the store jobs wait for your **Approve** after the GitHub release is created.

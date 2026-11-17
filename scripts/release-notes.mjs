@@ -9,7 +9,10 @@ if (!version) {
 }
 const changelog = readFileSync(new URL("../CHANGELOG.md", import.meta.url), "utf8");
 const escaped = version.replaceAll(".", "\\.");
-const match = new RegExp(`^## \\[${escaped}\\][^\\n]*\\n([\\s\\S]*?)(?=^## \\[|^\\[[^\\]]+\\]: )`, "m").exec(changelog);
+const match = new RegExp(
+  `^## \\[${escaped}\\][^\\n]*\\n([\\s\\S]*?)(?=^## \\[|^\\[[^\\]]+\\]: |(?![\\s\\S]))`,
+  "m",
+).exec(changelog);
 if (!match?.[1].trim()) {
   console.error(`CHANGELOG.md has no section for ${version}.`);
   process.exit(1);

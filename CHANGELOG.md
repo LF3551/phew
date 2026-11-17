@@ -5,16 +5,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-### Added
+The first public preview of Phew.
+
+### Handoff
 
 - Handoff notes: a session journal in `.phew/sessions/` (facts only, secrets removed, never committed) and a note in `.phew/handoff/` with the goal, decisions, dead ends, next steps, plan, changed files, commands, and how to verify. Notes are written after tasks that change files, when a chat is compacted, before a worktree is removed, and with `/handoff`. The format is open: see `docs/HANDOFF.md`.
 - `/continue`, a **Continue** card on the welcome screen, and **Continue from Handoff Note…**: a new chat starts from a note and learns what changed in the code since then (other branch, new commits, changed files).
 - With your consent, a section in `AGENTS.md` (and in `CLAUDE.md` and `GEMINI.md` when they exist) points other agents to the latest note.
 - Slash command menu: type `/` in the chat.
-
-## [0.1.2] - 2026-11-17
-
-The first public preview of Phew.
+- One-click releases in GitHub Actions with trusted publishing (OIDC) to the Visual Studio Marketplace and Open VSX.
 
 ### Agent
 
@@ -54,6 +53,3 @@ The first public preview of Phew.
 - Notifications and a soft "phew" sound when a chat finishes or needs input.
 - Phew Wrapped: a weekly or monthly card with bugs fixed, time saved, tasks, and the streak, which you can save as an image, and eight local achievements.
 - A getting started walkthrough and a settings page.
-
-[Unreleased]: https://github.com/LF3551/phew/compare/v0.1.2...HEAD
-[0.1.2]: https://github.com/LF3551/phew/releases/tag/v0.1.2
