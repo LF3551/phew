@@ -4,6 +4,16 @@ on:
   push:
     branches: [main]
   pull_request:
+  # macOS runners on GitHub can wait in the queue for a long time, so macOS runs
+  # once a week and on demand instead of on every push.
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+    inputs:
+      macos:
+        description: Also check on macOS
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -18,8 +28,24 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run package
+
+  macos:
+    name: Check on macos-latest
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.macos)
+    runs-on: macos-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7

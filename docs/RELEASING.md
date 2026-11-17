@@ -14,7 +14,7 @@ Releases are built by [`.github/workflows/release.yml`](../.github/workflows/rel
    node scripts/release-notes.mjs x.y.z
    ```
 
-4. Commit with sign-off and push to `main`. Wait for green CI.
+4. Commit with sign-off and push to `main`. Wait for green CI. CI checks Ubuntu and Windows on every push; check macOS by hand before a release (**Actions → CI → Run workflow**, or `gh workflow run CI --ref main`).
 
    ```bash
    git commit -s -m "chore: release x.y.z"
