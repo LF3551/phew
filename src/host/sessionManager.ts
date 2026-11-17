@@ -11,14 +11,24 @@ import { providerNames } from "./models";
 import { AgentSession, type SessionDependencies, type TaskRequest, type WorktreeInfo } from "./session";
 import { readSettings, updateSetting } from "./settings";
 
-type SharedDependencies = Omit<SessionDependencies, "emit" | "onChange" | "persist" | "modes">;
+export type { AgentSession };
+
+type SharedDependencies = Omit<SessionDependencies, "emit" | "onChange" | "persist" | "modes" | "claims" | "notify">;
+
+/** A chat view: the side bar follows the active chat, and an editor tab shows one pinned chat. */
+export interface ChatViewHandle {
+  readonly pinnedId?: string;
+  readonly visible: boolean;
+  post(message: HostMessage): void;
+}
 
 /** Keeps all chat sessions of the window, the saved history, and the worktree agents. */
 export class SessionManager implements vscode.Disposable {
   private readonly sessions = new Map<string, AgentSession>();
   private activeId = "";
   private readonly store: ConversationStore;
-  private post: (message: HostMessage) => void = () => {};
+  private readonly views = new Set<ChatViewHandle>();
+  private readonly fileClaims = new Map<string, string>();
   private customModes: ModeDefinition[] = [];
   private workspaceModes: ModeDefinition[] = [];
   private counter = 0;
@@ -33,9 +43,32 @@ export class SessionManager implements vscode.Disposable {
     this.reloadModes();
   }
 
-  /** Connects the chat view. */
-  attach(post: (message: HostMessage) => void): void {
-    this.post = post;
+  /** Connects a chat view. Returns a function that disconnects it. */
+  attach(view: ChatViewHandle): () => void {
+    this.views.add(view);
+    return () => this.views.delete(view);
+  }
+
+  get activeSessionId(): string {
+    return this.activeId;
+  }
+
+  /** The session that a view shows. */
+  sessionFor(view: ChatViewHandle): AgentSession | undefined {
+    return view.pinnedId ? this.sessions.get(view.pinnedId) : this.active;
+  }
+
+  session(id: string): AgentSession | undefined {
+    return this.sessions.get(id);
+  }
+
+  private shows(view: ChatViewHandle, session: AgentSession): boolean {
+    return view.pinnedId ? view.pinnedId === session.id : session.id === this.activeId;
+  }
+
+  /** Sends a message to the views of the active session, or to all views. */
+  private post(message: HostMessage, session = this.active): void {
+    for (const view of this.views) if (!session || this.shows(view, session)) view.post(message);
   }
 
   /** Creates the first session, or restores the last chat of this workspace. */
@@ -89,9 +122,11 @@ export class SessionManager implements vscode.Disposable {
     }
   }
 
-  state(): ViewState {
-    const session = this.active;
+  state(view?: ChatViewHandle): ViewState {
+    const session = view ? this.sessionFor(view) : this.active;
     const settings = readSettings();
+    const effective = session?.effectiveSettings() ?? settings;
+    const context = session?.contextState() ?? { share: 0, label: "" };
     const profile = this.deps.models.active();
     return {
       sessionId: session?.id ?? "",
@@ -108,27 +143,64 @@ export class SessionManager implements vscode.Disposable {
       cost: session?.usage.cost ?? "",
       celebrate: settings.celebrate,
       stats: this.deps.stats.summary(settings.minutesPerBug),
-      approvals: { review: settings.reviewMode, commands: settings.commands.mode, mcp: settings.mcpAutoApprove },
+      approvals: {
+        review: effective.reviewMode,
+        commands: effective.commands.mode,
+        mcp: effective.mcpAutoApprove,
+        custom: Object.values(session?.overrides ?? {}).some((value) => value !== undefined),
+      },
       reviewFiles: this.deps.reviews.pendingFiles.length,
       runningSessions: this.runningCount,
+      context: context.share,
+      contextLabel: context.label,
+      fontSize: settings.fontSize,
+      sendWith: settings.sendWith,
+      showThinking: settings.showThinking,
+      pinned: view?.pinnedId !== undefined,
     };
   }
 
   postState(): void {
-    this.post({ type: "state", state: this.state() });
+    for (const view of this.views) view.post({ type: "state", state: this.state(view) });
   }
 
-  /** Sends the transcript of the active session, for example when the view opens. */
-  replay(): void {
-    this.post({ type: "cleared" });
-    for (const message of this.active?.transcript.all() ?? []) this.post(message);
-    this.postState();
+  /** Sends the transcript of the session of each view, for example when a view opens or the active chat changes. */
+  replay(only?: ChatViewHandle): void {
+    for (const view of only ? [only] : this.views) {
+      if (!only && view.pinnedId) continue;
+      const session = this.sessionFor(view);
+      view.post({ type: "cleared" });
+      for (const message of session?.transcript.all() ?? []) view.post(message);
+      if (session) {
+        view.post({ type: "queue", items: session.queued });
+        view.post({ type: "plan", plan: session.plan });
+      }
+      view.post({ type: "state", state: this.state(view) });
+    }
   }
 
   async run(request: TaskRequest): Promise<void> {
     const session = this.active ?? this.newSession();
     if (!session) return;
     await session.run(request);
+  }
+
+  /** Creates a chat that is not active, for example for an editor tab. */
+  createDetached(): AgentSession | undefined {
+    const root = this.defaultRoot();
+    return root ? this.create(root) : undefined;
+  }
+
+  async rename(id?: string): Promise<void> {
+    const session = this.sessions.get(id ?? this.activeId);
+    if (!session) return;
+    const title = await vscode.window.showInputBox({
+      title: "Phew: Rename chat",
+      value: session.title,
+      validateInput: (value) => (value.trim() ? undefined : "Enter a name."),
+    });
+    if (title) session.rename(title);
+    await this.postSessions();
   }
 
   newSession(): AgentSession | undefined {
@@ -201,7 +273,7 @@ export class SessionManager implements vscode.Disposable {
     await this.postSessions();
   }
 
-  async postSessions(): Promise<void> {
+  async postSessions(only?: ChatViewHandle): Promise<void> {
     const sessions: SessionSummary[] = [...this.sessions.values()]
       .filter((session) => !session.isEmpty || session.id === this.activeId)
       .map((session) => ({
@@ -214,11 +286,11 @@ export class SessionManager implements vscode.Disposable {
       }));
     const open = new Set(sessions.map((session) => session.id));
     const history = (await this.store.list()).filter((item) => !open.has(item.id));
-    this.post({ type: "sessions", sessions, history });
+    for (const view of only ? [only] : this.views) view.post({ type: "sessions", sessions, history });
   }
 
-  async exportActive(): Promise<void> {
-    const session = this.active;
+  async exportActive(target?: AgentSession): Promise<void> {
+    const session = target ?? this.active;
     if (!session || session.isEmpty) {
       void vscode.window.showInformationMessage("Phew: the chat is empty.");
       return;
@@ -351,9 +423,21 @@ export class SessionManager implements vscode.Disposable {
     }
   }
 
-  async setApproval(key: "review" | "commands" | "mcp", value: string | boolean): Promise<void> {
-    const setting = key === "review" ? "review.mode" : key === "commands" ? "commands.approval" : "mcp.autoApprove";
-    await updateSetting(setting, value);
+  /** Changes an approval setting of one chat. The defaults stay in the settings. */
+  setApproval(session: AgentSession | undefined, key: "review" | "commands" | "mcp", value: string | boolean): void {
+    if (!session) return;
+    session.setOverride(key, value as never);
+    this.postState();
+  }
+
+  /** Saves the approval settings of a chat as the defaults for new chats. */
+  async saveApprovalsAsDefault(session: AgentSession | undefined): Promise<void> {
+    if (!session) return;
+    const effective = session.effectiveSettings();
+    await updateSetting("review.mode", effective.reviewMode);
+    await updateSetting("commands.approval", effective.commands.mode);
+    await updateSetting("mcp.autoApprove", effective.mcpAutoApprove);
+    session.resetOverrides();
     this.postState();
   }
 
@@ -382,6 +466,18 @@ export class SessionManager implements vscode.Disposable {
         emit: (source, message) => this.route(source, message),
         onChange: (source) => this.changed(source),
         persist: (source) => this.persist(source),
+        notify: (source, event) => this.notify(source, event),
+        claims: {
+          claim: (sessionId, path) => this.fileClaims.set(path, sessionId),
+          owner: (path, exceptSessionId) => {
+            const owner = this.fileClaims.get(path);
+            const session = owner && owner !== exceptSessionId ? this.sessions.get(owner) : undefined;
+            return session?.busy ? session.title : undefined;
+          },
+          release: (sessionId) => {
+            for (const [path, owner] of this.fileClaims) if (owner === sessionId) this.fileClaims.delete(path);
+          },
+        },
       },
       id,
       root,
@@ -392,27 +488,50 @@ export class SessionManager implements vscode.Disposable {
     return session;
   }
 
-  private route(session: AgentSession, message: HostMessage): void {
-    if (session.id === this.activeId) {
-      this.post(message);
-      return;
-    }
-    if (message.type === "approval" && !this.notifiedApprovals.has(message.id)) {
-      this.notifiedApprovals.add(message.id);
-      void vscode.window
-        .showInformationMessage(`Phew: "${session.title}" needs your approval: ${message.title}.`, "Show")
-        .then((answer) => {
-          if (answer === "Show") {
-            this.switchTo(session.id);
-            void vscode.commands.executeCommand("phew.openChat");
-          }
-        });
-    }
+  /** Keeps a session in the list even if it is empty, for example when an editor tab shows it. */
+  keep(id: string): void {
+    this.pinnedIds.add(id);
   }
 
-  private changed(session: AgentSession): void {
+  release(id: string): void {
+    this.pinnedIds.delete(id);
+  }
+
+  private readonly pinnedIds = new Set<string>();
+
+  private route(session: AgentSession, message: HostMessage): void {
+    for (const view of this.views) if (this.shows(view, session)) view.post(message);
+  }
+
+  /** Tells the user that a chat finished or needs input, when the user does not look at it. */
+  private notify(session: AgentSession, event: "done" | "failed" | "input"): void {
+    const settings = readSettings();
+    const visible = [...this.views].some((view) => view.visible && this.shows(view, session));
+    const focused = vscode.window.state.focused;
+    if (settings.sound && (event !== "done" || !focused || !visible)) {
+      for (const view of this.views) if (view.visible) view.post({ type: "sound" });
+    }
+    if (settings.notifyOnComplete === "never") return;
+    if (settings.notifyOnComplete === "unfocused" && focused && visible) return;
+    const key = `${session.id}:${event}:${session.updatedAt}`;
+    if (this.notifiedApprovals.has(key)) return;
+    this.notifiedApprovals.add(key);
+    const text =
+      event === "input"
+        ? `Phew: "${session.title}" needs your input.`
+        : event === "done"
+          ? `Phew! "${session.title}" is done.`
+          : `Phew: "${session.title}" stopped.`;
+    void vscode.window.showInformationMessage(text, "Show").then((answer) => {
+      if (answer !== "Show") return;
+      if (![...this.views].some((view) => view.pinnedId === session.id)) this.switchTo(session.id);
+      void vscode.commands.executeCommand("phew.openChat");
+    });
+  }
+
+  private changed(_session: AgentSession): void {
     this.onBusyChange(this.runningCount);
-    if (session.id === this.activeId) this.postState();
+    this.postState();
     void this.postSessions();
   }
 
@@ -445,7 +564,9 @@ export class SessionManager implements vscode.Disposable {
 
   private dropIdleEmpty(): void {
     for (const [id, session] of this.sessions) {
-      if (id !== this.activeId && session.isEmpty && !session.busy && !session.worktree) this.sessions.delete(id);
+      if (id !== this.activeId && session.isEmpty && !session.busy && !session.worktree && !this.pinnedIds.has(id)) {
+        this.sessions.delete(id);
+      }
     }
   }
 

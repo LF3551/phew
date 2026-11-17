@@ -105,7 +105,76 @@ export const changeTools: readonly ToolDefinition[] = [
     name: "run_command",
     description:
       "Run a shell command in the workspace root and return its exit code and output. Use it for tests, builds, and linters. Do not start servers that do not stop.",
-    parameters: object({ command: { type: "string", description: "The command to run." } }, ["command"]),
+    parameters: object(
+      {
+        command: { type: "string", description: "The command to run." },
+        cwd: { type: "string", description: "Folder to run in, relative to the workspace. Default: the main folder." },
+      },
+      ["command"],
+    ),
+  },
+];
+
+/** Tools to talk with the user and to keep the checklist. Every mode with the read group has them. */
+export const interactionTools: readonly ToolDefinition[] = [
+  {
+    name: "ask_user",
+    description:
+      "Ask the user a clarifying question when the request is ambiguous or a decision is needed. Offer short options when possible. Do not ask for things that you can find in the code.",
+    parameters: object(
+      {
+        question: { type: "string", description: "The question." },
+        options: {
+          type: "array",
+          items: { type: "string" },
+          description: "Up to 8 short answers that the user can click.",
+        },
+        allow_text: { type: "boolean", description: "Allow a free text answer. Default true." },
+      },
+      ["question"],
+    ),
+  },
+  {
+    name: "update_plan",
+    description:
+      "Create or update the checklist of the task for multi-step work. Send the full list each time. Mark one item in_progress while you work on it.",
+    parameters: object(
+      {
+        goal: { type: "string", description: "The goal of the task, in one sentence." },
+        items: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              text: { type: "string" },
+              status: { type: "string", enum: ["pending", "in_progress", "done"] },
+            },
+            required: ["text", "status"],
+            additionalProperties: false,
+          },
+        },
+      },
+      ["items"],
+    ),
+  },
+];
+
+export const skillTools: readonly ToolDefinition[] = [
+  {
+    name: "load_skill",
+    description: "Load the full instructions of a skill by name, with the list of its files.",
+    parameters: object({ name: { type: "string", description: "The skill name." } }, ["name"]),
+  },
+  {
+    name: "read_skill_file",
+    description: "Read a file that belongs to a skill, for example a template or a reference document.",
+    parameters: object(
+      {
+        name: { type: "string", description: "The skill name." },
+        path: { type: "string", description: "Path inside the skill folder." },
+      },
+      ["name", "path"],
+    ),
   },
 ];
 
@@ -121,7 +190,7 @@ export const memoryTools: readonly ToolDefinition[] = [
 ];
 
 const groupOf: Readonly<Record<string, ToolGroup>> = {
-  ...Object.fromEntries(readTools.map((tool) => [tool.name, "read"])),
+  ...Object.fromEntries([...readTools, ...interactionTools, ...skillTools].map((tool) => [tool.name, "read"])),
   edit_file: "edit",
   write_file: "edit",
   run_command: "command",
@@ -136,11 +205,13 @@ export function toolGroup(name: string): ToolGroup {
 /** Returns the built-in tools that a mode allows. */
 export function toolsForMode(
   mode: ModeDefinition,
-  options: { memory?: boolean; index?: boolean } = {},
+  options: { memory?: boolean; index?: boolean; skills?: boolean } = {},
 ): ToolDefinition[] {
   const tools: ToolDefinition[] = [];
   if (mode.tools.has("read")) {
     tools.push(...readTools.filter((tool) => tool.name !== "search_code" || options.index !== false));
+    tools.push(...interactionTools);
+    if (options.skills) tools.push(...skillTools);
   }
   if (mode.tools.has("edit")) tools.push(...changeTools.filter((tool) => tool.name !== "run_command"));
   if (mode.tools.has("command")) tools.push(...changeTools.filter((tool) => tool.name === "run_command"));

@@ -4,6 +4,8 @@ import { endpoint, type ModelProfile, requestHeaders } from "./profile";
 
 type Block =
   | { type: "text"; text: string }
+  | { type: "thinking"; thinking: string; signature: string }
+  | { type: "redacted_thinking"; data: string }
   | { type: "image"; source: { type: "base64"; media_type: string; data: string } }
   | { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
   | { type: "tool_result"; tool_use_id: string; content: string };
@@ -50,6 +52,11 @@ export function toAnthropic(messages: readonly ChatMessage[]): { system: string;
         break;
       case "assistant": {
         const blocks: Block[] = [];
+        // Extended thinking with tools needs the signed thinking blocks of the previous turn.
+        if (message.reasoning?.signature) {
+          blocks.push({ type: "thinking", thinking: message.reasoning.text, signature: message.reasoning.signature });
+        }
+        for (const data of message.reasoning?.redacted ?? []) blocks.push({ type: "redacted_thinking", data });
         if (message.content.trim()) blocks.push({ type: "text", text: message.content });
         for (const call of message.toolCalls ?? []) {
           blocks.push({ type: "tool_use", id: call.id, name: call.name, input: argumentsObject(call.arguments) });
@@ -66,6 +73,9 @@ export function toAnthropic(messages: readonly ChatMessage[]): { system: string;
 
 interface AnthropicState {
   content: string;
+  thinking: string;
+  signature: string;
+  redacted: string[];
   blocks: Map<number, { id: string; name: string; json: string }>;
   inputTokens: number;
   outputTokens: number;
@@ -73,21 +83,33 @@ interface AnthropicState {
 }
 
 export function newAnthropicState(): AnthropicState {
-  return { content: "", blocks: new Map(), inputTokens: 0, outputTokens: 0 };
+  return { content: "", thinking: "", signature: "", redacted: [], blocks: new Map(), inputTokens: 0, outputTokens: 0 };
 }
 
 interface AnthropicEvent {
   type?: string;
   index?: number;
   message?: { usage?: Record<string, unknown> };
-  content_block?: { type?: string; id?: unknown; name?: unknown; text?: unknown };
-  delta?: { type?: string; text?: unknown; partial_json?: unknown; stop_reason?: unknown };
+  content_block?: { type?: string; id?: unknown; name?: unknown; text?: unknown; data?: unknown };
+  delta?: {
+    type?: string;
+    text?: unknown;
+    partial_json?: unknown;
+    stop_reason?: unknown;
+    thinking?: unknown;
+    signature?: unknown;
+  };
   usage?: { output_tokens?: unknown };
   error?: { message?: unknown };
 }
 
 /** Applies one streamed Anthropic event. */
-export function applyAnthropicEvent(state: AnthropicState, event: unknown, onText: (delta: string) => void): void {
+export function applyAnthropicEvent(
+  state: AnthropicState,
+  event: unknown,
+  onText: (delta: string) => void,
+  onReasoning?: (delta: string) => void,
+): void {
   if (typeof event !== "object" || event === null) return;
   const data = event as AnthropicEvent;
   switch (data.type) {
@@ -104,6 +126,8 @@ export function applyAnthropicEvent(state: AnthropicState, event: unknown, onTex
       const block = data.content_block ?? {};
       if (block.type === "tool_use") {
         state.blocks.set(Number(data.index), { id: String(block.id ?? ""), name: String(block.name ?? ""), json: "" });
+      } else if (block.type === "redacted_thinking" && typeof block.data === "string") {
+        state.redacted.push(block.data);
       } else if (block.type === "text" && typeof block.text === "string" && block.text) {
         state.content += block.text;
         onText(block.text);
@@ -115,6 +139,11 @@ export function applyAnthropicEvent(state: AnthropicState, event: unknown, onTex
       if (delta.type === "text_delta" && typeof delta.text === "string") {
         state.content += delta.text;
         onText(delta.text);
+      } else if (delta.type === "thinking_delta" && typeof delta.thinking === "string") {
+        state.thinking += delta.thinking;
+        onReasoning?.(delta.thinking);
+      } else if (delta.type === "signature_delta" && typeof delta.signature === "string") {
+        state.signature += delta.signature;
       } else if (delta.type === "input_json_delta" && typeof delta.partial_json === "string") {
         const block = state.blocks.get(Number(data.index));
         if (block) block.json += delta.partial_json;
@@ -134,11 +163,20 @@ export function finishAnthropic(state: AnthropicState): CompletionResult {
   const toolCalls: ToolCall[] = [...state.blocks.entries()]
     .sort(([a], [b]) => a - b)
     .map(([, block]) => ({ id: block.id, name: block.name, arguments: block.json || "{}" }));
+  const reasoning =
+    state.thinking || state.redacted.length > 0
+      ? {
+          text: state.thinking,
+          ...(state.signature ? { signature: state.signature } : {}),
+          ...(state.redacted.length > 0 ? { redacted: state.redacted } : {}),
+        }
+      : undefined;
   return {
     content: state.content,
     toolCalls,
     usage: { inputTokens: state.inputTokens, outputTokens: state.outputTokens },
     finishReason: state.stopReason,
+    ...(reasoning ? { reasoning } : {}),
   };
 }
 
@@ -148,6 +186,7 @@ export class AnthropicClient implements ModelClient {
     private readonly profile: ModelProfile,
     private readonly apiKey: string | undefined,
     private readonly fetchFunction: FetchFunction = fetch,
+    private readonly retries = 0,
   ) {}
 
   body(request: CompletionRequest): Record<string, unknown> {
@@ -185,9 +224,10 @@ export class AnthropicClient implements ModelClient {
       headers,
       this.body(request),
       request.signal,
+      { retries: this.retries, onRetry: request.onRetry },
     );
     const state = newAnthropicState();
-    await readSse(response, (event) => applyAnthropicEvent(state, event, onText));
+    await readSse(response, (event) => applyAnthropicEvent(state, event, onText, request.onReasoning));
     return finishAnthropic(state);
   }
 }

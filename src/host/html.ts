@@ -36,6 +36,8 @@ export function renderChatHtml(options: ChatHtmlOptions): string {
   <header class="toolbar">
     <button type="button" class="title" id="title" title="Chats and history"><span id="titleText">New chat</span><span class="badge" id="worktree" hidden></span><span class="running" id="running" hidden></span></button>
     <div class="icons">
+      <button type="button" class="icon-button" id="renameButton" title="Rename chat" aria-label="Rename chat">✎</button>
+      <button type="button" class="icon-button" id="popOut" title="Open a parallel chat in an editor tab" aria-label="Open a parallel chat in an editor tab">⧉</button>
       <button type="button" class="icon-button" id="historyButton" title="Chats and history" aria-label="Chats and history">⟲</button>
       <button type="button" class="icon-button" id="newChat" title="New chat" aria-label="New chat">＋</button>
     </div>
@@ -52,6 +54,7 @@ export function renderChatHtml(options: ChatHtmlOptions): string {
     </div>
     <div class="panel-actions">
       <button type="button" class="secondary" id="panelNew">＋ New chat</button>
+      <button type="button" class="secondary" id="panelParallel" title="A second chat in an editor tab that works at the same time">⧉ Parallel chat</button>
       <button type="button" class="secondary" id="panelWorktree" title="An agent on a new branch in a separate folder">⑂ Agent in worktree</button>
       <button type="button" class="secondary" id="panelExport">Export</button>
     </div>
@@ -82,6 +85,11 @@ export function renderChatHtml(options: ChatHtmlOptions): string {
     <button type="button" class="link" id="reviewNext">Review</button>
   </div>
   <footer class="footer">
+    <section class="plan" id="plan" hidden>
+      <button type="button" class="plan-header" id="planToggle" aria-expanded="true"><span id="planTitle">Plan</span><span class="plan-progress" id="planProgress"></span></button>
+      <ul class="plan-items" id="planItems"></ul>
+    </section>
+    <ul class="queue" id="queue" hidden></ul>
     <div class="approvals" id="approvals">
       <label title="How you review file changes">Edits
         <select id="approvalReview">
@@ -103,6 +111,12 @@ export function renderChatHtml(options: ChatHtmlOptions): string {
           <option value="true">Auto</option>
         </select>
       </label>
+      <span class="custom" id="approvalCustom" hidden>this chat · <button type="button" class="link" id="saveApprovals">save as default</button></span>
+    </div>
+    <div class="context" id="context" hidden>
+      <div class="context-bar"><div class="context-fill" id="contextFill"></div></div>
+      <span class="context-label" id="contextLabel"></span>
+      <button type="button" class="link" id="compact" hidden>Compact</button>
     </div>
     <div class="meter" id="meter" title="Statistics"></div>
     <div class="chips" id="chips"></div>

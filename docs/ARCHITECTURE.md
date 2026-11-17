@@ -26,6 +26,11 @@ Pure TypeScript without the `vscode` module, so unit tests run in Node.js.
 | `memory.ts` | Project memory notes. |
 | `review.ts` | Keep and undo of single hunks for the review in the editor. |
 | `worktree.ts` | Branch names, worktree folders, and `git worktree list` parsing. |
+| `compaction.ts` | Context estimates and the summary of older messages. |
+| `skills.ts` | `SKILL.md` parsing and the skills prompt. |
+| `plan.ts` | The checklist and the questions of the agent. |
+| `roots.ts` | Paths across the folders of a multi-root workspace. |
+| `mcpConfig.ts`, `mcpHttp.ts`, `oauth.ts` | MCP configuration files and variables, the Streamable HTTP transport, and OAuth with PKCE. |
 | `chat.ts` | Message types, argument parsing, and history trimming. |
 | `tools.ts` | Tool definitions in JSON Schema and the tools of each mode. |
 | `modes.ts` | Built-in and custom modes and their tool groups. |
@@ -50,8 +55,10 @@ Pure TypeScript without the `vscode` module, so unit tests run in Node.js.
 
 | File | Purpose |
 | --- | --- |
-| `sessionManager.ts` | All chats of the window, the saved history, switching, export, and worktree agents. |
-| `session.ts` | One conversation: attachments, prompt, agent run, transcript, checkpoints, and persistence. |
+| `sessionManager.ts` | All chats of the window, the views that show them, the saved history, file claims between parallel chats, notifications, and worktree agents. |
+| `chatView.ts` | One controller per webview: the side bar follows the active chat, and editor tabs show one pinned chat each. |
+| `skillStore.ts` | Finds and reads Agent Skills. |
+| `session.ts` | One conversation: the queue, `/btw`, compaction, reasoning, approvals of the chat, the plan, the transcript, checkpoints, and persistence. |
 | `conversationStore.ts` | Saved chats in the workspace storage. |
 | `reviewManager.ts` | Keep and Undo CodeLens and decorations in the editor. |
 | `codeIndexManager.ts` | Builds, updates, saves, and searches the code index. |
@@ -64,7 +71,7 @@ Pure TypeScript without the `vscode` module, so unit tests run in Node.js.
 | `changes.ts` | Shows changes as hunks, applies the selected hunks, records checkpoints, and serves the diff editor. |
 | `approvals.ts` | Sends approval requests to the view and waits for the decision. |
 | `commandRunner.ts` | Runs shell commands with a timeout, an output limit, and cancellation. |
-| `mcpManager.ts` | Starts MCP servers and exposes their tools. |
+| `mcpManager.ts` | Reads MCP configurations, connects stdio and HTTP servers, signs in with OAuth, filters tools, and logs. |
 | `phewIt.ts` | The "Phew it!" quick fix on problems. |
 | `terminalWatcher.ts` | Remembers failed terminal commands through shell integration. |
 | `chatView.ts` | The webview view provider and the transcript that rebuilds a hidden view. |

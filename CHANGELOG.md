@@ -5,6 +5,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added in the latest update
+
+- Message queue: messages written while the agent works reach it at its next step. `/btw` side questions, `/goal`, and `/compact`.
+- Reasoning display for OpenAI-compatible, Anthropic (signed thinking is sent back for tool use), and Gemini models.
+- Context meter with automatic and manual compaction, and a context window per model profile, loaded from the provider when available.
+- Automatic retries after HTTP 429, overload, server, and network errors, with `Retry-After` and rate limit headers, and clear messages for a missing quota.
+- Clickable `file:line` references, chat rename, message times, and Copy for answers.
+- Agent Skills (`SKILL.md`) from Phew, Agents, Claude Code, and OpenCode folders, with the `load_skill` and `read_skill_file` tools.
+- Multi-root workspaces.
+- MCP from `.vscode/mcp.json` and `.mcp.json`, Streamable HTTP servers with OAuth (discovery, dynamic client registration, PKCE), `${input:...}` values in the secret storage, tool selection per server, enable and disable, restart, and an MCP log.
+- `ask_user` questions with clickable answers and an `update_plan` checklist in the chat.
+- Notifications and an optional sound when a chat finishes or needs input, chat font size, the send key setting, and approval settings per chat.
+- Parallel chats in editor tabs, with a warning before two running chats change the same file.
+
 ### Added
 
 - Chat view with Ask, Plan, and Code modes.

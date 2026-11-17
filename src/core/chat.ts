@@ -9,6 +9,21 @@ export interface ToolCall {
   readonly signature?: string;
 }
 
+/** Model reasoning ("thinking"). `signature` and `redacted` are opaque provider data. */
+export interface Reasoning {
+  readonly text: string;
+  readonly signature?: string;
+  readonly redacted?: readonly string[];
+}
+
+/** Information about an automatic retry after a rate limit or a server error. */
+export interface RetryInfo {
+  readonly attempt: number;
+  readonly maxAttempts: number;
+  readonly delayMs: number;
+  readonly reason: string;
+}
+
 /** An image attached to a user message, as base64 data. */
 export interface ImagePart {
   readonly mimeType: string;
@@ -18,7 +33,13 @@ export interface ImagePart {
 export type ChatMessage =
   | { readonly role: "system"; readonly content: string }
   | { readonly role: "user"; readonly content: string; readonly images?: readonly ImagePart[] }
-  | { readonly role: "assistant"; readonly content: string; readonly toolCalls?: readonly ToolCall[] }
+  | {
+      readonly role: "assistant";
+      readonly content: string;
+      readonly toolCalls?: readonly ToolCall[];
+      /** Reasoning of the model. Anthropic needs the signed thinking back in later requests. */
+      readonly reasoning?: Reasoning;
+    }
   | { readonly role: "tool"; readonly toolCallId: string; readonly content: string };
 
 /** A tool in the JSON Schema format that OpenAI-compatible APIs use. */
@@ -32,11 +53,16 @@ export interface CompletionRequest {
   readonly messages: readonly ChatMessage[];
   readonly tools: readonly ToolDefinition[];
   readonly signal: AbortSignal;
+  /** Receives streamed reasoning text. */
+  readonly onReasoning?: (delta: string) => void;
+  /** Called before an automatic retry. */
+  readonly onRetry?: (info: RetryInfo) => void;
 }
 
 export interface CompletionResult {
   readonly content: string;
   readonly toolCalls: readonly ToolCall[];
+  readonly reasoning?: Reasoning;
   readonly usage?: Usage;
   readonly finishReason?: string;
 }

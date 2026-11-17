@@ -62,7 +62,9 @@
         "phew.review.mode",
         "phew.commit.author",
         "phew.index.embeddings",
-        "phew.worktrees.location"
+        "phew.worktrees.location",
+        "phew.mcp.readWorkspaceConfigs",
+        "phew.skills.paths"
       ]
     },
     "virtualWorkspaces": {
@@ -125,6 +127,34 @@
       {
         "command": "phew.setMode",
         "title": "Switch Mode",
+        "category": "Phew"
+      },
+      {
+        "command": "phew.openChatInEditor",
+        "title": "Open Parallel Chat in Editor",
+        "category": "Phew",
+        "icon": "$(split-horizontal)"
+      },
+      {
+        "command": "phew.renameChat",
+        "title": "Rename Chat",
+        "category": "Phew",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "phew.compactChat",
+        "title": "Compact Chat",
+        "category": "Phew"
+      },
+      {
+        "command": "phew.manageMcp",
+        "title": "Manage MCP Servers",
+        "category": "Phew",
+        "icon": "$(server)"
+      },
+      {
+        "command": "phew.showMcpLogs",
+        "title": "Show MCP Logs",
         "category": "Phew"
       },
       {
@@ -328,6 +358,11 @@
           "group": "navigation@2"
         },
         {
+          "command": "phew.openChatInEditor",
+          "when": "view == phew.chatView",
+          "group": "navigation@2"
+        },
+        {
           "command": "phew.stop",
           "when": "view == phew.chatView && phew.busy",
           "group": "navigation@3"
@@ -376,6 +411,16 @@
           "command": "phew.showLog",
           "when": "view == phew.chatView",
           "group": "3_more@3"
+        },
+        {
+          "command": "phew.manageMcp",
+          "when": "view == phew.chatView",
+          "group": "2_agent@4"
+        },
+        {
+          "command": "phew.renameChat",
+          "when": "view == phew.chatView",
+          "group": "2_agent@0"
         }
       ],
       "editor/context": [
@@ -523,6 +568,11 @@
         "key": "ctrl+alt+z",
         "mac": "cmd+alt+z",
         "when": "editorTextFocus && phew.reviewPending"
+      },
+      {
+        "command": "phew.openChatInEditor",
+        "key": "ctrl+alt+shift+p",
+        "mac": "cmd+alt+shift+p"
       }
     ],
     "configuration": [
@@ -634,6 +684,11 @@
                     }
                   },
                   "description": "Price in US dollars per million tokens."
+                },
+                "contextWindow": {
+                  "type": "integer",
+                  "minimum": 1000,
+                  "description": "Context window in tokens, for the context meter and automatic compaction."
                 }
               }
             },
@@ -643,6 +698,13 @@
             "type": "string",
             "default": "",
             "markdownDescription": "The `id` of the model in `#phew.models#` that Phew uses. Use **Phew: Switch Model** or the model button in the chat."
+          },
+          "phew.model.maxRetries": {
+            "type": "number",
+            "default": 3,
+            "minimum": 0,
+            "maximum": 10,
+            "markdownDescription": "Automatic retries after rate limits (HTTP 429), overloaded servers, server errors, and network errors. Phew waits as long as the provider asks. A missing quota or credit is never retried."
           }
         }
       },
@@ -672,6 +734,72 @@
             "minimum": 1,
             "maximum": 5000,
             "markdownDescription": "Number of saved chats per workspace. Older chats are deleted."
+          },
+          "phew.chat.showThinking": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "Show the reasoning of models that stream it, for example DeepSeek, Claude with extended thinking, or Gemini with thoughts."
+          },
+          "phew.chat.sendWith": {
+            "type": "string",
+            "enum": [
+              "enter",
+              "ctrlEnter"
+            ],
+            "enumDescriptions": [
+              "Enter sends, Shift+Enter adds a new line.",
+              "Ctrl+Enter (Cmd+Enter on macOS) sends, Enter adds a new line."
+            ],
+            "default": "enter",
+            "markdownDescription": "The key that sends a message."
+          },
+          "phew.chat.fontSize": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "default": null,
+            "minimum": 8,
+            "maximum": 32,
+            "markdownDescription": "Font size of the chat in pixels. Leave empty to use the VS Code font size."
+          },
+          "phew.context.autoCompact": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "Summarize the older part of a long chat automatically when the context window is nearly full."
+          },
+          "phew.context.compactAt": {
+            "type": "number",
+            "default": 0.8,
+            "minimum": 0.3,
+            "maximum": 0.95,
+            "markdownDescription": "Share of the context window that starts the automatic compaction."
+          },
+          "phew.context.defaultWindow": {
+            "type": "number",
+            "default": 128000,
+            "minimum": 4000,
+            "markdownDescription": "Context window in tokens for models without a `contextWindow` in their profile."
+          },
+          "phew.notifications.onComplete": {
+            "type": "string",
+            "enum": [
+              "unfocused",
+              "always",
+              "never"
+            ],
+            "enumDescriptions": [
+              "Notify when VS Code is in the background or the chat is not visible.",
+              "Always notify.",
+              "Never notify."
+            ],
+            "default": "unfocused",
+            "markdownDescription": "Notify when a chat finishes or needs your input."
+          },
+          "phew.notifications.sound": {
+            "type": "boolean",
+            "default": false,
+            "markdownDescription": "Play a short sound when a chat finishes or needs your input."
           }
         }
       },
@@ -939,7 +1067,7 @@
         }
       },
       {
-        "title": "Memory and Modes",
+        "title": "Memory, Modes, and Skills",
         "properties": {
           "phew.memory.enabled": {
             "type": "boolean",
@@ -988,6 +1116,19 @@
               }
             },
             "markdownDescription": "Custom modes. Example: `[{ \"id\": \"docs\", \"name\": \"Docs\", \"instructions\": \"Write clear documentation.\", \"tools\": [\"read\", \"edit\"] }]`. Projects can also add modes in `.phew/modes.json`."
+          },
+          "phew.skills.enabled": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "Use Agent Skills: folders with a `SKILL.md` file in `.phew/skills`, `.agents/skills`, `.claude/skills`, or `.opencode/skills` of the project or the home folder. The agent loads a skill when a task matches it."
+          },
+          "phew.skills.paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "markdownDescription": "Extra folders with skills. `~` means the home folder."
           }
         }
       },
@@ -999,29 +1140,86 @@
             "default": {},
             "scope": "machine",
             "additionalProperties": {
-              "type": "object",
-              "properties": {
-                "command": {
-                  "type": "string"
-                },
-                "args": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
+              "anyOf": [
+                {
+                  "type": "object",
+                  "required": [
+                    "command"
+                  ],
+                  "properties": {
+                    "type": {
+                      "const": "stdio"
+                    },
+                    "command": {
+                      "type": "string"
+                    },
+                    "args": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "env": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "cwd": {
+                      "type": "string"
+                    }
                   }
                 },
-                "env": {
+                {
                   "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
+                  "required": [
+                    "url"
+                  ],
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "http",
+                        "sse"
+                      ]
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "headers": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    }
                   }
                 }
-              },
-              "required": [
-                "command"
               ]
             },
-            "markdownDescription": "MCP servers that Phew starts over stdio in Code mode. Example: `{ \"github\": { \"command\": \"npx\", \"args\": [\"-y\", \"@modelcontextprotocol/server-github\"] } }`."
+            "markdownDescription": "MCP servers. Local servers use `command`, remote servers use `url` and can sign in with OAuth. Example: `{ \"github\": { \"url\": \"https://api.githubcopilot.com/mcp/\" }, \"fs\": { \"command\": \"npx\", \"args\": [\"-y\", \"@modelcontextprotocol/server-filesystem\", \".\"] } }`. Values can use `${env:NAME}`, `${input:id}`, and `${workspaceFolder}`."
+          },
+          "phew.mcp.readWorkspaceConfigs": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "Also use the servers from `.vscode/mcp.json` and `.mcp.json` (Claude Code) of trusted workspaces."
+          },
+          "phew.mcp.disabledServers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "markdownDescription": "MCP servers that Phew does not start. Use **Phew: Manage MCP Servers**."
+          },
+          "phew.mcp.disabledTools": {
+            "type": "object",
+            "default": {},
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "markdownDescription": "MCP tools that the agent cannot use, by server. Use **Phew: Manage MCP Servers \u2192 Choose tools**."
           }
         }
       },

@@ -1,4 +1,4 @@
-import type { ChatMessage, ModelClient, ToolCall, ToolDefinition } from "./chat";
+import type { ChatMessage, ModelClient, RetryInfo, ToolCall, ToolDefinition } from "./chat";
 import { truncateMiddle } from "./chat";
 import type { CostMeter } from "./cost";
 
@@ -15,6 +15,8 @@ export interface VerificationResult {
 
 export interface AgentEvents {
   onText?(delta: string): void;
+  onReasoning?(delta: string): void;
+  onRetry?(info: RetryInfo): void;
   onAssistant?(content: string, toolCalls: readonly ToolCall[]): void;
   onToolStart?(call: ToolCall): void;
   onToolEnd?(call: ToolCall, result: ToolResult): void;
@@ -39,6 +41,11 @@ export interface AgentOptions {
   readonly requireChanges?: boolean;
   readonly maxNudges?: number;
   readonly maxSteps: number;
+  /**
+   * Runs before each model call, for example to compact the history or to add messages
+   * that the user queued while the agent was working.
+   */
+  readonly beforeStep?: () => Promise<void>;
   readonly meter: CostMeter;
   readonly signal: AbortSignal;
   readonly events?: AgentEvents;
@@ -56,6 +63,13 @@ export interface AgentResult {
 }
 
 const maximumVerifyOutput = 12_000;
+
+/** Runs `beforeStep` and reports whether it added a user message. */
+async function hasQueuedInput(options: AgentOptions): Promise<boolean> {
+  const length = options.history.length;
+  await options.beforeStep?.();
+  return options.history.length > length && options.history.at(-1)?.role === "user";
+}
 
 /** Runs the model and its tool calls until the task is complete or a limit is reached. */
 export async function runAgent(options: AgentOptions): Promise<AgentResult> {
@@ -80,12 +94,16 @@ export async function runAgent(options: AgentOptions): Promise<AgentResult> {
     const overBudget = meter.exceeded();
     if (overBudget) return finish("budget", overBudget);
     steps++;
+    if (options.beforeStep) await options.beforeStep();
+    if (signal.aborted) return finish("aborted");
 
     const result = await client.complete(
       {
         messages: [{ role: "system", content: options.systemPrompt }, ...history],
         tools: options.tools,
         signal,
+        onReasoning: (delta) => events?.onReasoning?.(delta),
+        onRetry: (info) => events?.onRetry?.(info),
       },
       (delta) => events?.onText?.(delta),
     );
@@ -95,10 +113,13 @@ export async function runAgent(options: AgentOptions): Promise<AgentResult> {
       role: "assistant",
       content: result.content,
       ...(result.toolCalls.length > 0 ? { toolCalls: result.toolCalls } : {}),
+      ...(result.reasoning ? { reasoning: result.reasoning } : {}),
     });
     events?.onAssistant?.(result.content, result.toolCalls);
 
     if (result.toolCalls.length === 0) {
+      // Messages that the user queued during this step continue the task.
+      if (options.beforeStep && history.at(-1)?.role === "assistant" && (await hasQueuedInput(options))) continue;
       if (options.requireChanges && !filesChanged && nudges < maxNudges) {
         nudges++;
         history.push({

@@ -236,7 +236,7 @@ function render(data: Init): void {
         el("p", "hint", `Index: ${data.index}`),
         button("Rebuild index", () => vscode.postMessage({ type: "command", command: "phew.rebuildIndex" })),
       );
-    if (category.title === "Memory and Modes") {
+    if (category.title.startsWith("Memory")) {
       const memory = el("div", "identity");
       memory.append(el("strong", undefined, `Project memory (${data.memory.length} notes)`));
       const list = el("ul");

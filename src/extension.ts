@@ -6,7 +6,7 @@ import { findMode } from "./core/modes";
 import { buildCommandFixRequest, buildFixRequest } from "./core/prompts";
 import { MentionProvider } from "./host/attachments";
 import { DiffContentProvider, diffScheme } from "./host/changes";
-import { ChatViewProvider } from "./host/chatView";
+import { ChatPanels, ChatViewProvider } from "./host/chatView";
 import { CodeIndexManager } from "./host/codeIndexManager";
 import { describeResult, runShellCommand } from "./host/commandRunner";
 import { CommitAssistant } from "./host/commitAssistant";
@@ -20,6 +20,7 @@ import type { TaskRequest } from "./host/session";
 import { SessionManager } from "./host/sessionManager";
 import { readSettings, section } from "./host/settings";
 import { SettingsPanel } from "./host/settingsPanel";
+import { SkillStore } from "./host/skillStore";
 import { StatsStore } from "./host/statsStore";
 import { type FailedCommand, TerminalWatcher } from "./host/terminalWatcher";
 
@@ -39,7 +40,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<PhewTe
   const diffs = new DiffContentProvider();
   const stats = new StatsStore(context.globalState);
   const models = new ModelManager(context.secrets, log);
-  const mcp = new McpManager(log, String(context.extension.packageJSON.version));
+  const mcp = new McpManager(context.secrets, String(context.extension.packageJSON.version));
+  const skills = new SkillStore();
   const memory = new MemoryStore();
   const mentions = new MentionProvider();
   let sessions: SessionManager | undefined;
@@ -77,15 +79,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<PhewTe
   });
 
   const manager = new SessionManager(
-    { context, log, diffs, mcp, stats, models, reviews, index, memory, terminal },
+    { context, log, diffs, mcp, stats, models, reviews, index, memory, skills, terminal },
     (running) => {
       updateStatus();
+      panels?.refreshTitles();
       void vscode.commands.executeCommand("setContext", "phew.busy", running > 0);
     },
   );
   sessions = manager;
+  let panels: ChatPanels | undefined;
   const view = new ChatViewProvider(context.extensionUri, log, manager, mentions);
-  manager.attach((message) => view.post(message));
+  panels = new ChatPanels(context.extensionUri, log, manager, mentions);
   await manager.initialize();
   updateStatus();
 
@@ -136,6 +140,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<PhewTe
     reviews,
     index,
     settingsPanel,
+    panels,
     completions,
     nextEdit,
     manager,
@@ -160,6 +165,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<PhewTe
       view.post({ type: "openPanel" });
     }),
     vscode.commands.registerCommand("phew.exportChat", () => manager.exportActive()),
+    vscode.commands.registerCommand("phew.openChatInEditor", (id?: unknown) =>
+      panels?.open(typeof id === "string" ? id : undefined),
+    ),
+    vscode.commands.registerCommand("phew.renameChat", () => manager.rename()),
+    vscode.commands.registerCommand("phew.compactChat", () => manager.active?.compactNow()),
+    vscode.commands.registerCommand("phew.manageMcp", () => mcp.manage(root())),
+    vscode.commands.registerCommand("phew.showMcpLogs", () => mcp.log.show()),
     vscode.commands.registerCommand("phew.setMode", async (value?: unknown) => {
       const modes = manager.modes();
       const mode =
@@ -390,6 +402,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<PhewTe
       if (!event.affectsConfiguration(section)) return;
       if (event.affectsConfiguration("phew.modes")) manager.reloadModes();
       if (event.affectsConfiguration("phew.autocomplete")) completions.update();
+      if (event.affectsConfiguration("phew.mcp")) void mcp.restartAll();
       manager.postState();
       updateStatus();
     }),

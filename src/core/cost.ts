@@ -21,6 +21,8 @@ export interface BudgetLimits {
 export class CostMeter {
   private input = 0;
   private output = 0;
+  /** Input tokens of the last request, which shows how full the context window is. */
+  lastInputTokens = 0;
 
   constructor(
     private readonly price: ModelPrice | undefined,
@@ -28,6 +30,7 @@ export class CostMeter {
   ) {}
 
   add(usage: Usage): void {
+    this.lastInputTokens = Math.max(0, usage.inputTokens);
     this.input += Math.max(0, usage.inputTokens);
     this.output += Math.max(0, usage.outputTokens);
   }

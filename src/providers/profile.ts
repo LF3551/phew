@@ -33,6 +33,8 @@ export interface ModelProfile {
   readonly maxTokens?: number;
   /** Price in US dollars per one million tokens, for the cost display and budget. */
   readonly price?: { readonly input: number; readonly output: number };
+  /** Size of the context window in tokens, for the context meter and automatic compaction. */
+  readonly contextWindow?: number;
 }
 
 export const defaultAuth: Readonly<Record<ProviderKind, AuthStyle>> = {
@@ -97,6 +99,7 @@ export function parseProfile(value: unknown): ModelProfile | string {
   const input = finiteNumber(price.input, 0, 1_000_000);
   const output = finiteNumber(price.output, 0, 1_000_000);
   const maxTokens = finiteNumber(raw.maxTokens, 1, 10_000_000);
+  const contextWindow = finiteNumber(raw.contextWindow, 1000, 100_000_000);
   return {
     id,
     name: typeof raw.name === "string" && raw.name.trim() ? raw.name.trim() : model,
@@ -111,6 +114,7 @@ export function parseProfile(value: unknown): ModelProfile | string {
     temperature: finiteNumber(raw.temperature, 0, 2),
     maxTokens: maxTokens === undefined ? undefined : Math.round(maxTokens),
     price: input !== undefined && output !== undefined ? { input, output } : undefined,
+    contextWindow: contextWindow === undefined ? undefined : Math.round(contextWindow),
   };
 }
 
@@ -153,6 +157,7 @@ export function serializeProfile(profile: ModelProfile): Record<string, unknown>
   if (profile.temperature !== undefined) result.temperature = profile.temperature;
   if (profile.maxTokens !== undefined) result.maxTokens = profile.maxTokens;
   if (profile.price) result.price = profile.price;
+  if (profile.contextWindow) result.contextWindow = profile.contextWindow;
   return result;
 }
 

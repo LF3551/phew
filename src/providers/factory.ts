@@ -10,14 +10,15 @@ export function createHttpClient(
   profile: ModelProfile,
   apiKey: string | undefined,
   fetchFunction: FetchFunction = fetch,
+  retries = 0,
 ): ModelClient {
   switch (profile.provider) {
     case "anthropic":
-      return new AnthropicClient(profile, apiKey, fetchFunction);
+      return new AnthropicClient(profile, apiKey, fetchFunction, retries);
     case "gemini":
-      return new GeminiClient(profile, apiKey, fetchFunction);
+      return new GeminiClient(profile, apiKey, fetchFunction, retries);
     case "openai":
-      return new OpenAiCompatibleClient(profile, apiKey, fetchFunction);
+      return new OpenAiCompatibleClient(profile, apiKey, fetchFunction, retries);
     case "vscode":
       throw new Error("VS Code language models are created by the extension host.");
   }
@@ -26,6 +27,26 @@ export function createHttpClient(
 export interface ModelInfo {
   readonly id: string;
   readonly label?: string;
+  /** Context window in tokens, when the provider reports it. */
+  readonly contextWindow?: number;
+}
+
+const contextFields = [
+  "context_length",
+  "context_window",
+  "max_model_len",
+  "max_context_length",
+  "inputTokenLimit",
+  "max_input_tokens",
+];
+
+function contextOf(item: Record<string, unknown>): number | undefined {
+  for (const field of contextFields) {
+    const value = item[field];
+    if (typeof value === "number" && Number.isFinite(value) && value >= 1000) return Math.round(value);
+  }
+  const top = item.top_provider as { context_length?: unknown } | undefined;
+  return typeof top?.context_length === "number" ? top.context_length : undefined;
 }
 
 /** Loads the models that the provider offers. */
@@ -79,7 +100,13 @@ export function parseModelList(provider: ModelProfile["provider"], data: unknown
       const methods = Array.isArray(item.supportedGenerationMethods) ? item.supportedGenerationMethods : [];
       if (methods.length > 0 && !methods.includes("generateContent")) continue;
       const name = typeof item.name === "string" ? item.name.replace(/^models\//, "") : "";
-      if (name) models.push({ id: name, label: typeof item.displayName === "string" ? item.displayName : undefined });
+      if (name) {
+        models.push({
+          id: name,
+          label: typeof item.displayName === "string" ? item.displayName : undefined,
+          ...(contextOf(item) ? { contextWindow: contextOf(item) } : {}),
+        });
+      }
       continue;
     }
     const id =
@@ -92,7 +119,8 @@ export function parseModelList(provider: ModelProfile["provider"], data: unknown
             : "";
     if (!id) continue;
     const label = typeof item.display_name === "string" ? item.display_name : undefined;
-    models.push({ id, label });
+    const contextWindow = contextOf(item);
+    models.push({ id, label, ...(contextWindow ? { contextWindow } : {}) });
   }
   const unique = new Map(models.map((model) => [model.id, model]));
   return [...unique.values()].sort((a, b) => a.id.localeCompare(b.id));

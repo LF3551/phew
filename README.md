@@ -25,11 +25,20 @@
 - **Fixes until green.** Phew runs your check command, for example `npm test`, and keeps fixing until it passes.
 - **Review in the editor.** Each change has **Keep** and **Undo** buttons in the file, and **Keep All** and **Undo All** in the editor title. Prefer to approve first? Switch **Edits** to **Ask first** in the chat.
 - **Undo anything.** Each request is a checkpoint. **Restore checkpoint** reverts all file changes made after it, even after a restart.
-- **Chat history.** Chats are saved per workspace. Search them, open them again, run several at the same time, and export them as Markdown.
+- **Chat history.** Chats are saved per workspace. Search, rename, open them again, and export them as Markdown. Every message shows its time, and every answer has a Copy button.
+- **Parallel chats.** Open a second chat in an editor tab (⧉) and let two agents work at the same time. Phew warns before two chats change the same file.
+- **Steer while it works.** Keep typing while the agent works: messages wait in a queue and reach the agent at its next step. `/btw` asks a quick side question without stopping the task.
+- **See the thinking and the context.** Phew shows the reasoning of models that stream it, and a context meter. Long chats are compacted automatically, or with `/compact`.
+- **Questions and a checklist.** The agent asks you with clickable answers when something is unclear, and keeps a checklist of the task. `/goal` sets the goal of a chat.
+- **Clickable files.** `src/app.ts:42` in an answer opens the file at that line.
+- **Survives rate limits.** Phew retries rate limits and server errors as long as the provider asks, and explains a missing quota or credit in plain words.
 - **Rich context.** Type `@` to attach files, `@problems`, `@git`, or `@terminal`. Paste or drop screenshots. Use **Add to Chat** in the editor, the explorer, and the terminal.
 - **Parallel agents.** **New Agent in Worktree** works on a new branch in a separate folder while you keep coding.
 - **Commits your way.** Generate commit messages in the Source Control view. See the author and signing that commits use, and set Conventional Commits, `Signed-off-by`, GPG or SSH signing, a different author, and trailers. Phew never adds co-authors by itself.
 - **Code index and memory.** Phew finds relevant code by meaning and remembers durable project facts in `.phew/memory.md`.
+- **Agent Skills.** Phew uses `SKILL.md` skills from `.phew/skills`, `.agents/skills`, `.claude/skills`, and `.opencode/skills`, in the project and in your home folder, the same format as Claude Code.
+- **Several folders.** In a multi-root workspace, the agent works across all folders.
+- **MCP done right.** Phew reads `.vscode/mcp.json`, `.mcp.json` (Claude Code), and its own settings, supports local and remote (HTTP) servers with OAuth sign-in, and lets you choose the tools of each server and read the logs (**Phew: Manage MCP Servers**).
 - **Autocomplete and Next Edit.** Inline completions and a predicted next edit, with any model.
 - **Modes.** Ask, Plan, Code, Debug, Review, and your own modes.
 - **Safe by default.** Phew does not read `.env` files and keys, removes secrets from tool output, and always asks before dangerous commands such as `git push --force`, `terraform apply`, or `kubectl delete`.
@@ -62,17 +71,21 @@
 | Shortcut | Action |
 | --- | --- |
 | `Ctrl+Alt+P` | Open the chat |
+| `Ctrl+Alt+Shift+P` | Open a parallel chat in an editor tab |
 | `Ctrl+Alt+L` | Add the selection or the file to the chat |
 | `Ctrl+Alt+.` | Phew it! Fix the problem at the cursor |
 | `Alt+]` | Suggest the next edit |
 | `Ctrl+Alt+Y` / `Ctrl+Alt+Z` | Keep or undo all changes in the file |
 | `↑` in the input | Reuse an earlier request |
+| `/btw`, `/goal`, `/compact` | Side question, goal of the chat, compact the chat |
 
 On macOS, use `Cmd` instead of `Ctrl`.
 
 ## Settings
 
-**Phew: Open Settings** opens a settings page with sections for models, the agent, approvals, checks, budget, commits, worktrees, the code index, autocomplete, memory and modes, MCP, privacy, and the interface.
+**Phew: Open Settings** opens a settings page with sections for models, the agent, approvals, checks, budget, commits, worktrees, the code index, autocomplete, memory, modes, and skills, MCP, privacy, and the interface.
+The approval toggles in the chat change only that chat; **save as default** makes them the default.
+Notifications, the sound, the font size of the chat, and the send key (`Enter` or `Ctrl+Enter`) are in **Agent**.
 Every setting is also available in the VS Code settings under **Phew**.
 
 ## Security and privacy

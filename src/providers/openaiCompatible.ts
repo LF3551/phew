@@ -1,5 +1,5 @@
 import type { ChatMessage, CompletionRequest, CompletionResult, ModelClient, ToolCall } from "../core/chat";
-import { type FetchFunction, httpError, networkError, postJson, readSse } from "./http";
+import { type FetchFunction, fetchWithRetry, finalError, postJson, readSse } from "./http";
 import { endpoint, type ModelProfile, requestHeaders } from "./profile";
 
 type ContentPart = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } };
@@ -55,17 +55,23 @@ export function toApiMessages(messages: readonly ChatMessage[]): ApiMessage[] {
 
 interface StreamState {
   content: string;
+  reasoning: string;
   calls: Map<number, { id: string; name: string; arguments: string }>;
   usage?: { inputTokens: number; outputTokens: number };
   finishReason?: string;
 }
 
 export function newStreamState(): StreamState {
-  return { content: "", calls: new Map() };
+  return { content: "", reasoning: "", calls: new Map() };
 }
 
 /** Applies one streamed chunk to the state. */
-export function applyChunk(state: StreamState, chunk: unknown, onText: (delta: string) => void): void {
+export function applyChunk(
+  state: StreamState,
+  chunk: unknown,
+  onText: (delta: string) => void,
+  onReasoning?: (delta: string) => void,
+): void {
   if (typeof chunk !== "object" || chunk === null) return;
   const data = chunk as {
     choices?: { delta?: Record<string, unknown>; message?: Record<string, unknown>; finish_reason?: unknown }[];
@@ -85,6 +91,16 @@ export function applyChunk(state: StreamState, chunk: unknown, onText: (delta: s
   for (const choice of data.choices ?? []) {
     if (typeof choice.finish_reason === "string") state.finishReason = choice.finish_reason;
     const delta = choice.delta ?? choice.message ?? {};
+    const reasoning =
+      typeof delta.reasoning_content === "string"
+        ? delta.reasoning_content
+        : typeof delta.reasoning === "string"
+          ? delta.reasoning
+          : "";
+    if (reasoning) {
+      state.reasoning += reasoning;
+      onReasoning?.(reasoning);
+    }
     if (typeof delta.content === "string" && delta.content.length > 0) {
       state.content += delta.content;
       onText(delta.content);
@@ -110,7 +126,13 @@ export function finishState(state: StreamState): CompletionResult {
     .sort(([a], [b]) => a - b)
     .filter(([, call]) => call.name.length > 0)
     .map(([index, call]) => ({ id: call.id || `call_${index}`, name: call.name, arguments: call.arguments }));
-  return { content: state.content, toolCalls, usage: state.usage, finishReason: state.finishReason };
+  return {
+    content: state.content,
+    toolCalls,
+    usage: state.usage,
+    finishReason: state.finishReason,
+    ...(state.reasoning ? { reasoning: { text: state.reasoning } } : {}),
+  };
 }
 
 /** A client for the OpenAI Chat Completions format with streaming and tools. Many providers implement it. */
@@ -121,6 +143,7 @@ export class OpenAiCompatibleClient implements ModelClient {
     private readonly profile: ModelProfile,
     private readonly apiKey: string | undefined,
     private readonly fetchFunction: FetchFunction = fetch,
+    private readonly retries = 0,
   ) {}
 
   async complete(request: CompletionRequest, onText: (delta: string) => void): Promise<CompletionResult> {
@@ -128,8 +151,8 @@ export class OpenAiCompatibleClient implements ModelClient {
     const state = newStreamState();
     if ((response.headers.get("content-type") ?? "").includes("application/json")) {
       // Some servers ignore `stream` and return one JSON object.
-      applyChunk(state, await response.json(), onText);
-    } else await readSse(response, (data) => applyChunk(state, data, onText));
+      applyChunk(state, await response.json(), onText, request.onReasoning);
+    } else await readSse(response, (data) => applyChunk(state, data, onText, request.onReasoning));
     return finishState(state);
   }
 
@@ -164,27 +187,24 @@ export class OpenAiCompatibleClient implements ModelClient {
     const url = endpoint(this.profile.baseUrl, "chat/completions", this.profile.query);
     const headers = { ...requestHeaders(this.profile, this.apiKey), Accept: "text/event-stream" };
     const name = this.profile.name;
-    if (!this.sendUsageOption)
-      return postJson(this.fetchFunction, name, url, headers, this.body(request, false), request.signal);
-
-    let response: Response;
-    try {
-      response = await this.fetchFunction(url, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(this.body(request, true)),
-        signal: request.signal,
-      });
-    } catch (error) {
-      throw networkError(name, url, error);
+    const retry = { retries: this.retries, onRetry: request.onRetry };
+    if (!this.sendUsageOption) {
+      return postJson(this.fetchFunction, name, url, headers, this.body(request, false), request.signal, retry);
     }
+    const response = await fetchWithRetry(
+      this.fetchFunction,
+      name,
+      url,
+      { method: "POST", headers, body: JSON.stringify(this.body(request, true)), signal: request.signal },
+      retry,
+    );
     if (response.ok) return response;
     const text = await response.text();
     if ((response.status === 400 || response.status === 422) && /stream_options|include_usage/i.test(text)) {
       this.sendUsageOption = false;
-      return postJson(this.fetchFunction, name, url, headers, this.body(request, false), request.signal);
+      return postJson(this.fetchFunction, name, url, headers, this.body(request, false), request.signal, retry);
     }
-    throw httpError(name, response.status, text);
+    throw finalError(name, response.status, text, this.retries + 1);
   }
 }
 

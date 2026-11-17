@@ -132,6 +132,7 @@ export function toGemini(messages: readonly ChatMessage[]): { system: string; co
 
 interface GeminiState {
   content: string;
+  reasoning: string;
   calls: ToolCall[];
   inputTokens: number;
   outputTokens: number;
@@ -139,11 +140,16 @@ interface GeminiState {
 }
 
 export function newGeminiState(): GeminiState {
-  return { content: "", calls: [], inputTokens: 0, outputTokens: 0 };
+  return { content: "", reasoning: "", calls: [], inputTokens: 0, outputTokens: 0 };
 }
 
 /** Applies one streamed Gemini response chunk. */
-export function applyGeminiChunk(state: GeminiState, chunk: unknown, onText: (delta: string) => void): void {
+export function applyGeminiChunk(
+  state: GeminiState,
+  chunk: unknown,
+  onText: (delta: string) => void,
+  onReasoning?: (delta: string) => void,
+): void {
   if (typeof chunk !== "object" || chunk === null) return;
   const data = chunk as {
     candidates?: { content?: { parts?: Record<string, unknown>[] }; finishReason?: unknown }[];
@@ -165,7 +171,10 @@ export function applyGeminiChunk(state: GeminiState, chunk: unknown, onText: (de
   if (!candidate) return;
   if (typeof candidate.finishReason === "string") state.finishReason = candidate.finishReason;
   for (const part of candidate.content?.parts ?? []) {
-    if (typeof part.text === "string" && part.thought !== true) {
+    if (typeof part.text === "string" && part.thought === true) {
+      state.reasoning += part.text;
+      onReasoning?.(part.text);
+    } else if (typeof part.text === "string") {
       state.content += part.text;
       onText(part.text);
     }
@@ -188,6 +197,7 @@ export function finishGemini(state: GeminiState): CompletionResult {
     toolCalls: state.calls,
     usage: { inputTokens: state.inputTokens, outputTokens: state.outputTokens },
     finishReason: state.finishReason,
+    ...(state.reasoning ? { reasoning: { text: state.reasoning } } : {}),
   };
 }
 
@@ -197,6 +207,7 @@ export class GeminiClient implements ModelClient {
     private readonly profile: ModelProfile,
     private readonly apiKey: string | undefined,
     private readonly fetchFunction: FetchFunction = fetch,
+    private readonly retries = 0,
   ) {}
 
   body(request: CompletionRequest): Record<string, unknown> {
@@ -242,9 +253,10 @@ export class GeminiClient implements ModelClient {
       { ...requestHeaders(this.profile, this.apiKey), Accept: "text/event-stream" },
       this.body(request),
       request.signal,
+      { retries: this.retries, onRetry: request.onRetry },
     );
     const state = newGeminiState();
-    await readSse(response, (chunk) => applyGeminiChunk(state, chunk, onText));
+    await readSse(response, (chunk) => applyGeminiChunk(state, chunk, onText, request.onReasoning));
     return finishGemini(state);
   }
 }

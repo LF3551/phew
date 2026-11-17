@@ -13,18 +13,20 @@ import { decideCommand } from "../core/commandPolicy";
 import { adjustAgentGitCommand, describeCommitIdentity } from "../core/commit";
 import { detectEol } from "../core/diff";
 import type { ModeDefinition } from "../core/modes";
-import { resolveInside, toRelative } from "../core/paths";
+import { type Plan, parsePlanUpdate, parseQuestion } from "../core/plan";
+import type { RootSet } from "../core/roots";
 import { isSensitivePath, redactSecrets } from "../core/secrets";
 import { toolGroup, toolsForMode } from "../core/tools";
 import type { ApprovalBroker } from "./approvals";
 import type { ChangeManager } from "./changes";
 import { readWorkspaceText } from "./changes";
-import { type CodeIndexManager, relativeHits } from "./codeIndexManager";
+import type { CodeIndexManager } from "./codeIndexManager";
 import { describeResult, runShellCommand } from "./commandRunner";
 import { git, gitIdentity } from "./git";
 import type { McpManager } from "./mcpManager";
 import type { MemoryStore } from "./memoryStore";
 import type { Settings } from "./settings";
+import type { SkillStore } from "./skillStore";
 
 const maximumToolOutput = 40_000;
 const maximumReadLines = 2_000;
@@ -39,6 +41,9 @@ export interface SessionRoot {
 
 export interface ToolHostOptions {
   readonly root: SessionRoot;
+  readonly roots: RootSet;
+  readonly skills: SkillStore;
+  readonly plan: { get(): Plan; set(plan: Plan): void };
   readonly mode: ModeDefinition;
   readonly settings: Settings;
   readonly broker: ApprovalBroker;
@@ -56,16 +61,24 @@ export class ToolHost {
   constructor(private readonly options: ToolHostOptions) {}
 
   private get rootPath(): string {
-    return this.options.root.uri.fsPath;
+    return this.options.roots.primary.path;
+  }
+
+  private get rootUris(): vscode.Uri[] {
+    return this.options.roots.roots.map((root) => vscode.Uri.file(root.path));
   }
 
   async definitions(): Promise<ToolDefinition[]> {
     const { mode, settings } = this.options;
-    const builtIn = toolsForMode(mode, { memory: settings.memoryEnabled, index: settings.index.enabled });
-    if (!mode.tools.has("mcp") || !vscode.workspace.isTrusted || Object.keys(settings.mcpServers).length === 0)
-      return builtIn;
+    const skills = settings.skillsEnabled ? await this.options.skills.list(this.rootUris) : [];
+    const builtIn = toolsForMode(mode, {
+      memory: settings.memoryEnabled,
+      index: settings.index.enabled,
+      skills: skills.length > 0,
+    });
+    if (!mode.tools.has("mcp") || !vscode.workspace.isTrusted) return builtIn;
     try {
-      const bindings = await this.options.mcp.tools(settings.mcpServers, this.rootPath);
+      const bindings = await this.options.mcp.tools(this.options.root.uri);
       this.mcpDefinitions = bindings.map((binding) => binding.definition);
     } catch (error) {
       this.options.log.warn(`MCP tools are not available: ${error instanceof Error ? error.message : String(error)}`);
@@ -86,7 +99,8 @@ export class ToolHost {
     } catch {
       return call.name;
     }
-    const value = args.path ?? args.pattern ?? args.query ?? args.command ?? args.note;
+    const value =
+      args.path ?? args.pattern ?? args.query ?? args.command ?? args.note ?? args.question ?? args.name ?? args.goal;
     return typeof value === "string" ? `${call.name} ${value.slice(0, 120)}` : call.name;
   }
 
@@ -132,6 +146,25 @@ export class ToolHost {
       case "remember":
         result = await this.remember(args);
         break;
+      case "ask_user":
+        result = await this.askUser(args, signal);
+        break;
+      case "update_plan":
+        this.options.plan.set(parsePlanUpdate(args, this.options.plan.get()));
+        result = { content: "The checklist is updated." };
+        break;
+      case "load_skill":
+        result = { content: await this.options.skills.load(this.rootUris, stringArgument(args, "name") as string) };
+        break;
+      case "read_skill_file":
+        result = {
+          content: await this.options.skills.readFile(
+            this.rootUris,
+            stringArgument(args, "name") as string,
+            stringArgument(args, "path") as string,
+          ),
+        };
+        break;
       default:
         result = await this.callMcp(call.name, args, signal);
     }
@@ -144,9 +177,9 @@ export class ToolHost {
   }
 
   private resolve(input: string, allowSensitive = false): { uri: vscode.Uri; relative: string } {
-    const absolute = resolveInside(this.rootPath, input);
+    const absolute = this.options.roots.resolve(input);
     if (!absolute) throw new Error(`The path "${input}" is outside the workspace.`);
-    const relative = toRelative(this.rootPath, absolute);
+    const relative = this.options.roots.display(absolute);
     if (!allowSensitive && isSensitivePath(relative, this.options.settings.sensitiveNames)) {
       throw new Error(`Phew does not open "${relative}" because it can contain secrets.`);
     }
@@ -156,12 +189,17 @@ export class ToolHost {
   private async listFiles(args: Record<string, unknown>): Promise<ToolResult> {
     const pattern = stringArgument(args, "pattern") as string;
     const limit = Math.min(Math.max(1, numberArgument(args, "limit") ?? 200), 1000);
-    const files = await vscode.workspace.findFiles(
-      new vscode.RelativePattern(this.options.root.uri, pattern),
-      undefined,
-      limit,
-    );
-    const paths = files.map((file) => toRelative(this.rootPath, file.fsPath)).sort();
+    const files = (
+      await Promise.all(
+        this.rootUris.map((root) =>
+          vscode.workspace.findFiles(new vscode.RelativePattern(root, pattern), undefined, limit),
+        ),
+      )
+    ).flat();
+    const paths = files
+      .map((file) => this.options.roots.display(file.fsPath))
+      .sort()
+      .slice(0, limit);
     return { content: paths.length > 0 ? paths.join("\n") : "No files match." };
   }
 
@@ -194,15 +232,21 @@ export class ToolHost {
     } catch {
       throw new Error("The regular expression is not valid.");
     }
-    const files = await vscode.workspace.findFiles(
-      new vscode.RelativePattern(this.options.root.uri, include),
-      "**/{node_modules,.git,dist,out,build,coverage}/**",
-      maximumSearchFiles,
-    );
+    const files = (
+      await Promise.all(
+        this.rootUris.map((root) =>
+          vscode.workspace.findFiles(
+            new vscode.RelativePattern(root, include),
+            "**/{node_modules,.git,dist,out,build,coverage}/**",
+            maximumSearchFiles,
+          ),
+        ),
+      )
+    ).flat();
     const results: string[] = [];
     for (const file of files) {
       if (signal.aborted || results.length >= maximumSearchResults) break;
-      const relative = toRelative(this.rootPath, file.fsPath);
+      const relative = this.options.roots.display(file.fsPath);
       if (isSensitivePath(relative, this.options.settings.sensitiveNames)) continue;
       let text: string | null;
       try {
@@ -225,14 +269,24 @@ export class ToolHost {
   private async searchCode(args: Record<string, unknown>, signal: AbortSignal): Promise<ToolResult> {
     const query = stringArgument(args, "query") as string;
     const limit = Math.min(Math.max(1, numberArgument(args, "limit") ?? 8), 20);
-    const hits = await this.options.index.search(this.options.root.uri, query, limit, signal);
-    return { content: formatHits(relativeHits(this.options.root.uri, hits)) };
+    const all = (
+      await Promise.all(
+        this.rootUris.map(async (root) =>
+          (
+            await this.options.index.search(root, query, limit, signal)
+          ).map((hit) => ({ ...hit, path: this.options.roots.display(hit.path) })),
+        ),
+      )
+    ).flat();
+    return { content: formatHits(all.sort((a, b) => b.score - a.score).slice(0, limit)) };
   }
 
   private async gitDiff(args: Record<string, unknown>): Promise<ToolResult> {
     const path = stringArgument(args, "path", false);
-    const extra = path ? ["--", this.resolve(path).relative] : [];
-    const result = await git(this.rootPath, [
+    const target = path ? this.resolve(path).uri.fsPath : undefined;
+    const cwd = target ? (this.options.roots.rootOf(target)?.path ?? this.rootPath) : this.rootPath;
+    const extra = target ? ["--", target] : [];
+    const result = await git(cwd, [
       "diff",
       ...(args.staged === true ? ["--cached"] : ["HEAD"]),
       "--no-color",
@@ -240,7 +294,7 @@ export class ToolHost {
       ...extra,
     ]);
     if (result.code !== 0) return { content: `git diff failed: ${result.stderr.trim() || "not a Git repository"}` };
-    const status = await git(this.rootPath, ["status", "--short"]);
+    const status = await git(cwd, ["status", "--short"]);
     return {
       content: `${status.stdout.trim() ? `Status:\n${status.stdout.trim()}\n\n` : ""}${result.stdout.trim() || "No changes."}`,
     };
@@ -254,14 +308,14 @@ export class ToolHost {
       : vscode.languages.getDiagnostics();
     const lines: string[] = [];
     for (const [uri, diagnostics] of entries) {
-      const absolute = resolveInside(this.rootPath, uri.fsPath);
-      if (!absolute) continue;
+      if (!this.options.roots.rootOf(uri.fsPath)) continue;
+      const absolute = uri.fsPath;
       for (const diagnostic of diagnostics) {
         if (diagnostic.severity > vscode.DiagnosticSeverity.Warning) continue;
         const severity = diagnostic.severity === vscode.DiagnosticSeverity.Error ? "error" : "warning";
         const source = diagnostic.source ? ` [${diagnostic.source}]` : "";
         lines.push(
-          `${toRelative(this.rootPath, absolute)}:${diagnostic.range.start.line + 1}: ${severity}${source} ${diagnostic.message}`,
+          `${this.options.roots.display(absolute)}:${diagnostic.range.start.line + 1}: ${severity}${source} ${diagnostic.message}`,
         );
         if (lines.length >= 300) break;
       }
@@ -306,19 +360,20 @@ export class ToolHost {
 
   private async runCommand(args: Record<string, unknown>, signal: AbortSignal): Promise<ToolResult> {
     const requested = (stringArgument(args, "command") as string).trim();
+    const folder = stringArgument(args, "cwd", false);
+    const cwd = folder ? this.options.roots.resolve(folder) : this.rootPath;
+    if (!cwd) throw new Error(`The folder "${folder}" is outside the workspace.`);
     const { command, notes } = adjustAgentGitCommand(requested, this.options.settings.commit);
     const decision = decideCommand(command, this.options.settings.commands);
     if (decision.kind === "deny") throw new Error(decision.reason);
     const isCommit = notes.length > 0 || /^\s*git\s+(-[Cc]\s+\S+\s+)*commit\b/.test(command);
     if (decision.kind === "ask" || isCommit) {
-      const identity = isCommit
-        ? describeCommitIdentity(this.options.settings.commit, await gitIdentity(this.rootPath))
-        : "";
+      const identity = isCommit ? describeCommitIdentity(this.options.settings.commit, await gitIdentity(cwd)) : "";
       const answer = await this.options.broker.request(
         {
           kind: "command",
           title: isCommit ? "Commit with Git" : "Run command",
-          detail: command,
+          detail: folder ? `${command}\n(in ${this.options.roots.display(cwd)})` : command,
           reason: [decision.kind === "ask" ? decision.reason : undefined, identity, ...notes].filter(Boolean).join(" "),
         },
         signal,
@@ -329,9 +384,26 @@ export class ToolHost {
       }
     }
     this.options.log.info(`[audit] command run: ${command}`);
-    const result = await runShellCommand(command, this.rootPath, this.options.settings.commandTimeoutSeconds, signal);
+    const result = await runShellCommand(command, cwd, this.options.settings.commandTimeoutSeconds, signal);
     const prefix = notes.length > 0 ? `${notes.join(" ")}\n` : "";
     return { content: prefix + describeResult(command, result) };
+  }
+
+  private async askUser(args: Record<string, unknown>, signal: AbortSignal): Promise<ToolResult> {
+    const question = parseQuestion(args);
+    const answer = await this.options.broker.request(
+      {
+        kind: "question",
+        title: question.question,
+        detail: "",
+        options: question.options,
+        allowText: question.allowText,
+      },
+      signal,
+    );
+    if (!answer.allowed)
+      return { content: "The user skipped the question. Make a reasonable choice and say which one." };
+    return { content: `The user answered: ${answer.answer ?? ""}` };
   }
 
   private async remember(args: Record<string, unknown>): Promise<ToolResult> {

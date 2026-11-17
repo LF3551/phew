@@ -9,6 +9,7 @@ import {
   serializeProfile,
   uniqueId,
 } from "../providers/profile";
+import { readSettings } from "./settings";
 import { listVsCodeModels, VsCodeLanguageModelClient } from "./vscodeLmClient";
 
 const section = "phew";
@@ -57,7 +58,7 @@ export class ModelManager {
 
   async client(profile: ModelProfile): Promise<ModelClient> {
     if (profile.provider === "vscode") return new VsCodeLanguageModelClient(profile.model);
-    return createHttpClient(profile, await this.apiKey(profile));
+    return createHttpClient(profile, await this.apiKey(profile), fetch, readSettings().maxRetries);
   }
 
   async setActive(id: string): Promise<void> {
@@ -148,6 +149,7 @@ export class ModelManager {
       ),
       name: name.trim(),
       model: model.id,
+      ...(model.contextWindow ? { contextWindow: model.contextWindow } : {}),
     };
     if (key.value) await this.secrets.store(apiKeySecretName(profile.id), key.value);
     await this.save([...existing, profile]);

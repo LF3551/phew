@@ -3,6 +3,8 @@ import type {
   HistoryItem,
   HostMessage,
   MentionItem,
+  PlanView,
+  QueuedView,
   SessionSummary,
   ViewState,
   WebviewMessage,
@@ -36,7 +38,8 @@ const celebration = $<HTMLElement>("celebration");
 const imageInput = $<HTMLInputElement>("imageInput");
 
 let state: ViewState | undefined;
-const assistants = new Map<string, { element: HTMLElement; text: string }>();
+const assistants = new Map<string, { element: HTMLElement; body: HTMLElement; text: string }>();
+const thoughts = new Map<string, { element: HTMLDetailsElement; body: HTMLElement; text: string; started: number }>();
 const tools = new Map<string, HTMLDetailsElement>();
 const approvals = new Map<string, HTMLElement>();
 let attachments: { attachment: Attachment; label: string }[] = [];
@@ -48,8 +51,13 @@ let history: HistoryItem[] = [];
 
 interface Saved {
   promptHistory: string[];
+  planOpen: boolean;
 }
-const saved: Saved = { promptHistory: [], ...((vscode.getState() as Partial<Saved> | undefined) ?? {}) };
+const saved: Saved = {
+  promptHistory: [],
+  planOpen: true,
+  ...((vscode.getState() as Partial<Saved> | undefined) ?? {}),
+};
 let historyPosition = -1;
 
 function element<K extends keyof HTMLElementTagNameMap>(
@@ -71,34 +79,118 @@ function button(label: string, className: string, onClick: () => void, title?: s
   return node;
 }
 
+function time(at: number | undefined): HTMLElement {
+  const node = element("time", "time");
+  if (!at) return node;
+  const date = new Date(at);
+  node.textContent = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  node.title = date.toLocaleString();
+  node.dateTime = date.toISOString();
+  return node;
+}
+
+function nearBottom(): boolean {
+  return transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight < 120;
+}
+
 function append(node: HTMLElement): void {
   welcome.hidden = true;
-  const atBottom = transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight < 80;
+  const atBottom = nearBottom();
   transcript.append(node);
   if (atBottom) transcript.scrollTop = transcript.scrollHeight;
 }
 
-/** Renders Markdown and adds a Copy button to each code block. */
+// Clickable file references such as src/app.ts:42 or package.json.
+
+const filePattern = /(?<![\w/.-])((?:[\w.-]+\/)*[\w.-]+\.[A-Za-z][A-Za-z0-9]{0,9})(?::(\d+))?(?::\d+)?(?![\w/-])/g;
+
+function fileLink(path: string, line: string | undefined, label: string): HTMLAnchorElement {
+  const link = element("a", "file-link", label);
+  link.href = "#";
+  link.title = `Open ${path}${line ? ` at line ${line}` : ""}`;
+  link.addEventListener("click", (event) => {
+    event.preventDefault();
+    vscode.postMessage({ type: "openFile", path, ...(line ? { line: Number(line) } : {}) });
+  });
+  return link;
+}
+
+function linkify(root: ParentNode): void {
+  for (const code of root.querySelectorAll(":not(pre) > code")) {
+    const text = code.textContent ?? "";
+    const match = /^((?:[\w.-]+\/)*[\w.-]+\.[A-Za-z][A-Za-z0-9]{0,9})(?::(\d+))?(?::\d+)?$/.exec(text);
+    if (match && !/^\d/.test(match[1])) {
+      const link = fileLink(match[1], match[2], "");
+      link.append(code.cloneNode(true));
+      code.replaceWith(link);
+    }
+  }
+  const walker = document.createTreeWalker(root as Node, NodeFilter.SHOW_TEXT);
+  const nodes: Text[] = [];
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const parent = (node as Text).parentElement;
+    if (parent && !parent.closest("pre, code, a")) nodes.push(node as Text);
+  }
+  for (const node of nodes) {
+    const text = node.textContent ?? "";
+    filePattern.lastIndex = 0;
+    if (!filePattern.test(text)) continue;
+    filePattern.lastIndex = 0;
+    const fragment = document.createDocumentFragment();
+    let last = 0;
+    for (const match of text.matchAll(filePattern)) {
+      const path = match[1];
+      // Skip plain words with dots, such as "e.g" or version numbers.
+      if (
+        !path.includes("/") &&
+        !match[2] &&
+        !/\.(ts|tsx|js|jsx|mjs|cjs|py|go|rs|java|kt|cs|cpp|c|h|rb|php|swift|json|ya?ml|toml|md|css|scss|html|vue|svelte|sh|sql|tf)$/i.test(
+          path,
+        )
+      )
+        continue;
+      const start = match.index ?? 0;
+      fragment.append(text.slice(last, start), fileLink(path, match[2], match[0]));
+      last = start + match[0].length;
+    }
+    if (last === 0) continue;
+    fragment.append(text.slice(last));
+    node.replaceWith(fragment);
+  }
+}
+
+/** Renders Markdown, adds Copy buttons to code blocks, and links file references. */
 function markdown(text: string): DocumentFragment {
   const fragment = renderMarkdown(text);
   for (const pre of fragment.querySelectorAll("pre")) {
     const wrapper = element("div", "code");
     pre.replaceWith(wrapper);
-    const copy = button("Copy", "copy", () => {
-      void navigator.clipboard.writeText(pre.textContent ?? "").then(() => {
-        copy.textContent = "Copied";
-        setTimeout(() => {
-          copy.textContent = "Copy";
-        }, 1200);
-      });
-    });
-    wrapper.append(copy, pre);
+    wrapper.append(
+      copyButton(() => pre.textContent ?? ""),
+      pre,
+    );
   }
+  linkify(fragment);
   return fragment;
 }
 
+function copyButton(text: () => string, label = "Copy", className = "copy"): HTMLButtonElement {
+  const copy = button(label, className, () => {
+    void navigator.clipboard.writeText(text()).then(() => {
+      copy.textContent = "Copied";
+      setTimeout(() => {
+        copy.textContent = label;
+      }, 1200);
+    });
+  });
+  return copy;
+}
+
+// State
+
 function applyState(next: ViewState): void {
   state = next;
+  document.body.style.setProperty("--phew-font-size", next.fontSize ? `${next.fontSize}px` : "var(--vscode-font-size)");
   $("titleText").textContent = next.title;
   const worktree = $("worktree");
   worktree.hidden = !next.worktree;
@@ -107,6 +199,7 @@ function applyState(next: ViewState): void {
   running.hidden = next.runningSessions === 0;
   running.textContent = next.runningSessions > 0 ? `● ${next.runningSessions}` : "";
   running.title = `${next.runningSessions} running`;
+  $("popOut").hidden = next.pinned;
 
   if (
     modeSelect.options.length !== next.modes.length ||
@@ -128,12 +221,28 @@ function applyState(next: ViewState): void {
   modelButton.textContent = next.configured ? `${next.model} ▾` : "Choose a model ▾";
   modelButton.title = next.configured ? `${next.model} (${next.provider}). Click to switch.` : "Add a model";
   $("setup").hidden = next.configured;
-  sendButton.hidden = next.busy;
+  sendButton.textContent = next.busy ? "Queue" : "Send";
+  sendButton.title = next.busy ? "The message reaches the agent at its next step" : "Send";
   stopButton.hidden = !next.busy;
+  const send = next.sendWith === "ctrlEnter" ? "Ctrl+Enter to send" : "Enter to send";
+  prompt.placeholder = next.busy
+    ? "Phew is working. Write to steer it, or /btw for a side question."
+    : `Ask Phew or describe a change. @ to attach, ↑ for history, ${send}.`;
   $<HTMLSelectElement>("approvalReview").value = next.approvals.review;
   $<HTMLSelectElement>("approvalCommands").value = next.approvals.commands;
   $<HTMLSelectElement>("approvalMcp").value = String(next.approvals.mcp);
+  $("approvalCustom").hidden = !next.approvals.custom;
   $("approvals").hidden = !next.trusted;
+
+  const context = $("context");
+  context.hidden = next.context <= 0;
+  const percent = Math.round(next.context * 100);
+  const fill = $("contextFill");
+  fill.style.width = `${percent}%`;
+  fill.dataset.level = percent >= 85 ? "high" : percent >= 60 ? "medium" : "low";
+  $("contextLabel").textContent = `${percent}% context`;
+  context.title = next.contextLabel;
+  $("compact").hidden = percent < 50 || next.busy;
 
   const usage = [next.tokens !== "0" ? `${next.tokens} tokens` : "", next.cost].filter(Boolean).join(" · ");
   meter.textContent = [next.trusted ? "" : "Restricted mode: Phew changes nothing.", usage, next.stats]
@@ -145,52 +254,98 @@ function applyState(next: ViewState): void {
     `${next.reviewFiles} ${next.reviewFiles === 1 ? "file has" : "files have"} changes to keep or undo.`;
 }
 
+// Messages
+
 function addUser(message: Extract<HostMessage, { type: "user" }>): void {
-  const node = element("article", "message user");
-  node.append(element("div", "text", message.text));
+  const node = element("article", `message user${message.text.startsWith("/btw ") ? " btw" : ""}`);
+  const header = element("div", "message-header");
+  header.append(element("span", "who", "You"), time(message.at));
+  node.append(header, element("div", "text", message.text));
   if (message.attachments && message.attachments.length > 0) {
     const list = element("div", "chips static");
     for (const label of message.attachments) list.append(element("span", "chip", label));
     node.append(list);
   }
-  const actions = element("div", "message-actions");
-  actions.append(
-    button(
-      "Restore checkpoint",
-      "link",
-      () => vscode.postMessage({ type: "restoreCheckpoint", checkpointId: message.checkpointId }),
-      "Undo all file changes made since this request",
-    ),
-    button(
-      "Edit",
-      "link",
-      () => {
-        prompt.value = message.text;
-        prompt.focus();
-      },
-      "Copy this request to the input",
-    ),
-  );
-  node.append(actions);
+  if (!message.text.startsWith("/btw ")) {
+    const actions = element("div", "message-actions");
+    actions.append(
+      button(
+        "Restore checkpoint",
+        "link",
+        () => vscode.postMessage({ type: "restoreCheckpoint", checkpointId: message.checkpointId }),
+        "Undo all file changes made since this request",
+      ),
+      button(
+        "Edit",
+        "link",
+        () => {
+          prompt.value = message.text;
+          prompt.focus();
+        },
+        "Copy this request to the input",
+      ),
+    );
+    node.append(actions);
+  }
   append(node);
 }
 
-function renderAssistant(id: string, text: string, done: boolean): void {
+function assistantEntry(id: string, variant?: "btw") {
   let entry = assistants.get(id);
   if (!entry) {
-    const node = element("article", "message assistant streaming");
-    entry = { element: node, text: "" };
+    const node = element("article", `message assistant streaming${variant ? ` ${variant}` : ""}`);
+    const header = element("div", "message-header");
+    header.append(element("span", "who", variant === "btw" ? "Phew · btw" : "Phew"));
+    const body = element("div", "body");
+    node.append(header, body);
+    entry = { element: node, body, text: "" };
     assistants.set(id, entry);
     append(node);
   }
+  return entry;
+}
+
+function renderAssistant(id: string, text: string, done: boolean, at?: number, variant?: "btw"): void {
+  const entry = assistantEntry(id, variant);
   entry.text = text;
+  const follow = nearBottom();
   if (done) {
     entry.element.classList.remove("streaming");
-    entry.element.replaceChildren(markdown(text));
-    if (text.trim() === "") entry.element.remove();
-  } else entry.element.textContent = text;
-  if (transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight < 160)
-    transcript.scrollTop = transcript.scrollHeight;
+    if (text.trim() === "") {
+      entry.element.remove();
+      return;
+    }
+    entry.body.replaceChildren(markdown(text));
+    const header = entry.element.querySelector(".message-header");
+    header?.append(
+      time(at),
+      copyButton(() => entry.text, "Copy answer", "copy-answer"),
+    );
+  } else entry.body.textContent = text;
+  if (follow) transcript.scrollTop = transcript.scrollHeight;
+}
+
+function renderThought(id: string, delta: string, done: boolean, full?: string): void {
+  let entry = thoughts.get(id);
+  if (!entry) {
+    const node = element("details", "thinking");
+    node.open = true;
+    const summary = element("summary", "thinking-summary", "Thinking…");
+    const body = element("div", "thinking-body");
+    node.append(summary, body);
+    entry = { element: node, body, text: "", started: Date.now() };
+    thoughts.set(id, entry);
+    append(node);
+  }
+  entry.text = full ?? entry.text + delta;
+  entry.body.textContent = entry.text;
+  if (done) {
+    const seconds = Math.max(1, Math.round((Date.now() - entry.started) / 1000));
+    const summary = entry.element.querySelector("summary");
+    if (summary) summary.textContent = full !== undefined && !delta ? "Thought" : `Thought for ${seconds} s`;
+    entry.element.open = false;
+  }
+  if (nearBottom()) transcript.scrollTop = transcript.scrollHeight;
 }
 
 function updateTool(message: Extract<HostMessage, { type: "tool" }>): void {
@@ -203,15 +358,60 @@ function updateTool(message: Extract<HostMessage, { type: "tool" }>): void {
   node.dataset.status = message.status;
   const summary = element("summary");
   const icon = message.status === "running" ? "⋯" : message.status === "error" ? "✕" : "✓";
-  summary.append(element("span", "icon", icon), element("span", "label", message.summary));
+  summary.append(element("span", "icon", icon), element("span", "label", message.summary), time(message.at));
   node.replaceChildren(summary);
   if (message.detail) node.append(element("pre", "detail", message.detail));
 }
 
 function addApproval(message: Extract<HostMessage, { type: "approval" }>): void {
   const card = element("section", `approval ${message.kind}`);
-  card.append(element("h3", undefined, message.title));
+  card.append(element("h3", undefined, message.kind === "question" ? `❓ ${message.title}` : message.title));
   if (message.reason) card.append(element("p", "reason", message.reason));
+  const actions = element("div", "actions");
+
+  if (message.kind === "question") {
+    const options = element("div", "options");
+    for (const option of message.options ?? []) {
+      options.append(
+        button(option, "secondary option", () =>
+          vscode.postMessage({ type: "approve", id: message.id, decision: "allow", text: option }),
+        ),
+      );
+    }
+    card.append(options);
+    if (message.allowText !== false) {
+      const answer = element("textarea", "answer");
+      answer.rows = 2;
+      answer.placeholder = "Type an answer";
+      answer.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && !event.shiftKey && answer.value.trim()) {
+          event.preventDefault();
+          vscode.postMessage({ type: "approve", id: message.id, decision: "allow", text: answer.value.trim() });
+        }
+      });
+      card.append(answer);
+      actions.append(
+        button("Skip", "secondary", () =>
+          vscode.postMessage({ type: "approve", id: message.id, decision: "deny", text: "" }),
+        ),
+        button("Answer", "primary", () => {
+          if (answer.value.trim())
+            vscode.postMessage({ type: "approve", id: message.id, decision: "allow", text: answer.value.trim() });
+        }),
+      );
+    } else
+      actions.append(
+        button("Skip", "secondary", () =>
+          vscode.postMessage({ type: "approve", id: message.id, decision: "deny", text: "" }),
+        ),
+      );
+    card.append(actions);
+    approvals.set(message.id, card);
+    append(card);
+    card.scrollIntoView({ block: "nearest" });
+    return;
+  }
+
   const selected = new Set((message.hunks ?? []).map((hunk) => hunk.index));
   if (message.kind === "edit") {
     card.append(element("p", "detail", message.detail));
@@ -236,7 +436,6 @@ function addApproval(message: Extract<HostMessage, { type: "approval" }>): void 
     card.append(list);
   } else card.append(element("pre", "command", message.detail));
 
-  const actions = element("div", "actions");
   if (message.kind === "edit")
     actions.append(button("Open diff", "secondary", () => vscode.postMessage({ type: "openDiff", id: message.id })));
   actions.append(
@@ -263,9 +462,48 @@ function resolveApproval(id: string, decision: string): void {
   if (!card) return;
   approvals.delete(id);
   card.classList.add("resolved");
-  for (const control of card.querySelectorAll<HTMLButtonElement | HTMLInputElement>("button, input"))
+  for (const control of card.querySelectorAll<HTMLButtonElement | HTMLInputElement | HTMLTextAreaElement>(
+    "button, input, textarea",
+  )) {
     control.disabled = true;
-  card.querySelector(".actions")?.replaceChildren(element("span", `decision ${decision}`, decision));
+  }
+  card.querySelector(".options")?.remove();
+  card.querySelector(".answer")?.remove();
+  card.querySelector(".actions")?.replaceChildren(element("span", `decision ${decision.split(":")[0]}`, decision));
+}
+
+function renderPlan(plan: PlanView): void {
+  const section = $("plan");
+  section.hidden = !plan.goal && plan.items.length === 0;
+  const done = plan.items.filter((item) => item.status === "done").length;
+  $("planTitle").textContent = plan.goal ? `🎯 ${plan.goal}` : "Plan";
+  $("planProgress").textContent = plan.items.length > 0 ? `${done}/${plan.items.length}` : "";
+  const list = $("planItems");
+  list.hidden = !saved.planOpen;
+  $("planToggle").setAttribute("aria-expanded", String(saved.planOpen));
+  list.replaceChildren(
+    ...plan.items.map((item) => {
+      const row = element("li", `plan-item ${item.status}`);
+      row.append(
+        element("span", "mark", item.status === "done" ? "✓" : item.status === "in_progress" ? "●" : "○"),
+        element("span", undefined, item.text),
+      );
+      return row;
+    }),
+  );
+}
+
+function renderQueue(items: readonly QueuedView[]): void {
+  const list = $("queue");
+  list.hidden = items.length === 0;
+  list.replaceChildren(
+    ...items.map((item) => {
+      const row = element("li", "queued");
+      row.append(element("span", "queued-label", "Queued"), element("span", "queued-text", item.text));
+      row.append(button("×", "remove", () => vscode.postMessage({ type: "removeQueued", id: item.id }), "Remove"));
+      return row;
+    }),
+  );
 }
 
 function celebrate(): void {
@@ -278,12 +516,40 @@ function celebrate(): void {
   }, 1800);
 }
 
+/** A short, soft "phew" sound: two falling tones. */
+function playSound(): void {
+  try {
+    const AudioContextClass =
+      window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const audio = new AudioContextClass();
+    const gain = audio.createGain();
+    gain.connect(audio.destination);
+    gain.gain.setValueAtTime(0.0001, audio.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.08, audio.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + 0.45);
+    const oscillator = audio.createOscillator();
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(880, audio.currentTime);
+    oscillator.frequency.exponentialRampToValueAtTime(520, audio.currentTime + 0.4);
+    oscillator.connect(gain);
+    oscillator.start();
+    oscillator.stop(audio.currentTime + 0.46);
+    oscillator.onended = () => void audio.close();
+  } catch {
+    // Sound is optional.
+  }
+}
+
 function clearTranscript(): void {
   for (const node of [...transcript.children]) if (node !== welcome) node.remove();
   assistants.clear();
+  thoughts.clear();
   tools.clear();
   approvals.clear();
   welcome.hidden = false;
+  renderPlan({ items: [] });
+  renderQueue([]);
 }
 
 // Attachments
@@ -396,8 +662,17 @@ function renderPanel(): void {
       });
       row.append(label);
       if (session.worktree) row.append(element("span", "badge", `⑂ ${session.worktree}`));
-      if (session.needsApproval) row.append(element("span", "badge warn", "needs approval"));
+      if (session.needsApproval) row.append(element("span", "badge warn", "needs input"));
       else if (session.running) row.append(element("span", "badge", "running"));
+      row.append(
+        button("✎", "remove", () => vscode.postMessage({ type: "renameChat", id: session.id }), "Rename"),
+        button(
+          "⧉",
+          "remove",
+          () => vscode.postMessage({ type: "openInEditor", id: session.id }),
+          "Open in an editor tab",
+        ),
+      );
       return row;
     }),
   );
@@ -424,8 +699,8 @@ function renderPanel(): void {
   );
 }
 
-function relativeTime(time: number): string {
-  const minutes = Math.round((Date.now() - time) / 60_000);
+function relativeTime(at: number): string {
+  const minutes = Math.round((Date.now() - at) / 60_000);
   if (minutes < 1) return "now";
   if (minutes < 60) return `${minutes} min`;
   const hours = Math.round(minutes / 60);
@@ -452,13 +727,19 @@ function handle(message: HostMessage): void {
       addUser(message);
       break;
     case "assistantStart":
-      renderAssistant(message.id, "", false);
+      assistantEntry(message.id, message.variant);
       break;
     case "assistantDelta":
       renderAssistant(message.id, (assistants.get(message.id)?.text ?? "") + message.text, false);
       break;
     case "assistantEnd":
-      renderAssistant(message.id, message.text, true);
+      renderAssistant(message.id, message.text, true, message.at, message.variant);
+      break;
+    case "reasoningDelta":
+      if (state?.showThinking !== false) renderThought(message.id, message.text, false);
+      break;
+    case "reasoningEnd":
+      if (state?.showThinking !== false && message.text) renderThought(message.id, "", true, message.text);
       break;
     case "tool":
       updateTool(message);
@@ -471,14 +752,13 @@ function handle(message: HostMessage): void {
       break;
     case "verify": {
       const node = element("details", `verify ${message.passed ? "passed" : "failed"}`);
-      node.append(
-        element(
-          "summary",
-          undefined,
-          message.passed ? "✓ Checks pass" : `✕ Checks fail (attempt ${message.attempt}). Phew keeps fixing…`,
-        ),
-        element("pre", "detail", message.output),
+      const summary = element(
+        "summary",
+        undefined,
+        message.passed ? "✓ Checks pass" : `✕ Checks fail (attempt ${message.attempt}). Phew keeps fixing…`,
       );
+      summary.append(time(message.at));
+      node.append(summary, element("pre", "detail", message.output));
       append(node);
       break;
     }
@@ -487,14 +767,26 @@ function handle(message: HostMessage): void {
       if (message.verified) append(element("p", "notice success", "Phew! All checks pass."));
       if (message.celebrate && state?.celebrate !== false) celebrate();
       break;
-    case "notice":
-      append(element("p", `notice ${message.level}`, message.text));
+    case "notice": {
+      const node = element("p", `notice ${message.level}`, message.text);
+      linkify(node);
+      append(node);
       break;
+    }
     case "checkpointRestored":
       append(element("p", "notice info", `Restored ${message.files.length} files: ${message.files.join(", ")}`));
       break;
     case "cleared":
       clearTranscript();
+      break;
+    case "plan":
+      renderPlan(message.plan);
+      break;
+    case "queue":
+      renderQueue(message.items);
+      break;
+    case "sound":
+      playSound();
       break;
     case "sessions":
       sessions = [...message.sessions];
@@ -523,7 +815,7 @@ function handle(message: HostMessage): void {
 form.addEventListener("submit", (event) => {
   event.preventDefault();
   const text = prompt.value.trim();
-  if ((!text && attachments.length === 0) || state?.busy) return;
+  if (!text && attachments.length === 0) return;
   vscode.postMessage({ type: "send", text, attachments: attachments.map((item) => item.attachment) });
   if (text) {
     saved.promptHistory = [...saved.promptHistory.filter((item) => item !== text), text].slice(-100);
@@ -575,7 +867,10 @@ prompt.addEventListener("keydown", (event) => {
     } else prompt.value = saved.promptHistory[historyPosition];
     return;
   }
-  if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+  if (event.key !== "Enter" || event.isComposing) return;
+  const modifier = event.ctrlKey || event.metaKey;
+  const sendOnEnter = state?.sendWith !== "ctrlEnter";
+  if ((sendOnEnter && !event.shiftKey && !modifier) || (!sendOnEnter && modifier)) {
     event.preventDefault();
     form.requestSubmit();
   }
@@ -640,8 +935,18 @@ imageInput.addEventListener("change", () => {
 
 stopButton.addEventListener("click", () => vscode.postMessage({ type: "stop" }));
 $("newChat").addEventListener("click", () => vscode.postMessage({ type: "newChat" }));
+$("renameButton").addEventListener("click", () => vscode.postMessage({ type: "renameChat" }));
+$("titleText").addEventListener("dblclick", (event) => {
+  event.stopPropagation();
+  vscode.postMessage({ type: "renameChat" });
+});
+$("popOut").addEventListener("click", () => vscode.postMessage({ type: "openInEditor" }));
 $("panelNew").addEventListener("click", () => {
   vscode.postMessage({ type: "newChat" });
+  panel.hidden = true;
+});
+$("panelParallel").addEventListener("click", () => {
+  vscode.postMessage({ type: "openInEditor" });
   panel.hidden = true;
 });
 $("panelWorktree").addEventListener("click", () => {
@@ -657,6 +962,14 @@ modelButton.addEventListener("click", () => vscode.postMessage({ type: "configur
 $("setup").addEventListener("click", () => vscode.postMessage({ type: "configureModel" }));
 $("guide").addEventListener("click", () => vscode.postMessage({ type: "openWalkthrough" }));
 $("reviewNext").addEventListener("click", () => vscode.postMessage({ type: "reviewNext" }));
+$("compact").addEventListener("click", () => vscode.postMessage({ type: "compact" }));
+$("saveApprovals").addEventListener("click", () => vscode.postMessage({ type: "resetApprovals" }));
+$("planToggle").addEventListener("click", () => {
+  saved.planOpen = !saved.planOpen;
+  vscode.setState(saved);
+  $("planItems").hidden = !saved.planOpen;
+  $("planToggle").setAttribute("aria-expanded", String(saved.planOpen));
+});
 meter.addEventListener("click", () => vscode.postMessage({ type: "showStats" }));
 modeSelect.addEventListener("change", () => vscode.postMessage({ type: "setMode", mode: modeSelect.value }));
 $<HTMLSelectElement>("approvalReview").addEventListener("change", (event) =>

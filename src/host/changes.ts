@@ -49,6 +49,9 @@ async function writeWorkspaceText(uri: vscode.Uri, content: string, exists: bool
   await document.save();
 }
 
+/** Tells whether another running chat changed a file. Returns the title of that chat. */
+export type FileClaims = (absolutePath: string) => string | undefined;
+
 export interface ProposeOptions {
   readonly uri: vscode.Uri;
   readonly relativePath: string;
@@ -64,10 +67,28 @@ export class ChangeManager {
     private readonly diffs: DiffContentProvider,
     private readonly checkpoints: CheckpointStore,
     private readonly reviews: ReviewManager,
+    private readonly claims: FileClaims = () => undefined,
+    private readonly onWritten: (absolutePath: string) => void = () => {},
   ) {}
 
   async propose(options: ProposeOptions): Promise<ToolResult> {
     const { uri, relativePath, newContent } = options;
+    const owner = this.claims(uri.fsPath);
+    if (owner) {
+      const answer = await this.broker.request(
+        {
+          kind: "command",
+          title: `Change ${relativePath}?`,
+          detail: relativePath,
+          reason: `The chat "${owner}" is working and changed this file in its current task. Two chats that change one file can overwrite each other.`,
+        },
+        options.signal,
+      );
+      if (!answer.allowed)
+        return {
+          content: `The user did not allow the change, because another chat is changing ${relativePath}. Do not retry it.`,
+        };
+    }
     const original = await readWorkspaceText(uri);
     if (original === newContent) return { content: `No change: ${relativePath} already has this content.` };
     const hunks = computeHunks(original ?? "", newContent);
@@ -102,6 +123,7 @@ export class ChangeManager {
     const finalContent = all ? newContent : applyHunks(original ?? "", hunks, selected);
     this.checkpoints.record(relativePath, original);
     await writeWorkspaceText(uri, finalContent, original !== null);
+    this.onWritten(uri.fsPath);
     if (options.reviewMode === "editor") this.reviews.track(uri, original ?? "");
     const skipped = hunks.filter((hunk) => !selected.has(hunk.index)).map((hunk) => hunk.index + 1);
     return {
@@ -112,10 +134,11 @@ export class ChangeManager {
     };
   }
 
-  /** Writes the planned restore of a checkpoint. */
-  async restore(root: vscode.Uri, writes: readonly RestoreWrite[]): Promise<void> {
+  /** Writes the planned restore of a checkpoint. `resolve` turns a recorded path into a file URI. */
+  async restore(resolve: (path: string) => vscode.Uri | undefined, writes: readonly RestoreWrite[]): Promise<void> {
     for (const write of writes) {
-      const uri = vscode.Uri.joinPath(root, write.path);
+      const uri = resolve(write.path);
+      if (!uri) continue;
       if (write.content === null) {
         try {
           await vscode.workspace.fs.delete(uri, { useTrash: true });

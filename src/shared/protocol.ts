@@ -25,9 +25,33 @@ export interface ViewState {
   readonly cost: string;
   readonly celebrate: boolean;
   readonly stats: string;
-  readonly approvals: { readonly review: ReviewSetting; readonly commands: CommandSetting; readonly mcp: boolean };
+  readonly approvals: {
+    readonly review: ReviewSetting;
+    readonly commands: CommandSetting;
+    readonly mcp: boolean;
+    /** True when this chat uses its own approval settings. */
+    readonly custom: boolean;
+  };
   readonly reviewFiles: number;
   readonly runningSessions: number;
+  /** Share of the context window that the last request used, from 0 to 1. */
+  readonly context: number;
+  readonly contextLabel: string;
+  readonly fontSize: number | null;
+  readonly sendWith: "enter" | "ctrlEnter";
+  readonly showThinking: boolean;
+  /** True when this view shows one fixed chat, for example in an editor tab. */
+  readonly pinned: boolean;
+}
+
+export interface PlanView {
+  readonly goal?: string;
+  readonly items: readonly { readonly text: string; readonly status: "pending" | "in_progress" | "done" }[];
+}
+
+export interface QueuedView {
+  readonly id: string;
+  readonly text: string;
 }
 
 export interface HunkView {
@@ -58,9 +82,9 @@ export interface MentionItem {
   readonly attachment: Attachment;
 }
 
-export type ApprovalKind = "command" | "edit" | "mcp";
+export type ApprovalKind = "command" | "edit" | "mcp" | "question";
 
-export type HostMessage =
+export type HostMessage = (
   | { readonly type: "state"; readonly state: ViewState }
   | {
       readonly type: "user";
@@ -69,9 +93,14 @@ export type HostMessage =
       readonly checkpointId: string;
       readonly attachments?: readonly string[];
     }
-  | { readonly type: "assistantStart"; readonly id: string }
+  | { readonly type: "assistantStart"; readonly id: string; readonly variant?: "btw" }
   | { readonly type: "assistantDelta"; readonly id: string; readonly text: string }
-  | { readonly type: "assistantEnd"; readonly id: string; readonly text: string }
+  | { readonly type: "assistantEnd"; readonly id: string; readonly text: string; readonly variant?: "btw" }
+  | { readonly type: "reasoningDelta"; readonly id: string; readonly text: string }
+  | { readonly type: "reasoningEnd"; readonly id: string; readonly text: string }
+  | { readonly type: "plan"; readonly plan: PlanView }
+  | { readonly type: "queue"; readonly items: readonly QueuedView[] }
+  | { readonly type: "sound" }
   | {
       readonly type: "tool";
       readonly id: string;
@@ -88,6 +117,8 @@ export type HostMessage =
       readonly detail: string;
       readonly reason?: string;
       readonly hunks?: readonly HunkView[];
+      readonly options?: readonly string[];
+      readonly allowText?: boolean;
     }
   | { readonly type: "approvalResolved"; readonly id: string; readonly decision: string }
   | { readonly type: "verify"; readonly attempt: number; readonly passed: boolean; readonly output: string }
@@ -110,7 +141,11 @@ export type HostMessage =
   | { readonly type: "addAttachment"; readonly attachment: Attachment; readonly label: string }
   | { readonly type: "mentions"; readonly query: string; readonly items: readonly MentionItem[] }
   | { readonly type: "focusInput"; readonly text?: string }
-  | { readonly type: "openPanel" };
+  | { readonly type: "openPanel" }
+) & {
+  /** Time of the event in milliseconds since 1970. */
+  readonly at?: number;
+};
 
 export type WebviewMessage =
   | { readonly type: "ready" }
@@ -123,6 +158,7 @@ export type WebviewMessage =
       readonly id: string;
       readonly decision: "allow" | "deny";
       readonly hunks?: readonly number[];
+      readonly text?: string;
     }
   | { readonly type: "openDiff"; readonly id: string }
   | { readonly type: "restoreCheckpoint"; readonly checkpointId: string }
@@ -140,7 +176,13 @@ export type WebviewMessage =
   | { readonly type: "exportChat" }
   | { readonly type: "reviewNext" }
   | { readonly type: "newWorktreeAgent" }
-  | { readonly type: "openWalkthrough" };
+  | { readonly type: "openWalkthrough" }
+  | { readonly type: "removeQueued"; readonly id: string }
+  | { readonly type: "openFile"; readonly path: string; readonly line?: number }
+  | { readonly type: "renameChat"; readonly id?: string }
+  | { readonly type: "openInEditor"; readonly id?: string }
+  | { readonly type: "resetApprovals" }
+  | { readonly type: "compact" };
 
 export const maximumPromptLength = 100_000;
 const idPattern = /^[A-Za-z0-9_-]{1,64}$/;
@@ -163,7 +205,35 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
     case "reviewNext":
     case "newWorktreeAgent":
     case "openWalkthrough":
+    case "resetApprovals":
+    case "compact":
       return { type: message.type };
+    case "removeQueued": {
+      const value = id("id");
+      return value ? { type: "removeQueued", id: value } : undefined;
+    }
+    case "renameChat":
+    case "openInEditor": {
+      if (message.id === undefined) return { type: message.type };
+      const value = id("id");
+      return value ? { type: message.type, id: value } : undefined;
+    }
+    case "openFile": {
+      if (
+        typeof message.path !== "string" ||
+        message.path.length === 0 ||
+        message.path.length > 1000 ||
+        message.path.includes("\0")
+      ) {
+        return undefined;
+      }
+      const line = Number(message.line);
+      return {
+        type: "openFile",
+        path: message.path,
+        ...(Number.isInteger(line) && line > 0 && line < 10_000_000 ? { line } : {}),
+      };
+    }
     case "send": {
       if (typeof message.text !== "string") return undefined;
       const text = message.text.trim();
@@ -189,7 +259,15 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
         if (!message.hunks.every((item) => Number.isInteger(item) && item >= 0)) return undefined;
         hunks = message.hunks as number[];
       }
-      return { type: "approve", id: approvalId, decision: message.decision, ...(hunks ? { hunks } : {}) };
+      if (message.text !== undefined && (typeof message.text !== "string" || message.text.length > 5000))
+        return undefined;
+      return {
+        type: "approve",
+        id: approvalId,
+        decision: message.decision,
+        ...(hunks ? { hunks } : {}),
+        ...(typeof message.text === "string" ? { text: message.text } : {}),
+      };
     }
     case "openDiff":
     case "switchSession":

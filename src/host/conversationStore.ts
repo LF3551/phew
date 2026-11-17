@@ -1,7 +1,8 @@
 import * as vscode from "vscode";
 import type { ChatMessage } from "../core/chat";
 import type { SerializedCheckpoint } from "../core/checkpoints";
-import type { HistoryItem, HostMessage } from "../shared/protocol";
+import type { Plan } from "../core/plan";
+import type { CommandSetting, HistoryItem, HostMessage, ReviewSetting } from "../shared/protocol";
 
 export interface StoredConversation {
   readonly version: 1;
@@ -17,6 +18,8 @@ export interface StoredConversation {
   readonly checkpoints: SerializedCheckpoint[];
   readonly tokens: number;
   readonly cost: number;
+  readonly plan?: Plan;
+  readonly overrides?: { readonly review?: ReviewSetting; readonly commands?: CommandSetting; readonly mcp?: boolean };
 }
 
 const idPattern = /^[A-Za-z0-9_-]{1,64}$/;

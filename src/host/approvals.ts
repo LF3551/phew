@@ -6,6 +6,9 @@ export interface ApprovalRequest {
   readonly detail: string;
   readonly reason?: string;
   readonly hunks?: readonly HunkView[];
+  /** Answers that the user can click, for questions. */
+  readonly options?: readonly string[];
+  readonly allowText?: boolean;
   /** Called when the user asks to see the change in the diff editor. */
   readonly openDiff?: () => void;
 }
@@ -14,6 +17,8 @@ export interface ApprovalDecision {
   readonly allowed: boolean;
   /** Selected hunk indexes for edit approvals. */
   readonly hunks?: readonly number[];
+  /** The answer to a question. */
+  readonly answer?: string;
 }
 
 interface Pending {
@@ -49,12 +54,20 @@ export class ApprovalBroker {
         detail: request.detail,
         ...(request.reason ? { reason: request.reason } : {}),
         ...(request.hunks ? { hunks: request.hunks } : {}),
+        ...(request.options ? { options: request.options } : {}),
+        ...(request.allowText !== undefined ? { allowText: request.allowText } : {}),
       });
     });
   }
 
-  answer(id: string, allowed: boolean, hunks?: readonly number[]): void {
-    this.resolve(id, { allowed, hunks }, allowed ? "allowed" : "denied");
+  answer(id: string, allowed: boolean, hunks?: readonly number[], text?: string): void {
+    const label =
+      text !== undefined ? (allowed ? `answered: ${text.slice(0, 80)}` : "skipped") : allowed ? "allowed" : "denied";
+    this.resolve(id, { allowed, hunks, answer: text }, label);
+  }
+
+  get pendingCount(): number {
+    return this.pending.size;
   }
 
   openDiff(id: string): void {

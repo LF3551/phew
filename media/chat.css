@@ -13,7 +13,7 @@ body {
   padding: 0;
   color: var(--vscode-foreground);
   font-family: var(--vscode-font-family);
-  font-size: var(--vscode-font-size);
+  font-size: var(--phew-font-size, var(--vscode-font-size));
 }
 
 button {
@@ -749,4 +749,226 @@ kbd {
 [hidden] {
   /* biome-ignore lint/complexity/noImportantStyles: the hidden attribute must win over display rules. */
   display: none !important;
+}
+
+/* Message headers, times, and copy */
+
+.message-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.85em;
+}
+
+.message-header .who {
+  font-weight: 600;
+}
+
+.time {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.8em;
+  opacity: 0.8;
+}
+
+.tool summary .time,
+.verify summary .time {
+  margin-left: 6px;
+}
+
+.message-header .copy-answer {
+  margin-left: auto;
+  padding: 0 6px;
+  color: var(--vscode-textLink-foreground);
+  background: none;
+  border: none;
+  font-size: 1em;
+  opacity: 0;
+}
+
+.message:hover .message-header .copy-answer,
+.message-header .copy-answer:focus-visible {
+  opacity: 1;
+}
+
+.file-link {
+  color: var(--vscode-textLink-foreground);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.file-link:hover {
+  text-decoration: underline;
+}
+
+/* Thinking and side questions */
+
+.thinking {
+  margin: 0 0 8px;
+  padding: 4px 8px;
+  color: var(--vscode-descriptionForeground);
+  border-left: 2px dashed var(--vscode-descriptionForeground);
+  font-size: 0.92em;
+}
+
+.thinking > .thinking-summary {
+  cursor: pointer;
+  font-style: italic;
+}
+
+.thinking-body {
+  overflow-y: auto;
+  max-height: 240px;
+  margin-top: 4px;
+  white-space: pre-wrap;
+}
+
+.message.btw {
+  border-left-style: dashed;
+  opacity: 0.9;
+}
+
+.message.user.btw {
+  background: none;
+  border: 1px dashed var(--vscode-panel-border, #8886);
+}
+
+/* Questions from the agent */
+
+.approval.question {
+  border-color: var(--phew-drop);
+}
+
+.options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.answer {
+  width: 100%;
+  margin-bottom: 6px;
+  padding: 4px 6px;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 4px;
+  font: inherit;
+}
+
+/* Plan, queue, and context */
+
+.plan {
+  margin-bottom: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--vscode-panel-border, #8884);
+  border-radius: 6px;
+}
+
+.plan-header {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0;
+  color: inherit;
+  background: none;
+  border: none;
+  font-weight: 600;
+  text-align: left;
+}
+
+.plan-progress {
+  color: var(--vscode-descriptionForeground);
+  font-weight: normal;
+}
+
+.plan-items {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plan-item {
+  display: flex;
+  gap: 6px;
+}
+
+.plan-item .mark {
+  width: 1em;
+  text-align: center;
+}
+
+.plan-item.done {
+  color: var(--vscode-descriptionForeground);
+  text-decoration: line-through;
+}
+
+.plan-item.in_progress .mark {
+  color: var(--phew-drop);
+}
+
+.queue {
+  margin: 0 0 6px;
+  padding: 0;
+  list-style: none;
+}
+
+.queued {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  background: var(--vscode-input-background);
+  border-radius: 4px;
+}
+
+.queued-label {
+  color: var(--phew-drop);
+  font-size: 0.8em;
+  text-transform: uppercase;
+}
+
+.queued-text {
+  overflow: hidden;
+  flex: 1;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.context {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.8em;
+}
+
+.context-bar {
+  overflow: hidden;
+  flex: 1;
+  max-width: 120px;
+  height: 4px;
+  background: var(--vscode-input-background);
+  border-radius: 2px;
+}
+
+.context-fill {
+  height: 100%;
+  background: var(--vscode-testing-iconPassed, #3fb950);
+}
+
+.context-fill[data-level="medium"] {
+  background: var(--vscode-editorWarning-foreground, #cca700);
+}
+
+.context-fill[data-level="high"] {
+  background: var(--vscode-errorForeground, #f85149);
+}
+
+.custom {
+  color: var(--phew-drop);
 }

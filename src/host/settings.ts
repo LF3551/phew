@@ -6,12 +6,6 @@ import { isModeId, type Mode } from "../core/modes";
 
 export const section = "phew";
 
-export interface McpServerConfig {
-  readonly command: string;
-  readonly args: readonly string[];
-  readonly env: Readonly<Record<string, string>>;
-}
-
 /** How Phew shows file changes: before applying them in the chat, after applying them in the editor, or not at all. */
 export type ReviewMode = "chat" | "editor" | "none";
 
@@ -26,8 +20,23 @@ export interface Settings {
   readonly budget: BudgetLimits;
   readonly sensitiveNames: readonly string[];
   readonly redactSecrets: boolean;
-  readonly mcpServers: Readonly<Record<string, McpServerConfig>>;
+  /** Raw MCP server entries from the settings. The MCP manager validates them. */
+  readonly mcpServers: Readonly<Record<string, unknown>>;
   readonly mcpAutoApprove: boolean;
+  readonly mcpReadWorkspaceConfigs: boolean;
+  readonly mcpDisabledServers: readonly string[];
+  readonly mcpDisabledTools: Readonly<Record<string, readonly string[]>>;
+  readonly showThinking: boolean;
+  readonly autoCompact: boolean;
+  readonly compactAt: number;
+  readonly defaultContextWindow: number;
+  readonly maxRetries: number;
+  readonly fontSize: number | null;
+  readonly sendWith: "enter" | "ctrlEnter";
+  readonly notifyOnComplete: "unfocused" | "always" | "never";
+  readonly sound: boolean;
+  readonly skillsEnabled: boolean;
+  readonly skillPaths: readonly string[];
   readonly celebrate: boolean;
   readonly minutesPerBug: number;
   readonly offerTerminalFix: boolean;
@@ -64,19 +73,12 @@ const oneOf = <T extends string>(value: unknown, options: readonly T[], fallback
 
 const text = (value: unknown): string => (typeof value === "string" ? value.trim() : "");
 
-function mcpServers(value: unknown): Record<string, McpServerConfig> {
-  const result: Record<string, McpServerConfig> = {};
-  if (typeof value !== "object" || value === null) return result;
-  for (const [name, raw] of Object.entries(value)) {
-    if (typeof raw !== "object" || raw === null) continue;
-    const { command, args, env } = raw as Record<string, unknown>;
-    if (typeof command !== "string" || command.trim() === "") continue;
-    const environment: Record<string, string> = {};
-    if (typeof env === "object" && env !== null) {
-      for (const [key, item] of Object.entries(env)) if (typeof item === "string") environment[key] = item;
-    }
-    result[name] = { command, args: strings(args), env: environment };
-  }
+const objectValue = (value: unknown): Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+
+function toolLists(value: unknown): Record<string, string[]> {
+  const result: Record<string, string[]> = {};
+  for (const [server, tools] of Object.entries(objectValue(value))) result[server] = strings(tools);
   return result;
 }
 
@@ -102,8 +104,32 @@ export function readSettings(scope?: vscode.Uri): Settings {
     },
     sensitiveNames: strings(config.get("privacy.sensitiveNames")),
     redactSecrets: config.get<boolean>("privacy.redactSecrets") !== false,
-    mcpServers: mcpServers(config.get("mcp.servers")),
+    mcpServers: objectValue(config.get("mcp.servers")),
     mcpAutoApprove: config.get<boolean>("mcp.autoApprove") === true,
+    mcpReadWorkspaceConfigs: config.get<boolean>("mcp.readWorkspaceConfigs") !== false,
+    mcpDisabledServers: strings(config.get("mcp.disabledServers")),
+    mcpDisabledTools: toolLists(config.get("mcp.disabledTools")),
+    showThinking: config.get<boolean>("chat.showThinking") !== false,
+    autoCompact: config.get<boolean>("context.autoCompact") !== false,
+    compactAt: Math.min(0.95, Math.max(0.3, positive(config.get("context.compactAt"), 0.8, 0.95))),
+    defaultContextWindow: Math.max(
+      4000,
+      Math.round(positive(config.get("context.defaultWindow"), 128_000, 10_000_000)),
+    ),
+    maxRetries: Math.round(positive(config.get("model.maxRetries"), 3, 10)),
+    fontSize:
+      typeof config.get("chat.fontSize") === "number"
+        ? Math.min(32, Math.max(8, config.get<number>("chat.fontSize") ?? 13))
+        : null,
+    sendWith: oneOf(config.get("chat.sendWith"), ["enter", "ctrlEnter"] as const, "enter"),
+    notifyOnComplete: oneOf(
+      config.get("notifications.onComplete"),
+      ["unfocused", "always", "never"] as const,
+      "unfocused",
+    ),
+    sound: config.get<boolean>("notifications.sound") === true,
+    skillsEnabled: config.get<boolean>("skills.enabled") !== false,
+    skillPaths: strings(config.get("skills.paths")),
     celebrate: config.get<boolean>("ui.celebrate") !== false,
     minutesPerBug: positive(config.get("stats.minutesPerBug"), 15, 600),
     offerTerminalFix: config.get<boolean>("terminal.offerFix") !== false,
