@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <title>Phew</title>
+  <rect width="256" height="256" rx="48" fill="#F0EDE8"/>
+  <path d="M48 140q32 36 64 0M144 140q32 36 64 0" fill="none" stroke="#30343B" stroke-width="26" stroke-linecap="round"/>
+  <path d="M198 30c-14 20-24 33-24 47a24 24 0 0 0 48 0c0-14-10-27-24-47z" fill="#22B8CF"/>
+</svg>
