@@ -32,9 +32,10 @@ body:
     validations:
       required: true
   - type: input
-    id: pi
+    id: model
     attributes:
-      label: Pi version
+      label: Model provider and model
+      placeholder: For example OpenAI gpt-4.1 or Ollama qwen2.5-coder
   - type: input
     id: os
     attributes:

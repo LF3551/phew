@@ -1,0 +1,13 @@
+**
+!dist/extension.js
+!dist/webview.js
+!media/**
+!resources/icon.png
+!resources/icon.svg
+!resources/phew.svg
+!resources/phew-dark.svg
+!package.json
+!README.md
+!CHANGELOG.md
+!LICENSE
+!NOTICE

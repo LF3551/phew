@@ -19,10 +19,10 @@ You get a first reply within 7 days.
 
 ## Security principles
 
-Phew follows these rules:
-
-1. Phew does not change files without a visible diff and an explicit **Apply**, unless the user turns on a less strict mode.
-2. Phew runs process-launching and file-changing workflows only in a trusted workspace.
-3. Phew sends prompts and context to Pi through stdin, not through process arguments.
-4. Phew does not collect telemetry.
-5. Webviews use a strict Content Security Policy and sanitize rendered content.
+1. Phew shows every file change as hunks and applies only the hunks that the user selects, unless the user turns off `phew.edits.requireApproval`.
+2. Phew always asks before dangerous or chained shell commands.
+3. Phew does not read sensitive files, such as `.env` files and keys, and removes secrets from tool output before it goes to the model.
+4. Phew changes files, runs commands, starts MCP servers, and reads project rules only in a trusted workspace.
+5. Phew keeps the API key in the VS Code secret storage and allows plain HTTP only for localhost.
+6. Phew does not collect telemetry.
+7. The chat view uses a strict Content Security Policy and never renders model output as HTML.

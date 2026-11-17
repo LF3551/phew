@@ -1,0 +1,446 @@
+{
+  "name": "phew",
+  "displayName": "Phew",
+  "description": "Bug fixed. Phew. Open-source AI coding agent for VS Code: fix errors in one click, review every change, and use any model.",
+  "version": "0.1.0",
+  "publisher": "alekseialeinikov",
+  "author": {
+    "name": "Aleksei Aleinikov",
+    "url": "https://www.alekseialeinikov.com"
+  },
+  "license": "Apache-2.0",
+  "icon": "resources/icon.png",
+  "galleryBanner": {
+    "color": "#F0EDE8",
+    "theme": "light"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LF3551/phew"
+  },
+  "homepage": "https://github.com/LF3551/phew#readme",
+  "bugs": {
+    "url": "https://github.com/LF3551/phew/issues"
+  },
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": [
+    "AI",
+    "Chat",
+    "Programming Languages",
+    "Linters"
+  ],
+  "keywords": [
+    "phew",
+    "ai",
+    "agent",
+    "coding agent",
+    "bug fix",
+    "quick fix",
+    "chat",
+    "llm",
+    "ollama",
+    "openai",
+    "mcp",
+    "code review"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "In Restricted Mode, Phew only answers questions. It does not change files, run commands, start MCP servers, or read project rules.",
+      "restrictedConfigurations": [
+        "phew.verify.command",
+        "phew.commands.autoApprove",
+        "phew.mcp.servers"
+      ]
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "Phew needs files on disk to run commands and checks."
+    }
+  },
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "phew",
+          "title": "Phew",
+          "icon": "resources/phew.svg"
+        }
+      ]
+    },
+    "views": {
+      "phew": [
+        {
+          "id": "phew.chatView",
+          "name": "Chat",
+          "type": "webview",
+          "icon": "resources/phew.svg"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "phew.openChat",
+        "title": "Open Chat",
+        "category": "Phew",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "phew.newChat",
+        "title": "New Chat",
+        "category": "Phew",
+        "icon": "$(add)"
+      },
+      {
+        "command": "phew.stop",
+        "title": "Stop",
+        "category": "Phew",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "phew.setMode",
+        "title": "Switch Mode (Ask, Plan, Code)",
+        "category": "Phew"
+      },
+      {
+        "command": "phew.fixProblem",
+        "title": "Phew it! Fix Problem at Cursor",
+        "category": "Phew",
+        "enablement": "isWorkspaceTrusted"
+      },
+      {
+        "command": "phew.fixFileProblems",
+        "title": "Phew it! Fix All Errors in File",
+        "category": "Phew",
+        "enablement": "isWorkspaceTrusted"
+      },
+      {
+        "command": "phew.fixLastCommand",
+        "title": "Phew it! Fix Last Failed Terminal Command",
+        "category": "Phew",
+        "enablement": "isWorkspaceTrusted"
+      },
+      {
+        "command": "phew.makeChecksPass",
+        "title": "Make Checks Pass",
+        "category": "Phew",
+        "enablement": "isWorkspaceTrusted"
+      },
+      {
+        "command": "phew.askSelection",
+        "title": "Ask About Selection",
+        "category": "Phew"
+      },
+      {
+        "command": "phew.configureModel",
+        "title": "Configure Model",
+        "category": "Phew"
+      },
+      {
+        "command": "phew.clearApiKey",
+        "title": "Remove Saved API Key",
+        "category": "Phew"
+      },
+      {
+        "command": "phew.showStats",
+        "title": "Show Statistics",
+        "category": "Phew"
+      },
+      {
+        "command": "phew.openSettings",
+        "title": "Open Settings",
+        "category": "Phew",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "phew.showLog",
+        "title": "Show Log",
+        "category": "Phew"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "phew.newChat",
+          "when": "view == phew.chatView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "phew.stop",
+          "when": "view == phew.chatView && phew.busy",
+          "group": "navigation@2"
+        },
+        {
+          "command": "phew.openSettings",
+          "when": "view == phew.chatView",
+          "group": "navigation@3"
+        },
+        {
+          "command": "phew.configureModel",
+          "when": "view == phew.chatView",
+          "group": "overflow@1"
+        },
+        {
+          "command": "phew.showStats",
+          "when": "view == phew.chatView",
+          "group": "overflow@2"
+        },
+        {
+          "command": "phew.showLog",
+          "when": "view == phew.chatView",
+          "group": "overflow@3"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "phew.askSelection",
+          "when": "editorHasSelection",
+          "group": "phew@1"
+        },
+        {
+          "command": "phew.fixProblem",
+          "when": "isWorkspaceTrusted",
+          "group": "phew@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "phew.stop",
+          "when": "phew.busy"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "phew.openChat",
+        "key": "ctrl+alt+p",
+        "mac": "cmd+alt+p"
+      },
+      {
+        "command": "phew.fixProblem",
+        "key": "ctrl+alt+.",
+        "mac": "cmd+alt+.",
+        "when": "editorTextFocus && isWorkspaceTrusted"
+      }
+    ],
+    "configuration": {
+      "title": "Phew",
+      "properties": {
+        "phew.model.baseUrl": {
+          "type": "string",
+          "default": "",
+          "order": 1,
+          "markdownDescription": "Base URL of an OpenAI-compatible API, for example `https://api.openai.com/v1` or `http://localhost:11434/v1`. Use **Phew: Configure Model** to set it up. The API key is stored in the VS Code secret storage, not here."
+        },
+        "phew.model.name": {
+          "type": "string",
+          "default": "",
+          "order": 2,
+          "markdownDescription": "Model name, for example `gpt-4.1` or `qwen2.5-coder:14b`."
+        },
+        "phew.model.temperature": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "default": null,
+          "minimum": 0,
+          "maximum": 2,
+          "order": 3,
+          "markdownDescription": "Sampling temperature. Leave empty to use the provider default."
+        },
+        "phew.agent.defaultMode": {
+          "type": "string",
+          "enum": [
+            "ask",
+            "plan",
+            "code"
+          ],
+          "enumDescriptions": [
+            "Answers questions. Changes nothing.",
+            "Explores the code and writes a plan. Changes nothing.",
+            "Edits files and runs commands with your approval."
+          ],
+          "default": "code",
+          "markdownDescription": "Mode for new workspaces."
+        },
+        "phew.agent.maxSteps": {
+          "type": "number",
+          "default": 40,
+          "minimum": 1,
+          "maximum": 200,
+          "markdownDescription": "Maximum number of model calls in one task."
+        },
+        "phew.edits.requireApproval": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show every file change as hunks and apply only the hunks that you select. When off, Phew applies changes at once. Checkpoints still let you undo them."
+        },
+        "phew.commands.autoApprove": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Command prefixes that run without a confirmation, for example `npm test` or `go test`. Dangerous and chained commands always ask."
+        },
+        "phew.commands.deny": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Command prefixes that never run."
+        },
+        "phew.commands.timeoutSeconds": {
+          "type": "number",
+          "default": 120,
+          "minimum": 5,
+          "maximum": 3600,
+          "markdownDescription": "Time limit of one command."
+        },
+        "phew.verify.command": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "markdownDescription": "Command that checks the work, for example `npm test` or `npm run lint && npm test`. In Code mode, Phew runs it after changes and keeps fixing until it passes."
+        },
+        "phew.verify.maxAttempts": {
+          "type": "number",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 10,
+          "markdownDescription": "How many times Phew runs the check before it stops."
+        },
+        "phew.budget.maxCostPerTask": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "markdownDescription": "Stop a task when its cost reaches this amount in US dollars. `0` means no limit. Needs a price in `#phew.budget.pricing#`."
+        },
+        "phew.budget.maxTokensPerTask": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "markdownDescription": "Stop a task when it uses this number of tokens. `0` means no limit."
+        },
+        "phew.budget.pricing": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "input": {
+                "type": "number",
+                "minimum": 0
+              },
+              "output": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "input",
+              "output"
+            ]
+          },
+          "markdownDescription": "Price per one million tokens in US dollars, by model name. A key can end with `*`. Example: `{ \"gpt-4.1\": { \"input\": 2, \"output\": 8 } }`. Check the current prices of your provider."
+        },
+        "phew.privacy.redactSecrets": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Remove values that look like keys, tokens, and passwords from tool output before it goes to the model."
+        },
+        "phew.privacy.sensitiveNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Extra file name parts that Phew never reads, in addition to `.env`, keys, and credential files."
+        },
+        "phew.mcp.servers": {
+          "type": "object",
+          "default": {},
+          "scope": "machine",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "command": {
+                "type": "string"
+              },
+              "args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "env": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "command"
+            ]
+          },
+          "markdownDescription": "MCP servers that Phew starts over stdio in Code mode. Example: `{ \"github\": { \"command\": \"npx\", \"args\": [\"-y\", \"@modelcontextprotocol/server-github\"] } }`."
+        },
+        "phew.mcp.requireApproval": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Ask before each MCP tool call."
+        },
+        "phew.terminal.offerFix": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Offer **Phew it!** when a command fails in the integrated terminal. Needs terminal shell integration."
+        },
+        "phew.ui.celebrate": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show a short **Phew! Done.** animation when a task changes files successfully."
+        },
+        "phew.stats.minutesPerBug": {
+          "type": "number",
+          "default": 15,
+          "minimum": 0,
+          "maximum": 600,
+          "markdownDescription": "Minutes that one fixed bug saves, for the estimated time saved in the statistics."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "watch": "node scripts/build.mjs --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p src/webview/tsconfig.json --noEmit",
+    "lint": "biome check src test scripts media",
+    "format": "biome check --write src test scripts media",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm run lint && npm test",
+    "package": "npm run check && node scripts/build.mjs --production && vsce package --out phew.vsix",
+    "vscode:prepublish": "node scripts/build.mjs --production",
+    "test:integration": "node scripts/build.mjs && node test/integration/run.mjs"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.8",
+    "@types/jsdom": "30.0.0",
+    "@types/node": "22.20.5",
+    "@types/vscode": "1.100.0",
+    "@vscode/test-electron": "3.1.0",
+    "@vscode/vsce": "4.1.1",
+    "esbuild": "0.28.2",
+    "jsdom": "31.0.1",
+    "typescript": "5.9.3",
+    "vitest": "5.1.0"
+  }
+}

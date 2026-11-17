@@ -4,7 +4,7 @@
 
 - Write the name as **Phew**, with a capital P.
 - Use the tagline **"Bug fixed. Phew."**
-- Do not use the name or logo in a way that suggests an official Pi or Microsoft product.
+- Use of the name and the logo by others is described in [TRADEMARKS.md](../TRADEMARKS.md).
 
 ## Logo
 

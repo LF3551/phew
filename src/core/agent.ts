@@ -1,0 +1,135 @@
+import type { ChatMessage, ModelClient, ToolCall, ToolDefinition } from "./chat";
+import { truncateMiddle } from "./chat";
+import type { CostMeter } from "./cost";
+
+export interface ToolResult {
+  readonly content: string;
+  /** True when the tool changed a file in the workspace. */
+  readonly changed?: boolean;
+}
+
+export interface VerificationResult {
+  readonly passed: boolean;
+  readonly output: string;
+}
+
+export interface AgentEvents {
+  onText?(delta: string): void;
+  onAssistant?(content: string, toolCalls: readonly ToolCall[]): void;
+  onToolStart?(call: ToolCall): void;
+  onToolEnd?(call: ToolCall, result: ToolResult): void;
+  onUsage?(meter: CostMeter): void;
+  onVerify?(attempt: number, result: VerificationResult): void;
+}
+
+export interface AgentOptions {
+  readonly client: ModelClient;
+  readonly systemPrompt: string;
+  /** Conversation without the system prompt. The agent appends new messages to it. */
+  readonly history: ChatMessage[];
+  readonly tools: readonly ToolDefinition[];
+  readonly executeTool: (call: ToolCall, signal: AbortSignal) => Promise<ToolResult>;
+  /** Runs the check command, for example the tests, after the agent says that it is done. */
+  readonly verify?: () => Promise<VerificationResult>;
+  readonly maxVerifyAttempts?: number;
+  readonly maxSteps: number;
+  readonly meter: CostMeter;
+  readonly signal: AbortSignal;
+  readonly events?: AgentEvents;
+}
+
+export type AgentStatus = "done" | "aborted" | "max-steps" | "budget" | "verify-failed";
+
+export interface AgentResult {
+  readonly status: AgentStatus;
+  readonly message?: string;
+  /** True when the check command passed at the end of the task. */
+  readonly verified: boolean;
+  readonly filesChanged: boolean;
+  readonly steps: number;
+}
+
+const maximumVerifyOutput = 12_000;
+
+/** Runs the model and its tool calls until the task is complete or a limit is reached. */
+export async function runAgent(options: AgentOptions): Promise<AgentResult> {
+  const { client, history, events, meter, signal } = options;
+  const maxVerifyAttempts = options.maxVerifyAttempts ?? 3;
+  let verifyAttempts = 0;
+  let filesChanged = false;
+  let steps = 0;
+
+  const finish = (status: AgentStatus, message?: string, verified = false): AgentResult => ({
+    status,
+    message,
+    verified,
+    filesChanged,
+    steps,
+  });
+
+  while (steps < options.maxSteps) {
+    if (signal.aborted) return finish("aborted");
+    const overBudget = meter.exceeded();
+    if (overBudget) return finish("budget", overBudget);
+    steps++;
+
+    const result = await client.complete(
+      {
+        messages: [{ role: "system", content: options.systemPrompt }, ...history],
+        tools: options.tools,
+        signal,
+      },
+      (delta) => events?.onText?.(delta),
+    );
+    if (result.usage) meter.add(result.usage);
+    events?.onUsage?.(meter);
+    history.push({
+      role: "assistant",
+      content: result.content,
+      ...(result.toolCalls.length > 0 ? { toolCalls: result.toolCalls } : {}),
+    });
+    events?.onAssistant?.(result.content, result.toolCalls);
+
+    if (result.toolCalls.length === 0) {
+      if (!options.verify || !filesChanged) return finish("done");
+      if (signal.aborted) return finish("aborted");
+      const verification = await options.verify();
+      verifyAttempts++;
+      events?.onVerify?.(verifyAttempts, verification);
+      if (verification.passed) return finish("done", undefined, true);
+      if (verifyAttempts >= maxVerifyAttempts) {
+        return finish("verify-failed", `The check still fails after ${verifyAttempts} attempts.`);
+      }
+      history.push({
+        role: "user",
+        content: [
+          `The check failed (attempt ${verifyAttempts} of ${maxVerifyAttempts}).`,
+          "Find the cause, fix it, and stop when you expect the check to pass.",
+          "Output:",
+          "```",
+          truncateMiddle(verification.output, maximumVerifyOutput),
+          "```",
+        ].join("\n"),
+      });
+      continue;
+    }
+
+    for (const call of result.toolCalls) {
+      if (signal.aborted) {
+        history.push({ role: "tool", toolCallId: call.id, content: "Cancelled by the user." });
+        continue;
+      }
+      events?.onToolStart?.(call);
+      let toolResult: ToolResult;
+      try {
+        toolResult = await options.executeTool(call, signal);
+      } catch (error) {
+        toolResult = { content: `Error: ${error instanceof Error ? error.message : String(error)}` };
+      }
+      if (toolResult.changed) filesChanged = true;
+      history.push({ role: "tool", toolCallId: call.id, content: toolResult.content });
+      events?.onToolEnd?.(call, toolResult);
+    }
+  }
+  return finish("max-steps", `The task stopped after ${options.maxSteps} steps.`);
+}

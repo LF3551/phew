@@ -4,34 +4,48 @@ These rules apply to human contributors and to AI coding agents.
 
 ## Project
 
-- Phew is an open-source VS Code extension that integrates the [Pi](https://pi.dev) coding agent.
-- Phew is an independent project and must not claim to be an official Pi or Microsoft product.
-- Write all new code from scratch.
-  Do not copy code from other extensions unless the license allows it and the copyright notice is kept.
+- Phew is an open-source AI coding agent for VS Code by Aleksei Aleinikov, licensed under Apache 2.0.
+- The extension ID is `alekseialeinikov.phew`.
+  Commands, settings, views, and context keys use the `phew.` prefix.
+- Read `docs/ARCHITECTURE.md` before you change the structure.
+- Do not copy code from other projects.
+  Add a third-party dependency only when its license is compatible with Apache 2.0, and list it in `NOTICE` when its license requires it.
 
-## Language
+## Code
 
-- Write code, comments, commit messages, and documentation in English.
-- Use short, simple sentences and put each prose sentence on a separate source line.
-- Do not describe planned features as available.
-  Mark them as planned until they are released.
+- TypeScript 5.9, strict mode, bundled with esbuild.
+- Keep `src/core` free of the `vscode` module so that it stays unit-testable.
+- Keep browser code in `src/webview` and shared message types in `src/shared`.
+- Validate every message from the webview and every tool argument from the model.
+- Follow `biome.json`: two-space indentation, 120-column lines, double quotes, and semicolons.
+- Use stable VS Code APIs that the minimum version in `package.json` supports.
 
-## Commits
+## Commands
 
-- Use Conventional Commits, for example `feat:`, `fix:`, `docs:`, `test:`, and `chore:`.
-- Sign off each commit with `git commit -s`.
-- Update `CHANGELOG.md` under `Unreleased` for each user-visible change.
+- `npm ci` installs the locked dependencies.
+- `npm run check` runs the type check, the linter, and the unit tests. Run it before each commit.
+- `npm run test:integration` runs the extension in VS Code. On headless Linux, start a display server first, for example `Xvfb :99 &` and `DISPLAY=:99`.
+- `npm run package` creates `phew.vsix`.
+
+## Tests
+
+- Add unit tests in `test/*.test.ts` for every change in `src/core`, `src/providers`, and `src/shared`.
+- Add integration checks in `test/integration/suite.cjs` for new commands and workflows.
+- Do not claim checks that were not run.
 
 ## Security
 
-- Read `SECURITY.md` before you change process, trust, context, or edit workflows.
-- Do not apply file changes without a visible diff and an explicit user action, except in a mode that the user turns on.
-- Send prompts and context to Pi through stdin, not through process arguments.
+- Never apply a file change without a visible diff, unless the user turned off `phew.edits.requireApproval`.
+- Always ask before dangerous or chained commands, even when a prefix is auto-approved.
+- Never read sensitive files, and redact secrets from tool output.
 - Do not add telemetry.
-- Keep webview assets local, keep a strict Content Security Policy, and sanitize rendered content.
+- Keep the webview Content Security Policy strict, keep assets local, and never render model output as HTML.
 - Do not commit secrets, tokens, or personal data.
 
-## Boundaries
+## Language and commits
 
-- Ask the maintainer before you publish a release, change Marketplace data, or use a live model for validation.
-- Do not edit generated files such as `out/`, `dist/`, or `*.vsix`.
+- Write code, comments, commit messages, and documentation in English.
+- Use short, simple sentences, one sentence per line in Markdown.
+- Use Conventional Commits and sign off each commit with `git commit -s`.
+- Update `CHANGELOG.md` under `Unreleased` for each user-visible change.
+- Ask the maintainer before you publish a release or change Marketplace data.

@@ -26,8 +26,18 @@ The project is in early development, so the process is small and can change.
 
 ## Development
 
-The extension scaffold is not available yet.
-This section will contain the build, test, and debug commands when the scaffold is added.
+```sh
+npm ci
+npm run check            # type check, lint, and unit tests
+npm run test:integration # run the extension in VS Code
+```
+
+Press `F5` in VS Code to start an Extension Development Host.
+Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before you change the structure.
+
+## License of contributions
+
+By contributing, you agree that your contribution is licensed under the [Apache License 2.0](LICENSE), as Section 5 of the License describes.
 
 ## Code of conduct
 
