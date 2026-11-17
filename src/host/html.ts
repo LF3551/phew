@@ -32,15 +32,34 @@ export function renderChatHtml(options: ChatHtmlOptions): string {
 <title>Phew</title>
 </head>
 <body>
-<div class="app" id="app" data-icon="${e(options.iconUri)}">
+<div class="app" id="app">
   <header class="toolbar">
-    <div class="modes" role="radiogroup" aria-label="Mode">
-      <button type="button" role="radio" data-mode="ask" title="Answers questions. Changes nothing.">Ask</button>
-      <button type="button" role="radio" data-mode="plan" title="Explores the code and writes a plan. Changes nothing.">Plan</button>
-      <button type="button" role="radio" data-mode="code" title="Edits files and runs commands with your approval.">Code</button>
+    <button type="button" class="title" id="title" title="Chats and history"><span id="titleText">New chat</span><span class="badge" id="worktree" hidden></span><span class="running" id="running" hidden></span></button>
+    <div class="icons">
+      <button type="button" class="icon-button" id="historyButton" title="Chats and history" aria-label="Chats and history">⟲</button>
+      <button type="button" class="icon-button" id="newChat" title="New chat" aria-label="New chat">＋</button>
     </div>
-    <button type="button" class="model" id="model" title="Configure the model"></button>
   </header>
+  <div class="bar">
+    <label class="visually-hidden" for="mode">Mode</label>
+    <select id="mode" title="Mode"></select>
+    <button type="button" class="model" id="model" title="Switch model"></button>
+  </div>
+  <section class="panel" id="panel" hidden>
+    <div class="panel-header">
+      <input type="search" id="historySearch" placeholder="Search chats" aria-label="Search chats">
+      <button type="button" class="icon-button" id="closePanel" aria-label="Close">✕</button>
+    </div>
+    <div class="panel-actions">
+      <button type="button" class="secondary" id="panelNew">＋ New chat</button>
+      <button type="button" class="secondary" id="panelWorktree" title="An agent on a new branch in a separate folder">⑂ Agent in worktree</button>
+      <button type="button" class="secondary" id="panelExport">Export</button>
+    </div>
+    <h4>Open</h4>
+    <ul class="list" id="openList"></ul>
+    <h4>History</h4>
+    <ul class="list" id="historyList"></ul>
+  </section>
   <main class="transcript" id="transcript" aria-live="polite">
     <section class="welcome" id="welcome">
       <img class="logo" src="${e(options.iconUri)}" alt="" width="72" height="72">
@@ -48,19 +67,54 @@ export function renderChatHtml(options: ChatHtmlOptions): string {
       <p class="tagline">Bug fixed. Phew.</p>
       <ul class="tips">
         <li>Ask about your code, or describe a change.</li>
+        <li>Type <kbd>@</kbd> to attach files, problems, Git changes, or the terminal.</li>
         <li>Click <strong>Phew it!</strong> on any error in the editor.</li>
-        <li>Every change shows a diff. Restore a checkpoint at any time.</li>
+        <li>Keep or undo each change in the editor. Restore a checkpoint at any time.</li>
       </ul>
-      <button type="button" class="primary" id="setup" hidden>Choose a model</button>
+      <div class="welcome-actions">
+        <button type="button" class="primary" id="setup" hidden>Choose a model</button>
+        <button type="button" class="secondary" id="guide">Get started</button>
+      </div>
     </section>
   </main>
+  <div class="review-banner" id="reviewBanner" hidden>
+    <span id="reviewText"></span>
+    <button type="button" class="link" id="reviewNext">Review</button>
+  </div>
   <footer class="footer">
-    <div class="meter" id="meter"></div>
+    <div class="approvals" id="approvals">
+      <label title="How you review file changes">Edits
+        <select id="approvalReview">
+          <option value="editor">Review in editor</option>
+          <option value="chat">Ask first</option>
+          <option value="none">Auto-apply</option>
+        </select>
+      </label>
+      <label title="When commands run without asking. Dangerous commands always ask.">Commands
+        <select id="approvalCommands">
+          <option value="ask">Always ask</option>
+          <option value="allowlist">Allowlist</option>
+          <option value="safe">Safe auto</option>
+        </select>
+      </label>
+      <label title="Run MCP tools without asking">MCP
+        <select id="approvalMcp">
+          <option value="false">Ask</option>
+          <option value="true">Auto</option>
+        </select>
+      </label>
+    </div>
+    <div class="meter" id="meter" title="Statistics"></div>
+    <div class="chips" id="chips"></div>
     <form class="composer" id="composer">
+      <div class="mentions" id="mentions" role="listbox" hidden></div>
       <label class="visually-hidden" for="prompt">Message</label>
-      <textarea id="prompt" rows="3" placeholder="Ask Phew or describe a change…"></textarea>
+      <textarea id="prompt" rows="3" placeholder="Ask Phew or describe a change. @ to attach, ↑ for history"></textarea>
       <div class="actions">
-        <button type="button" class="secondary" id="newChat" title="Start a new chat">New</button>
+        <button type="button" class="icon-button" id="mentionButton" title="Attach context (@)" aria-label="Attach context">@</button>
+        <button type="button" class="icon-button" id="imageButton" title="Attach an image" aria-label="Attach an image">🖼</button>
+        <input type="file" id="imageInput" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
+        <span class="spacer"></span>
         <button type="button" class="secondary" id="stop" hidden>Stop</button>
         <button type="submit" class="primary" id="send">Send</button>
       </div>

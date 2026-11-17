@@ -1,7 +1,7 @@
-import { type Mode, modeInfo } from "./modes";
+import type { ModeDefinition } from "./modes";
 
 export interface PromptContext {
-  readonly mode: Mode;
+  readonly mode: ModeDefinition;
   readonly workspaceName: string;
   readonly platform: string;
   readonly shell: string;
@@ -12,40 +12,20 @@ export interface PromptContext {
   readonly verifyCommand?: string;
   /** Names of MCP tools that the agent can use. */
   readonly mcpTools?: readonly string[];
+  /** Facts from the project memory. */
+  readonly memory?: string;
 }
-
-const modeInstructions: Readonly<Record<Mode, string>> = {
-  ask: [
-    "You are in Ask mode.",
-    "Answer the question with the read-only tools.",
-    "Do not propose file changes unless the user asks for an example.",
-  ].join("\n"),
-  plan: [
-    "You are in Plan mode.",
-    "Explore the code with the read-only tools, then write a numbered implementation plan.",
-    "List the files to change, the risks, and how to verify the result.",
-    "Do not change files.",
-  ].join("\n"),
-  code: [
-    "You are in Code mode.",
-    "Make the smallest correct change that solves the task.",
-    "Read the relevant code before you edit it.",
-    "Change files only with the tools: edit_file for focused changes and write_file for new files or full rewrites.",
-    "Showing code in the answer does not change any file.",
-    "Run the relevant tests or checks with run_command when they exist.",
-  ].join("\n"),
-};
 
 /** Builds the system prompt of the agent. */
 export function buildSystemPrompt(context: PromptContext): string {
   const sections = [
     [
       "You are Phew, an AI coding agent inside Visual Studio Code.",
-      `Mode: ${modeInfo[context.mode].label}.`,
+      `Mode: ${context.mode.name}.`,
       `Workspace: ${context.workspaceName}. Platform: ${context.platform}. Shell: ${context.shell}. Date: ${context.date}.`,
       "All paths are relative to the workspace root.",
     ].join("\n"),
-    modeInstructions[context.mode],
+    context.mode.instructions || `You are in ${context.mode.name} mode.`,
     [
       "Safety rules:",
       "- Never read, print, or send secrets, keys, tokens, or .env files.",
@@ -60,13 +40,18 @@ export function buildSystemPrompt(context: PromptContext): string {
       "**Fix:** what you changed.",
     ].join("\n"),
   ];
-  if (context.verifyCommand && context.mode === "code") {
+  if (context.verifyCommand && context.mode.tools.has("edit")) {
     sections.push(
       `After you change files, Phew runs \`${context.verifyCommand}\` to check the work and sends you the output when it fails.`,
     );
   }
   if (context.mcpTools && context.mcpTools.length > 0) {
     sections.push(`MCP tools from connected servers: ${context.mcpTools.join(", ")}.`);
+  }
+  if (context.memory && context.memory.trim().length > 0) {
+    sections.push(
+      `Project memory. These facts were saved earlier. Use the remember tool to add new durable facts:\n\n${context.memory}`,
+    );
   }
   if (context.rules.trim().length > 0) {
     sections.push(

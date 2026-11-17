@@ -69,4 +69,40 @@ export class CheckpointStore {
   clear(): void {
     this.checkpoints.length = 0;
   }
+
+  /** Serializes the checkpoints. Files larger than `maxFileCharacters` are skipped. */
+  toJSON(maxFileCharacters = 2_000_000): SerializedCheckpoint[] {
+    return this.checkpoints.map((checkpoint) => ({
+      id: checkpoint.id,
+      label: checkpoint.label,
+      createdAt: checkpoint.createdAt,
+      files: [...checkpoint.files].filter(([, content]) => content === null || content.length <= maxFileCharacters),
+    }));
+  }
+
+  static fromJSON(value: unknown): CheckpointStore {
+    const store = new CheckpointStore();
+    for (const raw of Array.isArray(value) ? value : []) {
+      const item = raw as Partial<SerializedCheckpoint>;
+      if (typeof item.id !== "string" || !Array.isArray(item.files)) continue;
+      const checkpoint = store.begin(item.id, String(item.label ?? ""), Number(item.createdAt) || 0);
+      for (const entry of item.files) {
+        if (
+          Array.isArray(entry) &&
+          typeof entry[0] === "string" &&
+          (typeof entry[1] === "string" || entry[1] === null)
+        ) {
+          checkpoint.files.set(entry[0], entry[1]);
+        }
+      }
+    }
+    return store;
+  }
+}
+
+export interface SerializedCheckpoint {
+  readonly id: string;
+  readonly label: string;
+  readonly createdAt: number;
+  readonly files: [string, string | null][];
 }

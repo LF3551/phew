@@ -4,6 +4,7 @@ import { endpoint, type ModelProfile, requestHeaders } from "./profile";
 
 type Block =
   | { type: "text"; text: string }
+  | { type: "image"; source: { type: "base64"; media_type: string; data: string } }
   | { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
   | { type: "tool_result"; tool_use_id: string; content: string };
 
@@ -34,7 +35,15 @@ export function toAnthropic(messages: readonly ChatMessage[]): { system: string;
         system.push(message.content);
         break;
       case "user":
-        push("user", [{ type: "text", text: message.content || " " }]);
+        push("user", [
+          ...(message.images ?? []).map(
+            (image): Block => ({
+              type: "image",
+              source: { type: "base64", media_type: image.mimeType, data: image.data },
+            }),
+          ),
+          { type: "text", text: message.content || " " },
+        ]);
         break;
       case "tool":
         push("user", [{ type: "tool_result", tool_use_id: message.toolCallId, content: message.content || "(empty)" }]);

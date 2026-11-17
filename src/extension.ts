@@ -1,66 +1,102 @@
 import * as vscode from "vscode";
+import type { Attachment } from "./core/attachments";
+import { attachmentLabel } from "./core/attachments";
 import { truncateMiddle } from "./core/chat";
-import { isMode, modeInfo, modes } from "./core/modes";
+import { findMode } from "./core/modes";
 import { buildCommandFixRequest, buildFixRequest } from "./core/prompts";
+import { MentionProvider } from "./host/attachments";
 import { DiffContentProvider, diffScheme } from "./host/changes";
 import { ChatViewProvider } from "./host/chatView";
+import { CodeIndexManager } from "./host/codeIndexManager";
 import { describeResult, runShellCommand } from "./host/commandRunner";
+import { CommitAssistant } from "./host/commitAssistant";
+import { CompletionProvider, NextEditPredictor } from "./host/completions";
 import { McpManager } from "./host/mcpManager";
+import { MemoryStore } from "./host/memoryStore";
 import { ModelManager } from "./host/models";
 import { fileProblemsRequest, fixProblemCommand, PhewItCodeActionProvider, problemContext } from "./host/phewIt";
-import { AgentSession, type TaskRequest } from "./host/session";
+import { ReviewManager } from "./host/reviewManager";
+import type { TaskRequest } from "./host/session";
+import { SessionManager } from "./host/sessionManager";
 import { readSettings, section } from "./host/settings";
+import { SettingsPanel } from "./host/settingsPanel";
 import { StatsStore } from "./host/statsStore";
 import { type FailedCommand, TerminalWatcher } from "./host/terminalWatcher";
-
-let session: AgentSession | undefined;
-let mcp: McpManager | undefined;
 
 /** A small API for the integration tests. It exists only when VS Code runs the extension in test mode. */
 export interface PhewTestApi {
   run(request: TaskRequest): Promise<void>;
   restoreLatest(): Promise<void>;
+  sessions: SessionManager;
+  reviews: ReviewManager;
+  index: CodeIndexManager;
 }
 
-export function activate(context: vscode.ExtensionContext): PhewTestApi | undefined {
+let disposeAll: (() => void) | undefined;
+
+export async function activate(context: vscode.ExtensionContext): Promise<PhewTestApi | undefined> {
   const log = vscode.window.createOutputChannel("Phew", { log: true });
-  const view = new ChatViewProvider(context.extensionUri, log);
   const diffs = new DiffContentProvider();
   const stats = new StatsStore(context.globalState);
   const models = new ModelManager(context.secrets, log);
-  mcp = new McpManager(log, String(context.extension.packageJSON.version));
+  const mcp = new McpManager(log, String(context.extension.packageJSON.version));
+  const memory = new MemoryStore();
+  const mentions = new MentionProvider();
+  let sessions: SessionManager | undefined;
+  const index = new CodeIndexManager(context.globalStorageUri, models, log, () => sessions?.postState());
 
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   status.command = "phew.openChat";
-  const updateStatus = (busy: boolean) => {
-    status.text = busy ? "$(sync~spin) Phew" : "$(sparkle) Phew";
+  const reviews = new ReviewManager((files) => {
+    updateStatus();
+    sessions?.postState();
+    void files;
+  });
+  const updateStatus = () => {
+    const running = sessions?.runningCount ?? 0;
     const model = models.active();
-    status.tooltip = busy
-      ? "Phew is working. Click to open the chat."
-      : `Phew · ${model ? model.name : "no model"} · ${stats.summary(readSettings().minutesPerBug)}`;
+    const pending = reviews.pendingFiles.length;
+    status.text =
+      running > 0
+        ? `$(sync~spin) Phew${running > 1 ? ` ${running}` : ""}`
+        : pending > 0
+          ? `$(sparkle) Phew · ${pending} to review`
+          : "$(sparkle) Phew";
+    status.tooltip = `Phew · ${model ? model.name : "no model"} · ${stats.summary(readSettings().minutesPerBug)}`;
+    status.command = pending > 0 && running === 0 ? "phew.review.next" : "phew.openChat";
   };
-  updateStatus(false);
   status.show();
 
-  session = new AgentSession({
-    context,
-    log,
-    post: (message) => view.post(message),
-    diffs,
-    mcp,
-    stats,
-    models,
-    onBusyChange: (busy) => {
-      updateStatus(busy);
-      void vscode.commands.executeCommand("setContext", "phew.busy", busy);
-    },
+  const terminal = new TerminalWatcher((failure) => {
+    if (!readSettings().offerTerminalFix || (sessions?.active?.busy ?? false)) return;
+    void vscode.window
+      .showInformationMessage(`The command "${failure.command.slice(0, 60)}" failed.`, "Phew it!")
+      .then((answer) => {
+        if (answer === "Phew it!") void fixFailedCommand(failure);
+      });
   });
-  view.attach(session);
-  const current = session;
+
+  const manager = new SessionManager(
+    { context, log, diffs, mcp, stats, models, reviews, index, memory, terminal },
+    (running) => {
+      updateStatus();
+      void vscode.commands.executeCommand("setContext", "phew.busy", running > 0);
+    },
+  );
+  sessions = manager;
+  const view = new ChatViewProvider(context.extensionUri, log, manager, mentions);
+  manager.attach((message) => view.post(message));
+  await manager.initialize();
+  updateStatus();
+
+  const settingsPanel = new SettingsPanel(context, models, index, memory, stats);
+  const commits = new CommitAssistant(models, log);
+  const completions = new CompletionProvider(models);
+  const nextEdit = new NextEditPredictor(models, reviews);
 
   const start = async (request: TaskRequest) => {
     await view.reveal();
-    await current.run(request);
+    await manager.run(request);
   };
 
   const fixFailedCommand = (failure: FailedCommand) =>
@@ -71,38 +107,123 @@ export function activate(context: vscode.ExtensionContext): PhewTestApi | undefi
       mode: "code",
     });
 
-  const terminal = new TerminalWatcher((failure) => {
-    if (!readSettings().offerTerminalFix || current.busy) return;
-    void vscode.window
-      .showInformationMessage(`The command "${failure.command.slice(0, 60)}" failed.`, "Phew it!")
-      .then((answer) => {
-        if (answer === "Phew it!") void fixFailedCommand(failure);
-      });
-  });
+  const addToChat = async (attachment: Attachment) => {
+    await view.reveal();
+    view.post({ type: "addAttachment", attachment, label: attachmentLabel(attachment) });
+  };
+
+  const editorSelection = (): Attachment | undefined => {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) return undefined;
+    const path = vscode.workspace.asRelativePath(editor.document.uri, false);
+    if (editor.selection.isEmpty) return { kind: "file", path };
+    return {
+      kind: "selection",
+      path,
+      startLine: editor.selection.start.line + 1,
+      endLine: editor.selection.end.line + 1,
+      text: editor.document.getText(editor.selection),
+      language: editor.document.languageId,
+    };
+  };
+
+  const root = () => manager.active?.root.uri ?? vscode.workspace.workspaceFolders?.[0]?.uri;
 
   context.subscriptions.push(
     log,
     status,
     terminal,
-    { dispose: () => current.dispose() },
+    reviews,
+    index,
+    settingsPanel,
+    completions,
+    nextEdit,
+    manager,
+    { dispose: () => mcp.dispose() },
     vscode.window.registerWebviewViewProvider(ChatViewProvider.viewId, view),
     vscode.workspace.registerTextDocumentContentProvider(diffScheme, diffs),
+    vscode.languages.registerCodeLensProvider({ scheme: "file" }, reviews),
+    vscode.languages.registerInlineCompletionItemProvider({ pattern: "**" }, completions),
     vscode.languages.registerCodeActionsProvider({ scheme: "file" }, new PhewItCodeActionProvider(), {
       providedCodeActionKinds: PhewItCodeActionProvider.kinds,
     }),
 
+    // Chat and sessions
     vscode.commands.registerCommand("phew.openChat", () => view.reveal()),
     vscode.commands.registerCommand("phew.newChat", async () => {
       await view.reveal();
-      current.newChat();
+      manager.newSession();
     }),
-    vscode.commands.registerCommand("phew.stop", () => current.stop()),
-    vscode.commands.registerCommand("phew.switchModel", () => models.switchModel()),
-    vscode.commands.registerCommand("phew.addModel", () => models.addModel()),
+    vscode.commands.registerCommand("phew.stop", () => manager.active?.stop()),
+    vscode.commands.registerCommand("phew.showHistory", async () => {
+      await view.reveal();
+      view.post({ type: "openPanel" });
+    }),
+    vscode.commands.registerCommand("phew.exportChat", () => manager.exportActive()),
+    vscode.commands.registerCommand("phew.setMode", async (value?: unknown) => {
+      const modes = manager.modes();
+      const mode =
+        typeof value === "string" && modes.some((item) => item.id === value)
+          ? value
+          : (
+              await vscode.window.showQuickPick(
+                modes.map((item) => ({ label: item.name, description: item.description, id: item.id })),
+                { title: "Phew: Mode" },
+              )
+            )?.id;
+      if (mode) manager.active?.setMode(findMode(mode, modes).id);
+    }),
+
+    // Context
+    vscode.commands.registerCommand("phew.addSelectionToChat", async () => {
+      const attachment = editorSelection();
+      if (attachment) await addToChat(attachment);
+    }),
+    vscode.commands.registerCommand("phew.addFileToChat", async (uri?: vscode.Uri, selected?: vscode.Uri[]) => {
+      const targets = selected && selected.length > 0 ? selected : uri ? [uri] : [];
+      if (targets.length === 0) {
+        const attachment = editorSelection();
+        if (attachment)
+          await addToChat(attachment.kind === "selection" ? { kind: "file", path: attachment.path } : attachment);
+        return;
+      }
+      for (const target of targets)
+        await addToChat({ kind: "file", path: vscode.workspace.asRelativePath(target, false) });
+    }),
+    vscode.commands.registerCommand("phew.addTerminalToChat", async () => {
+      const last = terminal.lastExecution;
+      if (!last) {
+        void vscode.window.showInformationMessage(
+          "Phew: no terminal command yet. Phew needs terminal shell integration.",
+        );
+        return;
+      }
+      await addToChat({ kind: "terminal", command: last.command, output: truncateMiddle(last.output, 30_000) });
+    }),
+    vscode.commands.registerCommand("phew.addProblemsToChat", () => addToChat({ kind: "problems" })),
+
+    // Models
+    vscode.commands.registerCommand("phew.switchModel", async () => {
+      await models.switchModel();
+      manager.postState();
+    }),
+    vscode.commands.registerCommand("phew.addModel", async () => {
+      await models.addModel();
+      manager.postState();
+    }),
     vscode.commands.registerCommand("phew.manageModels", () => models.manage()),
     vscode.commands.registerCommand("phew.testModel", () => models.test()),
-    vscode.commands.registerCommand("phew.openSettings", () =>
-      vscode.commands.executeCommand("workbench.action.openSettings", `@ext:${context.extension.id}`),
+
+    // Settings, onboarding, and statistics
+    vscode.commands.registerCommand("phew.openSettings", (focus?: string) =>
+      settingsPanel.show(typeof focus === "string" ? focus : undefined),
+    ),
+    vscode.commands.registerCommand("phew.openWalkthrough", () =>
+      vscode.commands.executeCommand(
+        "workbench.action.openWalkthrough",
+        `${context.extension.id}#phew.gettingStarted`,
+        false,
+      ),
     ),
     vscode.commands.registerCommand("phew.showLog", () => log.show()),
     vscode.commands.registerCommand("phew.showStats", async () => {
@@ -113,26 +234,58 @@ export function activate(context: vscode.ExtensionContext): PhewTestApi | undefi
       );
       if (answer === "Reset") {
         await stats.reset();
-        current.postState();
-        updateStatus(current.busy);
+        manager.postState();
+        updateStatus();
       }
     }),
-    vscode.commands.registerCommand("phew.setMode", async (value?: unknown) => {
-      const mode = isMode(value)
-        ? value
-        : (
-            await vscode.window.showQuickPick(
-              modes.map((item) => ({
-                label: modeInfo[item].label,
-                description: modeInfo[item].description,
-                mode: item,
-              })),
-              { title: "Phew: Mode" },
-            )
-          )?.mode;
-      if (mode) await current.setMode(mode);
-    }),
 
+    // Review in the editor
+    vscode.commands.registerCommand("phew.review.keep", (uri: vscode.Uri, hunk: number) => reviews.keep(uri, hunk)),
+    vscode.commands.registerCommand("phew.review.undo", (uri: vscode.Uri, hunk: number) => reviews.undo(uri, hunk)),
+    vscode.commands.registerCommand("phew.review.keepFile", (uri?: vscode.Uri) => {
+      const target = uri ?? vscode.window.activeTextEditor?.document.uri;
+      return target ? reviews.keepFile(target) : undefined;
+    }),
+    vscode.commands.registerCommand("phew.review.undoFile", (uri?: vscode.Uri) => {
+      const target = uri ?? vscode.window.activeTextEditor?.document.uri;
+      return target ? reviews.undoFile(target) : undefined;
+    }),
+    vscode.commands.registerCommand("phew.review.keepAll", () => reviews.keepAll()),
+    vscode.commands.registerCommand("phew.review.undoAll", async () => {
+      const answer = await vscode.window.showWarningMessage(
+        "Undo all changes that are waiting for review?",
+        { modal: true },
+        "Undo All",
+      );
+      if (answer) await reviews.undoAll();
+    }),
+    vscode.commands.registerCommand("phew.review.next", () => reviews.next()),
+
+    // Git
+    vscode.commands.registerCommand("phew.generateCommitMessage", (source?: unknown) => commits.generate(source)),
+    vscode.commands.registerCommand("phew.commit", (source?: unknown) => commits.commit(source)),
+    vscode.commands.registerCommand("phew.showCommitIdentity", () => commits.showIdentity()),
+    vscode.commands.registerCommand("phew.newWorktreeAgent", () => manager.newWorktreeAgent()),
+    vscode.commands.registerCommand("phew.worktreeActions", () => manager.worktreeActions()),
+
+    // Memory, index, and completions
+    vscode.commands.registerCommand("phew.openMemory", async () => {
+      const target = root();
+      if (target) await memory.open(target);
+    }),
+    vscode.commands.registerCommand("phew.rebuildIndex", async () => {
+      const target = root();
+      if (!target) return;
+      const result = await vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Notification, title: "Phew: indexing the code…" },
+        () => index.rebuild(target),
+      );
+      void vscode.window.showInformationMessage(`Phew: indexed ${result.files} files (${result.chunks} chunks).`);
+    }),
+    vscode.commands.registerCommand("phew.toggleAutocomplete", () => completions.toggle()),
+    vscode.commands.registerCommand("phew.suggestNextEdit", () => nextEdit.suggest()),
+
+    // Phew it!
     vscode.commands.registerCommand(fixProblemCommand, async (uri?: vscode.Uri, diagnostic?: vscode.Diagnostic) => {
       let document: vscode.TextDocument | undefined;
       let problem = diagnostic;
@@ -150,10 +303,10 @@ export function activate(context: vscode.ExtensionContext): PhewTestApi | undefi
         void vscode.window.showInformationMessage("Phew: no problem found at the cursor.");
         return;
       }
-      const context = problemContext(document, problem);
+      const problemInfo = problemContext(document, problem);
       await start({
-        text: buildFixRequest(context),
-        display: `Phew it! ${context.path}:${context.line} — ${context.message.split("\n")[0].slice(0, 160)}`,
+        text: buildFixRequest(problemInfo),
+        display: `Phew it! ${problemInfo.path}:${problemInfo.line} — ${problemInfo.message.split("\n")[0].slice(0, 160)}`,
         kind: "fix",
         mode: "code",
       });
@@ -179,13 +332,13 @@ export function activate(context: vscode.ExtensionContext): PhewTestApi | undefi
     }),
     vscode.commands.registerCommand("phew.makeChecksPass", async () => {
       const settings = readSettings();
-      const folder = vscode.workspace.workspaceFolders?.[0];
+      const folder = root();
       if (!settings.verifyCommand) {
         const answer = await vscode.window.showInformationMessage(
           "Set the check command first, for example npm test.",
           "Open Setting",
         );
-        if (answer) await vscode.commands.executeCommand("workbench.action.openSettings", "phew.verify.command");
+        if (answer) await settingsPanel.show("checks");
         return;
       }
       if (!folder || !vscode.workspace.isTrusted) {
@@ -203,7 +356,7 @@ export function activate(context: vscode.ExtensionContext): PhewTestApi | undefi
           token.onCancellationRequested(() => controller.abort());
           return runShellCommand(
             settings.verifyCommand,
-            folder.uri.fsPath,
+            folder.fsPath,
             settings.commandTimeoutSeconds,
             controller.signal,
           );
@@ -227,44 +380,44 @@ export function activate(context: vscode.ExtensionContext): PhewTestApi | undefi
       });
     }),
     vscode.commands.registerCommand("phew.askSelection", async () => {
-      const editor = vscode.window.activeTextEditor;
-      if (!editor || editor.selection.isEmpty) {
-        void vscode.window.showInformationMessage("Phew: select some code first.");
-        return;
-      }
-      const question = await vscode.window.showInputBox({
-        title: "Phew: Ask about the selection",
-        value: "Explain this code.",
-      });
-      if (!question) return;
-      const folder = vscode.workspace.getWorkspaceFolder(editor.document.uri);
-      const path = folder ? vscode.workspace.asRelativePath(editor.document.uri, false) : editor.document.fileName;
-      const start_ = editor.selection.start.line + 1;
-      const code = editor.document.getText(editor.selection);
-      await start({
-        text: `${question}\n\nCode from ${path}, starting at line ${start_}:\n\`\`\`${editor.document.languageId}\n${code}\n\`\`\``,
-        display: `${question} (${path}:${start_})`,
-        kind: "chat",
-      });
+      const attachment = editorSelection();
+      if (!attachment) return;
+      await addToChat(attachment);
+      view.post({ type: "focusInput", text: "Explain this code." });
     }),
 
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration(section)) {
-        current.postState();
-        updateStatus(current.busy);
-      }
+      if (!event.affectsConfiguration(section)) return;
+      if (event.affectsConfiguration("phew.modes")) manager.reloadModes();
+      if (event.affectsConfiguration("phew.autocomplete")) completions.update();
+      manager.postState();
+      updateStatus();
     }),
-    vscode.workspace.onDidGrantWorkspaceTrust(() => current.postState()),
+    vscode.workspace.onDidGrantWorkspaceTrust(async () => {
+      await manager.loadWorkspaceModes();
+      manager.postState();
+    }),
   );
 
+  const welcomeKey = "phew.welcomeShown";
+  if (!context.globalState.get(welcomeKey) && context.extensionMode !== vscode.ExtensionMode.Test) {
+    await context.globalState.update(welcomeKey, true);
+    void vscode.commands.executeCommand("phew.openWalkthrough");
+  }
+
+  disposeAll = () => manager.dispose();
   log.info(`Phew ${context.extension.packageJSON.version} activated.`);
   if (context.extensionMode !== vscode.ExtensionMode.Test) return undefined;
-  return { run: (request) => current.run(request), restoreLatest: () => current.restoreLatestForTest() };
+  return {
+    run: (request) => manager.run(request),
+    restoreLatest: () => manager.restoreFirstCheckpointForTest(),
+    sessions: manager,
+    reviews,
+    index,
+  };
 }
 
 export function deactivate(): void {
-  session?.dispose();
-  mcp?.dispose();
-  session = undefined;
-  mcp = undefined;
+  disposeAll?.();
+  disposeAll = undefined;
 }

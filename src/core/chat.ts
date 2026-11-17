@@ -9,9 +9,15 @@ export interface ToolCall {
   readonly signature?: string;
 }
 
+/** An image attached to a user message, as base64 data. */
+export interface ImagePart {
+  readonly mimeType: string;
+  readonly data: string;
+}
+
 export type ChatMessage =
   | { readonly role: "system"; readonly content: string }
-  | { readonly role: "user"; readonly content: string }
+  | { readonly role: "user"; readonly content: string; readonly images?: readonly ImagePart[] }
   | { readonly role: "assistant"; readonly content: string; readonly toolCalls?: readonly ToolCall[] }
   | { readonly role: "tool"; readonly toolCallId: string; readonly content: string };
 
@@ -81,7 +87,12 @@ export function truncateMiddle(text: string, limit: number): string {
 
 function messageSize(message: ChatMessage): number {
   const calls = message.role === "assistant" ? (message.toolCalls ?? []) : [];
-  return message.content.length + calls.reduce((sum, call) => sum + call.name.length + call.arguments.length, 0);
+  const images = message.role === "user" ? (message.images ?? []) : [];
+  return (
+    message.content.length +
+    calls.reduce((sum, call) => sum + call.name.length + call.arguments.length, 0) +
+    images.reduce((sum, image) => sum + Math.min(image.data.length, 4000), 0)
+  );
 }
 
 /**

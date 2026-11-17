@@ -18,9 +18,16 @@ export function toVsCodeMessages(messages: readonly ChatMessage[]): vscode.Langu
   for (const message of messages) {
     switch (message.role) {
       case "system":
-      case "user":
         push("user", [new vscode.LanguageModelTextPart(message.content || " ")]);
         break;
+      case "user": {
+        const note =
+          message.images && message.images.length > 0
+            ? `\n\n[${message.images.length} image(s) omitted: VS Code language models in Phew do not accept images yet.]`
+            : "";
+        push("user", [new vscode.LanguageModelTextPart((message.content || " ") + note)]);
+        break;
+      }
       case "tool":
         push("user", [
           new vscode.LanguageModelToolResultPart(message.toolCallId, [

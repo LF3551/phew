@@ -480,3 +480,24 @@ describe("model lists, tests, and errors", () => {
     expect(networkError("Ollama", "http://localhost:11434/v1", refused).message).toMatch(/ECONNREFUSED.*local server/);
   });
 });
+
+describe("images", () => {
+  const withImage: ChatMessage[] = [
+    { role: "user", content: "What is this?", images: [{ mimeType: "image/png", data: "AAAA" }] },
+  ];
+
+  test("each provider sends images in its own format", () => {
+    expect(toApiMessages(withImage)[0]).toEqual({
+      role: "user",
+      content: [
+        { type: "text", text: "What is this?" },
+        { type: "image_url", image_url: { url: "data:image/png;base64,AAAA" } },
+      ],
+    });
+    expect(toAnthropic(withImage).messages[0].content[0]).toEqual({
+      type: "image",
+      source: { type: "base64", media_type: "image/png", data: "AAAA" },
+    });
+    expect(toGemini(withImage).contents[0].parts[0]).toEqual({ inlineData: { mimeType: "image/png", data: "AAAA" } });
+  });
+});

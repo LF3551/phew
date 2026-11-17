@@ -411,3 +411,342 @@ summary:focus-visible {
   overflow: hidden;
   clip: rect(0 0 0 0);
 }
+
+/* Header, mode, and model */
+
+.toolbar .title {
+  display: flex;
+  overflow: hidden;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 2px 4px;
+  color: inherit;
+  background: none;
+  border: none;
+  font-weight: 600;
+  text-align: left;
+}
+
+.toolbar .title span:first-child {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.icons {
+  display: flex;
+  gap: 2px;
+}
+
+.icon-button {
+  min-width: 26px;
+  padding: 2px 6px;
+  color: var(--vscode-icon-foreground, inherit);
+  background: none;
+  border: none;
+  border-radius: 4px;
+}
+
+.icon-button:hover {
+  background: var(--vscode-toolbar-hoverBackground, #8883);
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 6px;
+  border-bottom: 1px solid var(--vscode-panel-border, transparent);
+}
+
+select {
+  padding: 2px 4px;
+  color: var(--vscode-dropdown-foreground);
+  background: var(--vscode-dropdown-background);
+  border: 1px solid var(--vscode-dropdown-border, transparent);
+  border-radius: 3px;
+  font: inherit;
+}
+
+.bar .model {
+  max-width: none;
+  margin-left: auto;
+}
+
+.badge {
+  padding: 0 6px;
+  color: var(--vscode-badge-foreground);
+  background: var(--vscode-badge-background);
+  border-radius: 8px;
+  font-size: 0.8em;
+  font-weight: normal;
+  white-space: nowrap;
+}
+
+.badge.warn {
+  background: var(--vscode-editorWarning-foreground, #cca700);
+}
+
+.running {
+  color: var(--phew-drop);
+  font-size: 0.85em;
+}
+
+/* Sessions and history panel */
+
+.panel {
+  position: absolute;
+  z-index: 5;
+  top: 34px;
+  right: 6px;
+  left: 6px;
+  overflow-y: auto;
+  max-height: 70vh;
+  padding: 8px;
+  background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+  border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border, #8884));
+  border-radius: 6px;
+  box-shadow: 0 4px 16px var(--vscode-widget-shadow, #0006);
+}
+
+.panel-header {
+  display: flex;
+  gap: 6px;
+}
+
+.panel-header input {
+  flex: 1;
+  padding: 3px 6px;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 3px;
+}
+
+.panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.panel h4 {
+  margin: 8px 0 4px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.85em;
+  text-transform: uppercase;
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.list .item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.list .item:hover,
+.list .item.active {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.item-title {
+  overflow: hidden;
+  flex: 1;
+  padding: 3px 0;
+  color: inherit;
+  background: none;
+  border: none;
+  text-align: left;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.when,
+.empty {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.85em;
+}
+
+.remove {
+  padding: 0 4px;
+  color: var(--vscode-descriptionForeground);
+  background: none;
+  border: none;
+}
+
+/* Messages */
+
+.message-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.code {
+  position: relative;
+}
+
+.code .copy {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  padding: 1px 6px;
+  color: var(--vscode-button-secondaryForeground);
+  background: var(--vscode-button-secondaryBackground);
+  border: none;
+  border-radius: 3px;
+  font-size: 0.8em;
+  opacity: 0;
+}
+
+.code:hover .copy,
+.code .copy:focus-visible {
+  opacity: 1;
+}
+
+.review-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--vscode-editorInfo-background, #3794ff22);
+  border-top: 1px solid var(--vscode-panel-border, transparent);
+}
+
+/* Footer */
+
+.approvals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.85em;
+}
+
+.approvals label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.approvals select {
+  font-size: 1em;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.chips:empty {
+  display: none;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 1px 4px 1px 8px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  border-radius: 10px;
+  font-size: 0.85em;
+}
+
+.chip .chip-label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.chip img {
+  width: 18px;
+  height: 18px;
+  object-fit: cover;
+  border-radius: 3px;
+}
+
+.chip .remove {
+  color: inherit;
+}
+
+.chips.static {
+  margin: 6px 0 0;
+}
+
+.composer {
+  position: relative;
+}
+
+.mentions {
+  position: absolute;
+  z-index: 4;
+  right: 0;
+  bottom: 100%;
+  left: 0;
+  overflow-y: auto;
+  max-height: 240px;
+  margin-bottom: 4px;
+  background: var(--vscode-editorSuggestWidget-background, var(--vscode-editorWidget-background));
+  border: 1px solid var(--vscode-editorSuggestWidget-border, var(--vscode-widget-border, #8884));
+  border-radius: 4px;
+}
+
+.mention {
+  display: flex;
+  gap: 8px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.mention.selected {
+  color: var(--vscode-editorSuggestWidget-selectedForeground, inherit);
+  background: var(--vscode-editorSuggestWidget-selectedBackground, var(--vscode-list-activeSelectionBackground));
+}
+
+.mention .detail {
+  overflow: hidden;
+  color: var(--vscode-descriptionForeground);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.actions .spacer {
+  flex: 1;
+}
+
+.welcome-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+kbd {
+  padding: 0 4px;
+  background: var(--vscode-keybindingLabel-background, #8883);
+  border: 1px solid var(--vscode-keybindingLabel-border, #8886);
+  border-radius: 3px;
+}
+
+.app {
+  position: relative;
+}
+
+[hidden] {
+  /* biome-ignore lint/complexity/noImportantStyles: the hidden attribute must win over display rules. */
+  display: none !important;
+}

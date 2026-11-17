@@ -6,7 +6,11 @@ import { escapeHtml, renderChatHtml } from "../src/host/html";
 import { parseWebviewMessage } from "../src/shared/protocol";
 
 test("accepts valid webview messages", () => {
-  expect(parseWebviewMessage({ type: "send", text: "  fix  " })).toEqual({ type: "send", text: "fix" });
+  expect(parseWebviewMessage({ type: "send", text: "  fix  " })).toEqual({
+    type: "send",
+    text: "fix",
+    attachments: [],
+  });
   expect(parseWebviewMessage({ type: "setMode", mode: "plan" })).toEqual({ type: "setMode", mode: "plan" });
   expect(parseWebviewMessage({ type: "approve", id: "approval_1", decision: "allow", hunks: [0, 2] })).toEqual({
     type: "approve",
@@ -19,7 +23,7 @@ test("accepts valid webview messages", () => {
 test.each([
   null,
   { type: "send", text: "" },
-  { type: "setMode", mode: "root" },
+  { type: "setMode", mode: "Root Mode!" },
   { type: "approve", id: "../x", decision: "allow" },
   { type: "approve", id: "a", decision: "maybe" },
   { type: "approve", id: "a", decision: "allow", hunks: [-1] },
@@ -61,4 +65,21 @@ test("statistics survive invalid stored values", () => {
   const next = recordOutcome(stats, { success: true, bugFixed: true, filesChanged: 3, tokens: 100, cost: 0.5 });
   expect(next).toMatchObject({ bugsFixed: 3, tasksCompleted: 1, filesChanged: 3, tokens: 100, cost: 0.5 });
   expect(estimatedMinutesSaved(next, 15)).toBe(45);
+});
+
+test("new webview messages are validated", () => {
+  expect(parseWebviewMessage({ type: "send", text: "", attachments: [{ kind: "problems" }] })).toEqual({
+    type: "send",
+    text: "",
+    attachments: [{ kind: "problems" }],
+  });
+  expect(parseWebviewMessage({ type: "send", text: "x", attachments: [{ kind: "bad" }] })).toBeUndefined();
+  expect(parseWebviewMessage({ type: "send", text: "", attachments: [] })).toBeUndefined();
+  expect(parseWebviewMessage({ type: "setApproval", key: "commands", value: "safe" })).toBeDefined();
+  expect(parseWebviewMessage({ type: "setApproval", key: "commands", value: "yolo" })).toBeUndefined();
+  expect(parseWebviewMessage({ type: "setApproval", key: "mcp", value: "true" })).toBeUndefined();
+  expect(parseWebviewMessage({ type: "setMode", mode: "my-mode" })).toEqual({ type: "setMode", mode: "my-mode" });
+  expect(parseWebviewMessage({ type: "openConversation", id: "c_1" })).toEqual({ type: "openConversation", id: "c_1" });
+  expect(parseWebviewMessage({ type: "openConversation", id: "../x" })).toBeUndefined();
+  expect(parseWebviewMessage({ type: "mentionQuery", query: "x".repeat(300) })).toBeUndefined();
 });

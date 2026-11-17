@@ -19,6 +19,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - MCP servers over stdio.
 - Local statistics and the **Phew! Done.** animation.
 
+### Added in this update
+
+- Chat history per workspace with search, several chats at the same time, restore after a restart, and Markdown export.
+- `@` mentions for files, problems, Git changes, and terminal output; images by paste, drop, or file picker; **Add to Chat** in the editor, explorer, and terminal.
+- Approval toggles in the chat for edits, commands, and MCP tools.
+- Review in the editor with Keep and Undo per change, Keep All and Undo All, and a review banner.
+- Commit messages in the Source Control view, **Commit with Phew**, and commit settings for style, language, sign-off, GPG or SSH signing, author, trailers, and model, with a clear view of the identity that commits use.
+- Debug and Review modes, custom modes in the settings and in `.phew/modes.json`, and a model per mode.
+- Project memory in `.phew/memory.md` with the `remember` tool.
+- Inline autocomplete and **Suggest Next Edit**.
+- Local code index with `search_code` and optional embeddings.
+- Agents in Git worktrees with diff, merge, open, and remove actions.
+- A getting started walkthrough and a settings page.
+- Prompt history with the arrow keys and Copy buttons on code blocks.
+
 ### Changed
 
 - Model profiles: several models, quick switch, a guided setup that loads the model list and tests the connection, API keys in the secret storage or from environment variables, and custom auth, headers, query parameters, and request fields.

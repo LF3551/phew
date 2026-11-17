@@ -1,0 +1,457 @@
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as vscode from "vscode";
+import { conversationToMarkdown } from "../core/export";
+import { builtInModes, type ModeDefinition, parseCustomModes } from "../core/modes";
+import { branchName, isValidBranch, worktreeFolder } from "../core/worktree";
+import type { HostMessage, SessionSummary, ViewState } from "../shared/protocol";
+import { ConversationStore, type StoredConversation } from "./conversationStore";
+import { git, gitOrThrow, repositoryRoot } from "./git";
+import { providerNames } from "./models";
+import { AgentSession, type SessionDependencies, type TaskRequest, type WorktreeInfo } from "./session";
+import { readSettings, updateSetting } from "./settings";
+
+type SharedDependencies = Omit<SessionDependencies, "emit" | "onChange" | "persist" | "modes">;
+
+/** Keeps all chat sessions of the window, the saved history, and the worktree agents. */
+export class SessionManager implements vscode.Disposable {
+  private readonly sessions = new Map<string, AgentSession>();
+  private activeId = "";
+  private readonly store: ConversationStore;
+  private post: (message: HostMessage) => void = () => {};
+  private customModes: ModeDefinition[] = [];
+  private workspaceModes: ModeDefinition[] = [];
+  private counter = 0;
+  private notifiedApprovals = new Set<string>();
+
+  constructor(
+    private readonly deps: SharedDependencies,
+    private readonly onBusyChange: (running: number) => void,
+  ) {
+    const storage = deps.context.storageUri ?? vscode.Uri.joinPath(deps.context.globalStorageUri, "no-workspace");
+    this.store = new ConversationStore(vscode.Uri.joinPath(storage, "chats"), () => readSettings().historyLimit);
+    this.reloadModes();
+  }
+
+  /** Connects the chat view. */
+  attach(post: (message: HostMessage) => void): void {
+    this.post = post;
+  }
+
+  /** Creates the first session, or restores the last chat of this workspace. */
+  async initialize(): Promise<void> {
+    await this.loadWorkspaceModes();
+    const root = this.defaultRoot();
+    if (readSettings().restoreLastChat && root) {
+      const last = (await this.store.list()).find((item) => !item.worktree);
+      const stored = last ? await this.store.load(last.id) : undefined;
+      if (stored && stored.root === root.uri.fsPath) {
+        const session = this.create(root, stored.id, undefined, stored);
+        this.activeId = session.id;
+        return;
+      }
+    }
+    this.newSession();
+  }
+
+  get active(): AgentSession | undefined {
+    return this.sessions.get(this.activeId);
+  }
+
+  get runningCount(): number {
+    return [...this.sessions.values()].filter((session) => session.busy).length;
+  }
+
+  modes(): ModeDefinition[] {
+    return [...builtInModes, ...this.customModes, ...this.workspaceModes];
+  }
+
+  reloadModes(): void {
+    const parsed = parseCustomModes(readSettings().customModes);
+    this.customModes = parsed.modes;
+    for (const error of parsed.errors) this.deps.log.warn(`phew.modes: ${error}`);
+  }
+
+  /** Reads `.phew/modes.json` of the workspace. Only trusted workspaces can add modes. */
+  async loadWorkspaceModes(): Promise<void> {
+    this.workspaceModes = [];
+    const root = this.defaultRoot();
+    if (!root || !vscode.workspace.isTrusted) return;
+    try {
+      const text = new TextDecoder().decode(
+        await vscode.workspace.fs.readFile(vscode.Uri.joinPath(root.uri, ".phew/modes.json")),
+      );
+      const parsed = parseCustomModes(JSON.parse(text), [...builtInModes, ...this.customModes]);
+      this.workspaceModes = parsed.modes;
+      for (const error of parsed.errors) this.deps.log.warn(`.phew/modes.json: ${error}`);
+    } catch {
+      // No workspace modes.
+    }
+  }
+
+  state(): ViewState {
+    const session = this.active;
+    const settings = readSettings();
+    const profile = this.deps.models.active();
+    return {
+      sessionId: session?.id ?? "",
+      title: session?.title ?? "New chat",
+      worktree: session?.worktree?.branch,
+      mode: session?.mode.id ?? settings.defaultMode,
+      modes: this.modes().map((mode) => ({ id: mode.id, name: mode.name, description: mode.description })),
+      model: profile?.name ?? "No model",
+      provider: profile ? providerNames[profile.provider] : "Not configured",
+      configured: profile !== undefined,
+      busy: session?.busy ?? false,
+      trusted: vscode.workspace.isTrusted,
+      tokens: session?.usage.tokens ?? "0",
+      cost: session?.usage.cost ?? "",
+      celebrate: settings.celebrate,
+      stats: this.deps.stats.summary(settings.minutesPerBug),
+      approvals: { review: settings.reviewMode, commands: settings.commands.mode, mcp: settings.mcpAutoApprove },
+      reviewFiles: this.deps.reviews.pendingFiles.length,
+      runningSessions: this.runningCount,
+    };
+  }
+
+  postState(): void {
+    this.post({ type: "state", state: this.state() });
+  }
+
+  /** Sends the transcript of the active session, for example when the view opens. */
+  replay(): void {
+    this.post({ type: "cleared" });
+    for (const message of this.active?.transcript.all() ?? []) this.post(message);
+    this.postState();
+  }
+
+  async run(request: TaskRequest): Promise<void> {
+    const session = this.active ?? this.newSession();
+    if (!session) return;
+    await session.run(request);
+  }
+
+  newSession(): AgentSession | undefined {
+    const current = this.active;
+    if (current?.isEmpty && !current.busy && !current.worktree) {
+      this.replay();
+      return current;
+    }
+    const root = this.defaultRoot();
+    if (!root) {
+      this.post({
+        type: "notice",
+        level: "warning",
+        text: "Open a folder first. Phew works inside a workspace folder.",
+      });
+      return undefined;
+    }
+    const session = this.create(root);
+    this.activeId = session.id;
+    this.dropIdleEmpty();
+    this.replay();
+    return session;
+  }
+
+  switchTo(id: string): void {
+    if (!this.sessions.has(id)) return;
+    this.activeId = id;
+    this.replay();
+  }
+
+  async openConversation(id: string): Promise<void> {
+    if (this.sessions.has(id)) {
+      this.switchTo(id);
+      return;
+    }
+    const stored = await this.store.load(id);
+    if (!stored) {
+      this.post({ type: "notice", level: "warning", text: "This chat is no longer available." });
+      return;
+    }
+    const root = stored.worktree
+      ? { uri: vscode.Uri.file(stored.worktree.path), name: path.basename(stored.worktree.path) }
+      : this.defaultRoot();
+    if (!root) return;
+    if (stored.worktree && !fs.existsSync(stored.worktree.path)) {
+      this.post({
+        type: "notice",
+        level: "warning",
+        text: `The worktree ${stored.worktree.path} no longer exists. The chat is read-only.`,
+      });
+    }
+    const session = this.create(root, stored.id, stored.worktree, stored);
+    this.activeId = session.id;
+    this.dropIdleEmpty();
+    this.replay();
+  }
+
+  async deleteConversation(id: string): Promise<void> {
+    const session = this.sessions.get(id);
+    if (session?.busy) {
+      this.post({ type: "notice", level: "warning", text: "Stop this chat before you delete it." });
+      return;
+    }
+    await this.store.delete(id);
+    if (session) {
+      session.dispose();
+      this.sessions.delete(id);
+      if (this.activeId === id) this.newSession();
+    }
+    await this.postSessions();
+  }
+
+  async postSessions(): Promise<void> {
+    const sessions: SessionSummary[] = [...this.sessions.values()]
+      .filter((session) => !session.isEmpty || session.id === this.activeId)
+      .map((session) => ({
+        id: session.id,
+        title: session.title,
+        running: session.busy,
+        active: session.id === this.activeId,
+        needsApproval: session.needsApproval,
+        ...(session.worktree ? { worktree: session.worktree.branch } : {}),
+      }));
+    const open = new Set(sessions.map((session) => session.id));
+    const history = (await this.store.list()).filter((item) => !open.has(item.id));
+    this.post({ type: "sessions", sessions, history });
+  }
+
+  async exportActive(): Promise<void> {
+    const session = this.active;
+    if (!session || session.isEmpty) {
+      void vscode.window.showInformationMessage("Phew: the chat is empty.");
+      return;
+    }
+    const markdown = conversationToMarkdown(session.conversation, {
+      title: session.title,
+      model: this.deps.models.active()?.name,
+      mode: session.mode.name,
+      date: new Date(session.createdAt),
+    });
+    const document = await vscode.workspace.openTextDocument({ language: "markdown", content: markdown });
+    await vscode.window.showTextDocument(document);
+  }
+
+  /** Starts an agent in a new Git worktree, so it works in parallel without touching the current files. */
+  async newWorktreeAgent(): Promise<void> {
+    const root = this.defaultRoot();
+    if (!root || !vscode.workspace.isTrusted) {
+      void vscode.window.showWarningMessage("Phew: open a trusted folder in a Git repository first.");
+      return;
+    }
+    const repository = await repositoryRoot(root.uri.fsPath);
+    if (!repository) {
+      void vscode.window.showWarningMessage("Phew: this folder is not a Git repository.");
+      return;
+    }
+    const task = await vscode.window.showInputBox({
+      title: "Phew: New agent in a worktree (1/2) — task",
+      prompt: "The agent works on a new branch in a separate folder. Your current files do not change.",
+      placeHolder: "For example: add input validation to the signup form",
+      ignoreFocusOut: true,
+      validateInput: (value) => (value.trim() ? undefined : "Describe the task."),
+    });
+    if (!task) return;
+    const settings = readSettings();
+    const branch = await vscode.window.showInputBox({
+      title: "Phew: New agent in a worktree (2/2) — branch",
+      value: branchName(task, settings.worktrees.branchPrefix),
+      ignoreFocusOut: true,
+      validateInput: (value) => (isValidBranch(value.trim()) ? undefined : "Enter a valid branch name."),
+    });
+    if (!branch) return;
+    const folder = worktreeFolder(repository, branch.trim(), settings.worktrees.location);
+    try {
+      await gitOrThrow(repository, ["worktree", "add", "-b", branch.trim(), folder, "HEAD"]);
+    } catch (error) {
+      void vscode.window.showErrorMessage(`Phew: ${error instanceof Error ? error.message : String(error)}`);
+      return;
+    }
+    this.deps.log.info(`[audit] worktree created: ${folder} on ${branch.trim()}`);
+    const info: WorktreeInfo = { path: folder, branch: branch.trim(), repository };
+    const session = this.create({ uri: vscode.Uri.file(folder), name: path.basename(folder) }, undefined, info);
+    session.setMode("code");
+    this.activeId = session.id;
+    this.replay();
+    void session.run({ text: task.trim(), kind: "chat", mode: "code" }).then(() => this.worktreeDone(session));
+  }
+
+  /** Actions for a worktree agent: open, compare, merge, or remove. */
+  async worktreeActions(id = this.activeId): Promise<void> {
+    const session = this.sessions.get(id);
+    const info = session?.worktree;
+    if (!session || !info) {
+      void vscode.window.showInformationMessage("Phew: the active chat is not a worktree agent.");
+      return;
+    }
+    const pick = await vscode.window.showQuickPick(
+      [
+        { label: "$(git-compare) Show changes", action: "diff" },
+        { label: "$(empty-window) Open the worktree in a new window", action: "open" },
+        { label: "$(git-merge) Merge the branch into the current branch", action: "merge" },
+        { label: "$(trash) Remove the worktree and the branch", action: "remove" },
+      ],
+      { title: `Phew: ${info.branch}` },
+    );
+    if (!pick) return;
+    if (pick.action === "open") {
+      await vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(info.path), { forceNewWindow: true });
+    } else if (pick.action === "diff") {
+      await this.showWorktreeDiff(info);
+    } else if (pick.action === "merge") {
+      const status = await git(info.path, ["status", "--porcelain"]);
+      if (status.stdout.trim()) {
+        const commit = await vscode.window.showWarningMessage(
+          `The worktree has uncommitted changes. Commit them on ${info.branch} first?`,
+          { modal: true },
+          "Commit and Merge",
+        );
+        if (commit !== "Commit and Merge") return;
+        await gitOrThrow(info.path, ["add", "-A"]);
+        const message = `${session.title.replace(/^Agent: /, "")}`.slice(0, 72);
+        const result = await git(info.path, [
+          "commit",
+          "-m",
+          message,
+          ...(readSettings().commit.signOff ? ["--signoff"] : []),
+        ]);
+        if (result.code !== 0) {
+          void vscode.window.showErrorMessage(`Phew: git commit failed: ${result.stderr.trim()}`);
+          return;
+        }
+      }
+      const answer = await vscode.window.showWarningMessage(
+        `Merge ${info.branch} into the current branch?`,
+        { modal: true },
+        "Merge",
+      );
+      if (answer !== "Merge") return;
+      const result = await git(info.repository, ["merge", "--no-ff", "--no-edit", info.branch]);
+      if (result.code === 0) void vscode.window.showInformationMessage(`Phew: merged ${info.branch}.`);
+      else
+        void vscode.window.showErrorMessage(
+          `Phew: merge failed. Resolve it in Git. ${result.stderr.trim().slice(0, 300)}`,
+        );
+    } else if (pick.action === "remove") {
+      const answer = await vscode.window.showWarningMessage(
+        `Remove the worktree ${info.path} and delete the branch ${info.branch}? Uncommitted changes are lost.`,
+        { modal: true },
+        "Remove",
+      );
+      if (answer !== "Remove") return;
+      session.stop();
+      await git(info.repository, ["worktree", "remove", "--force", info.path]);
+      await git(info.repository, ["branch", "-D", info.branch]);
+      this.deps.log.info(`[audit] worktree removed: ${info.path}`);
+      this.sessions.delete(session.id);
+      await this.store.delete(session.id);
+      if (this.activeId === session.id) this.newSession();
+      await this.postSessions();
+    }
+  }
+
+  async setApproval(key: "review" | "commands" | "mcp", value: string | boolean): Promise<void> {
+    const setting = key === "review" ? "review.mode" : key === "commands" ? "commands.approval" : "mcp.autoApprove";
+    await updateSetting(setting, value);
+    this.postState();
+  }
+
+  listHistory() {
+    return this.store.list();
+  }
+
+  async restoreFirstCheckpointForTest(): Promise<void> {
+    await this.active?.restoreFirstForTest();
+  }
+
+  dispose(): void {
+    for (const session of this.sessions.values()) session.dispose();
+  }
+
+  private create(
+    root: { uri: vscode.Uri; name: string },
+    id = `c_${Date.now().toString(36)}_${(++this.counter).toString(36)}`,
+    worktree?: WorktreeInfo,
+    stored?: StoredConversation,
+  ): AgentSession {
+    const session = new AgentSession(
+      {
+        ...this.deps,
+        modes: () => this.modes(),
+        emit: (source, message) => this.route(source, message),
+        onChange: (source) => this.changed(source),
+        persist: (source) => this.persist(source),
+      },
+      id,
+      root,
+      worktree,
+      stored,
+    );
+    this.sessions.set(session.id, session);
+    return session;
+  }
+
+  private route(session: AgentSession, message: HostMessage): void {
+    if (session.id === this.activeId) {
+      this.post(message);
+      return;
+    }
+    if (message.type === "approval" && !this.notifiedApprovals.has(message.id)) {
+      this.notifiedApprovals.add(message.id);
+      void vscode.window
+        .showInformationMessage(`Phew: "${session.title}" needs your approval: ${message.title}.`, "Show")
+        .then((answer) => {
+          if (answer === "Show") {
+            this.switchTo(session.id);
+            void vscode.commands.executeCommand("phew.openChat");
+          }
+        });
+    }
+  }
+
+  private changed(session: AgentSession): void {
+    this.onBusyChange(this.runningCount);
+    if (session.id === this.activeId) this.postState();
+    void this.postSessions();
+  }
+
+  private async persist(session: AgentSession): Promise<void> {
+    if (session.isEmpty) return;
+    await this.store.save(session.toStored());
+  }
+
+  private worktreeDone(session: AgentSession): void {
+    const info = session.worktree;
+    if (!info) return;
+    void vscode.window
+      .showInformationMessage(`Phew: the agent on ${info.branch} finished.`, "Show Changes", "Open Chat", "More…")
+      .then(async (answer) => {
+        if (answer === "Show Changes") await this.showWorktreeDiff(info);
+        else if (answer === "Open Chat") {
+          this.switchTo(session.id);
+          await vscode.commands.executeCommand("phew.openChat");
+        } else if (answer === "More…") await this.worktreeActions(session.id);
+      });
+  }
+
+  private async showWorktreeDiff(info: WorktreeInfo): Promise<void> {
+    const result = await git(info.path, ["diff", "HEAD", "--no-color"]);
+    const committed = await git(info.repository, ["diff", `HEAD...${info.branch}`, "--no-color"]);
+    const content = [committed.stdout.trim(), result.stdout.trim()].filter(Boolean).join("\n") || "No changes yet.";
+    const document = await vscode.workspace.openTextDocument({ language: "diff", content });
+    await vscode.window.showTextDocument(document, { preview: true });
+  }
+
+  private dropIdleEmpty(): void {
+    for (const [id, session] of this.sessions) {
+      if (id !== this.activeId && session.isEmpty && !session.busy && !session.worktree) this.sessions.delete(id);
+    }
+  }
+
+  private defaultRoot(): { uri: vscode.Uri; name: string } | undefined {
+    const active = vscode.window.activeTextEditor?.document.uri;
+    const folder = (active && vscode.workspace.getWorkspaceFolder(active)) ?? vscode.workspace.workspaceFolders?.[0];
+    return folder ? { uri: folder.uri, name: folder.name } : undefined;
+  }
+}

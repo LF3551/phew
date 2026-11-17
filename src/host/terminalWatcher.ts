@@ -13,6 +13,7 @@ const maximumOutput = 60_000;
 /** Remembers the last failed command in the integrated terminal. It needs VS Code shell integration. */
 export class TerminalWatcher implements vscode.Disposable {
   private last: FailedCommand | undefined;
+  private lastAny: FailedCommand | undefined;
   private readonly outputs = new WeakMap<vscode.TerminalShellExecution, string>();
   private readonly disposables: vscode.Disposable[] = [];
   private lastOffer = 0;
@@ -26,6 +27,11 @@ export class TerminalWatcher implements vscode.Disposable {
 
   get lastFailure(): FailedCommand | undefined {
     return this.last;
+  }
+
+  /** The last finished command, successful or not. */
+  get lastExecution(): FailedCommand | undefined {
+    return this.lastAny;
   }
 
   dispose(): void {
@@ -48,9 +54,17 @@ export class TerminalWatcher implements vscode.Disposable {
 
   private end(event: vscode.TerminalShellExecutionEndEvent): void {
     const exitCode = event.exitCode;
-    if (exitCode === undefined || exitCode === 0 || exitCode === 130) return;
     const command = event.execution.commandLine.value.trim();
     if (command.length === 0) return;
+    setTimeout(() => {
+      this.lastAny = {
+        command,
+        exitCode,
+        output: stripAnsi(this.outputs.get(event.execution) ?? ""),
+        cwd: event.execution.cwd?.fsPath,
+      };
+    }, 300);
+    if (exitCode === undefined || exitCode === 0 || exitCode === 130) return;
     // Output streaming can end slightly after the end event.
     setTimeout(() => {
       this.last = {

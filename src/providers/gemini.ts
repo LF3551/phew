@@ -4,6 +4,7 @@ import { endpoint, type ModelProfile, requestHeaders } from "./profile";
 
 type Part =
   | { text: string; thought?: boolean }
+  | { inlineData: { mimeType: string; data: string } }
   | { functionCall: { name: string; args: Record<string, unknown>; id?: string }; thoughtSignature?: string }
   | { functionResponse: { name: string; response: Record<string, unknown>; id?: string } };
 
@@ -85,7 +86,12 @@ export function toGemini(messages: readonly ChatMessage[]): { system: string; co
         system.push(message.content);
         break;
       case "user":
-        push("user", [{ text: message.content || " " }]);
+        push("user", [
+          ...(message.images ?? []).map(
+            (image): Part => ({ inlineData: { mimeType: image.mimeType, data: image.data } }),
+          ),
+          { text: message.content || " " },
+        ]);
         break;
       case "assistant": {
         const parts: Part[] = [];

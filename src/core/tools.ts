@@ -1,5 +1,5 @@
 import type { ToolDefinition } from "./chat";
-import type { Mode } from "./modes";
+import type { ModeDefinition, ToolGroup } from "./modes";
 
 const object = (properties: Record<string, unknown>, required: string[]): Record<string, unknown> => ({
   type: "object",
@@ -46,6 +46,29 @@ export const readTools: readonly ToolDefinition[] = [
     ),
   },
   {
+    name: "search_code",
+    description:
+      "Find the code that is most relevant to a question in the code index, for example 'where is the login handled'. Returns ranked code snippets with paths and line numbers.",
+    parameters: object(
+      {
+        query: { type: "string", description: "What you are looking for, in words or identifiers." },
+        limit: { type: "number", description: "Maximum number of snippets. Default 8." },
+      },
+      ["query"],
+    ),
+  },
+  {
+    name: "git_diff",
+    description: "Show the uncommitted Git changes of the workspace. Use staged=true for the staged changes only.",
+    parameters: object(
+      {
+        staged: { type: "boolean", description: "Show only the staged changes." },
+        path: { type: "string", description: "Limit the diff to one path." },
+      },
+      [],
+    ),
+  },
+  {
     name: "get_problems",
     description: "Get the errors and warnings from the VS Code Problems panel, optionally for one file.",
     parameters: object({ path: { type: "string", description: "Path relative to the workspace root." } }, []),
@@ -86,9 +109,43 @@ export const changeTools: readonly ToolDefinition[] = [
   },
 ];
 
+export const memoryTools: readonly ToolDefinition[] = [
+  {
+    name: "remember",
+    description:
+      "Save a short, durable fact about this project to the project memory, for example a build command or a convention. Do not save secrets or temporary details.",
+    parameters: object({ note: { type: "string", description: "One concise fact, at most 300 characters." } }, [
+      "note",
+    ]),
+  },
+];
+
+const groupOf: Readonly<Record<string, ToolGroup>> = {
+  ...Object.fromEntries(readTools.map((tool) => [tool.name, "read"])),
+  edit_file: "edit",
+  write_file: "edit",
+  run_command: "command",
+  remember: "memory",
+};
+
+/** The tool group of a built-in tool. MCP tools belong to the `mcp` group. */
+export function toolGroup(name: string): ToolGroup {
+  return groupOf[name] ?? "mcp";
+}
+
 /** Returns the built-in tools that a mode allows. */
-export function toolsForMode(mode: Mode): ToolDefinition[] {
-  return mode === "code" ? [...readTools, ...changeTools] : [...readTools];
+export function toolsForMode(
+  mode: ModeDefinition,
+  options: { memory?: boolean; index?: boolean } = {},
+): ToolDefinition[] {
+  const tools: ToolDefinition[] = [];
+  if (mode.tools.has("read")) {
+    tools.push(...readTools.filter((tool) => tool.name !== "search_code" || options.index !== false));
+  }
+  if (mode.tools.has("edit")) tools.push(...changeTools.filter((tool) => tool.name !== "run_command"));
+  if (mode.tools.has("command")) tools.push(...changeTools.filter((tool) => tool.name === "run_command"));
+  if (mode.tools.has("memory") && options.memory !== false) tools.push(...memoryTools);
+  return tools;
 }
 
 export const changeToolNames: ReadonlySet<string> = new Set(changeTools.map((tool) => tool.name));

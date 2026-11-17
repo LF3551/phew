@@ -4,6 +4,12 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": []
   },
-  "include": ["./**/*.ts", "../shared/**/*.ts", "../core/modes.ts", "../../test/markdown.test.ts"],
+  "include": [
+    "./**/*.ts",
+    "../shared/**/*.ts",
+    "../core/modes.ts",
+    "../core/attachments.ts",
+    "../../test/markdown.test.ts"
+  ],
   "exclude": []
 }

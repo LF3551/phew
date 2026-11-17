@@ -1,37 +1,10 @@
 import { randomBytes } from "node:crypto";
 import * as vscode from "vscode";
 import { type HostMessage, parseWebviewMessage, type WebviewMessage } from "../shared/protocol";
+import type { MentionProvider } from "./attachments";
 import { renderChatHtml } from "./html";
-import type { AgentSession } from "./session";
-
-const maximumTranscript = 3_000;
-
-/**
- * Keeps the chat messages so that the view can rebuild itself after VS Code disposes a hidden webview.
- * Streaming deltas are replaced by the final assistant message.
- */
-export class Transcript {
-  private items: HostMessage[] = [];
-
-  add(message: HostMessage): void {
-    if (message.type === "state") return;
-    if (message.type === "cleared") {
-      this.items = [];
-      return;
-    }
-    if (message.type === "assistantEnd") {
-      this.items = this.items.filter(
-        (item) => !((item.type === "assistantDelta" || item.type === "assistantStart") && item.id === message.id),
-      );
-    }
-    this.items.push(message);
-    if (this.items.length > maximumTranscript) this.items.splice(0, this.items.length - maximumTranscript);
-  }
-
-  all(): readonly HostMessage[] {
-    return this.items;
-  }
-}
+import type { SessionManager } from "./sessionManager";
+import { readSettings } from "./settings";
 
 /** The chat view in the Phew side bar. */
 export class ChatViewProvider implements vscode.WebviewViewProvider {
@@ -40,21 +13,19 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private view: vscode.WebviewView | undefined;
   private ready = false;
   private readyWaiters: (() => void)[] = [];
-  private readonly transcript = new Transcript();
-  private session: AgentSession | undefined;
+  private queue: HostMessage[] = [];
 
   constructor(
     private readonly extensionUri: vscode.Uri,
     private readonly log: vscode.LogOutputChannel,
+    private readonly sessions: SessionManager,
+    private readonly mentions: MentionProvider,
   ) {}
 
-  attach(session: AgentSession): void {
-    this.session = session;
-  }
-
   post(message: HostMessage): void {
-    this.transcript.add(message);
     if (this.view && this.ready) void this.view.webview.postMessage(message);
+    else if (message.type === "addAttachment" || message.type === "focusInput" || message.type === "openPanel")
+      this.queue.push(message);
   }
 
   /** Shows the view and waits until the webview script is ready. */
@@ -103,35 +74,69 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   }
 
   private async handle(message: WebviewMessage): Promise<void> {
-    const session = this.session;
-    if (!session) return;
+    const sessions = this.sessions;
     switch (message.type) {
       case "ready":
         this.ready = true;
-        for (const item of this.transcript.all()) void this.view?.webview.postMessage(item);
-        void this.view?.webview.postMessage({ type: "state", state: session.state() } satisfies HostMessage);
+        sessions.replay();
+        await sessions.postSessions();
+        for (const item of this.queue.splice(0)) this.post(item);
         for (const resolve of this.readyWaiters.splice(0)) resolve();
         return;
       case "send":
-        await session.run({ text: message.text, kind: "chat" });
+        await sessions.run({ text: message.text, kind: "chat", attachments: message.attachments });
         return;
       case "stop":
-        session.stop();
+        sessions.active?.stop();
         return;
       case "setMode":
-        await session.setMode(message.mode);
+        sessions.active?.setMode(message.mode);
         return;
       case "newChat":
-        session.newChat();
+        sessions.newSession();
         return;
       case "approve":
-        session.broker.answer(message.id, message.decision === "allow", message.hunks);
+        sessions.active?.broker.answer(message.id, message.decision === "allow", message.hunks);
         return;
       case "openDiff":
-        session.broker.openDiff(message.id);
+        sessions.active?.broker.openDiff(message.id);
         return;
       case "restoreCheckpoint":
-        await session.restoreCheckpoint(message.checkpointId);
+        await sessions.active?.restoreCheckpoint(message.checkpointId);
+        return;
+      case "mentionQuery": {
+        const root = sessions.active?.root.uri;
+        if (!root) return;
+        const items = await this.mentions.suggest(root, message.query, readSettings());
+        this.post({ type: "mentions", query: message.query, items });
+        return;
+      }
+      case "setApproval":
+        await sessions.setApproval(message.key, message.value);
+        return;
+      case "listSessions":
+        await sessions.postSessions();
+        return;
+      case "switchSession":
+        sessions.switchTo(message.id);
+        return;
+      case "openConversation":
+        await sessions.openConversation(message.id);
+        return;
+      case "deleteConversation":
+        await sessions.deleteConversation(message.id);
+        return;
+      case "exportChat":
+        await sessions.exportActive();
+        return;
+      case "reviewNext":
+        await vscode.commands.executeCommand("phew.review.next");
+        return;
+      case "newWorktreeAgent":
+        await sessions.newWorktreeAgent();
+        return;
+      case "openWalkthrough":
+        await vscode.commands.executeCommand("phew.openWalkthrough");
         return;
       case "configureModel":
         await vscode.commands.executeCommand("phew.switchModel");

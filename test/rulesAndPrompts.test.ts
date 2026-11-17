@@ -1,4 +1,5 @@
 import { expect, test } from "vitest";
+import { builtInModes, findMode } from "../src/core/modes";
 import { buildCommandFixRequest, buildFixRequest, buildSystemPrompt } from "../src/core/prompts";
 import { combineRules } from "../src/core/rules";
 
@@ -19,8 +20,15 @@ test("combines rules, skips empty and duplicate files, and respects the limit", 
 
 test("the system prompt depends on the mode and includes rules", () => {
   const base = { workspaceName: "app", platform: "linux", shell: "bash", date: "2026-01-01", rules: "" };
-  expect(buildSystemPrompt({ ...base, mode: "ask" })).toContain("Ask mode");
-  const code = buildSystemPrompt({ ...base, mode: "code", rules: "No any.", verifyCommand: "npm test" });
+  expect(buildSystemPrompt({ ...base, mode: findMode("ask", builtInModes) })).toContain("Ask mode");
+  const code = buildSystemPrompt({
+    ...base,
+    mode: findMode("code", builtInModes),
+    rules: "No any.",
+    verifyCommand: "npm test",
+    memory: "- Use pnpm.",
+  });
+  expect(code).toContain("Use pnpm.");
   expect(code).toContain("Code mode");
   expect(code).toContain("`npm test`");
   expect(code).toContain("No any.");

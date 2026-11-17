@@ -17,10 +17,18 @@ Pure TypeScript without the `vscode` module, so unit tests run in Node.js.
 
 | File | Purpose |
 | --- | --- |
-| `agent.ts` | The agent loop: model call, tool calls, step and budget limits, and the check loop that fixes until green. |
+| `agent.ts` | The agent loop: model call, tool calls, step and budget limits, the check loop that fixes until green, and reminders to apply fixes. |
+| `attachments.ts` | Attachments, `@` mentions, and the context format. |
+| `codeIndex.ts` | BM25 code index with identifier-aware tokens and optional embeddings. |
+| `commit.ts` | Commit message prompts, trailers, identity, signing, and flags for agent commits. |
+| `completion.ts` | Inline completion and next edit prompts and parsing. |
+| `export.ts` | Markdown export and chat titles. |
+| `memory.ts` | Project memory notes. |
+| `review.ts` | Keep and undo of single hunks for the review in the editor. |
+| `worktree.ts` | Branch names, worktree folders, and `git worktree list` parsing. |
 | `chat.ts` | Message types, argument parsing, and history trimming. |
 | `tools.ts` | Tool definitions in JSON Schema and the tools of each mode. |
-| `modes.ts` | Ask, Plan, and Code modes. |
+| `modes.ts` | Built-in and custom modes and their tool groups. |
 | `prompts.ts` | The system prompt and the requests of the "Phew it!" workflows. |
 | `diff.ts` | Line diff (Myers algorithm), hunks, and partial apply. |
 | `checkpoints.ts` | Original file content per request and restore planning. |
@@ -42,7 +50,16 @@ Pure TypeScript without the `vscode` module, so unit tests run in Node.js.
 
 | File | Purpose |
 | --- | --- |
-| `session.ts` | One conversation: builds the prompt, runs the agent, posts events to the view, and records statistics. |
+| `sessionManager.ts` | All chats of the window, the saved history, switching, export, and worktree agents. |
+| `session.ts` | One conversation: attachments, prompt, agent run, transcript, checkpoints, and persistence. |
+| `conversationStore.ts` | Saved chats in the workspace storage. |
+| `reviewManager.ts` | Keep and Undo CodeLens and decorations in the editor. |
+| `codeIndexManager.ts` | Builds, updates, saves, and searches the code index. |
+| `commitAssistant.ts`, `git.ts` | Commit messages, commits, Git identity, and Git commands without a shell. |
+| `completions.ts` | Inline completions and next edit prediction. |
+| `memoryStore.ts`, `attachments.ts` | Project memory and attachment resolution with the `@` menu. |
+| `models.ts`, `vscodeLmClient.ts` | Model profiles, setup, tests, and VS Code language models. |
+| `settingsPanel.ts` | The settings page, generated from the configuration schema. |
 | `toolHost.ts` | Executes tools inside the workspace with path, secret, trust, and command checks. |
 | `changes.ts` | Shows changes as hunks, applies the selected hunks, records checkpoints, and serves the diff editor. |
 | `approvals.ts` | Sends approval requests to the view and waits for the decision. |

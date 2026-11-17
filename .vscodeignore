@@ -1,6 +1,7 @@
 **
 !dist/extension.js
 !dist/webview.js
+!dist/settings.js
 !media/**
 !resources/icon.png
 !resources/icon.svg

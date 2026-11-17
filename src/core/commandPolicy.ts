@@ -4,7 +4,15 @@ export type CommandDecision =
   | { readonly kind: "ask"; readonly reason?: string }
   | { readonly kind: "deny"; readonly reason: string };
 
+/**
+ * How commands run without a confirmation:
+ * `ask` always asks, `allowlist` runs only the listed prefixes, and `safe` runs every command that is not
+ * dangerous and not chained. Dangerous commands always ask.
+ */
+export type AutoApproveMode = "ask" | "allowlist" | "safe";
+
 export interface CommandPolicySettings {
+  readonly mode?: AutoApproveMode;
   /** Command prefixes that run without a confirmation, for example `npm test`. */
   readonly autoApprove: readonly string[];
   /** Command prefixes that never run. */
@@ -72,6 +80,9 @@ export function decideCommand(rawCommand: string, settings: CommandPolicySetting
   const danger = findDanger(command);
   if (danger) return { kind: "ask", reason: `Dangerous command: ${danger}.` };
   if (isCompound(command)) return { kind: "ask", reason: "The command chains, pipes, or redirects other commands." };
+  const mode = settings.mode ?? "allowlist";
+  if (mode === "ask") return { kind: "ask" };
+  if (mode === "safe") return { kind: "allow" };
   if (settings.autoApprove.some((prefix) => matchesPrefix(command, prefix))) return { kind: "allow" };
   return { kind: "ask" };
 }

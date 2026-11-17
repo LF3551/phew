@@ -15,7 +15,7 @@ test("the extension identity is Phew", () => {
 
 test("every contributed command is registered and every registered command is contributed", () => {
   const contributed = manifest.contributes.commands.map((command: { command: string }) => command.command).sort();
-  const registered = [...sources.matchAll(/registerCommand\(\s*"(phew\.[A-Za-z]+)"/g)].map((match) => match[1]);
+  const registered = [...sources.matchAll(/registerCommand\(\s*"(phew\.[A-Za-z.]+)"/g)].map((match) => match[1]);
   registered.push("phew.fixProblem");
   expect([...new Set(registered)].sort()).toEqual(contributed);
   for (const command of manifest.contributes.commands) expect(command.category).toBe("Phew");
@@ -23,7 +23,11 @@ test("every contributed command is registered and every registered command is co
 
 test("every setting is read in the code", () => {
   const settings = readFileSync("src/host/settings.ts", "utf8") + readFileSync("src/host/models.ts", "utf8");
-  for (const key of Object.keys(manifest.contributes.configuration.properties)) {
+  const properties = Object.assign(
+    {},
+    ...manifest.contributes.configuration.map((category: { properties: object }) => category.properties),
+  );
+  for (const key of Object.keys(properties)) {
     expect(key).toMatch(/^phew\./);
     expect(settings, key).toContain(`"${key.slice("phew.".length)}"`);
   }

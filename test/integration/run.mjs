@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -14,8 +15,15 @@ writeFileSync(
 );
 writeFileSync(
   path.join(workspace, ".vscode", "settings.json"),
-  JSON.stringify({ "phew.verify.command": "node check.js", "phew.edits.requireApproval": false }, null, 2),
+  JSON.stringify({ "phew.verify.command": "node check.js", "phew.commit.signOff": true }, null, 2),
 );
+const git = (...args) => execFileSync("git", args, { cwd: workspace });
+git("init", "-q", "-b", "main");
+git("config", "user.name", "Test User");
+git("config", "user.email", "test@example.com");
+git("config", "commit.gpgsign", "false");
+git("add", "-A");
+git("commit", "-q", "-m", "initial");
 
 await runTests({
   version: process.env.VSCODE_VERSION ?? "stable",

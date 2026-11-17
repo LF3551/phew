@@ -22,76 +22,66 @@
 ## Why Phew
 
 - **Phew it!** One click on an error in the editor, a failed terminal command, or failing tests. Phew finds the cause, fixes it, and checks the result.
-- **Fixes until green.** Phew runs your check command, for example `npm test`, and keeps fixing until it passes or reaches the attempt limit.
-- **You stay in control.** Every file change shows as hunks. Apply only the hunks that you want, or open the native diff editor.
-- **Undo anything.** Each request is a checkpoint. **Restore checkpoint** reverts all file changes made after it.
+- **Fixes until green.** Phew runs your check command, for example `npm test`, and keeps fixing until it passes.
+- **Review in the editor.** Each change has **Keep** and **Undo** buttons in the file, and **Keep All** and **Undo All** in the editor title. Prefer to approve first? Switch **Edits** to **Ask first** in the chat.
+- **Undo anything.** Each request is a checkpoint. **Restore checkpoint** reverts all file changes made after it, even after a restart.
+- **Chat history.** Chats are saved per workspace. Search them, open them again, run several at the same time, and export them as Markdown.
+- **Rich context.** Type `@` to attach files, `@problems`, `@git`, or `@terminal`. Paste or drop screenshots. Use **Add to Chat** in the editor, the explorer, and the terminal.
+- **Parallel agents.** **New Agent in Worktree** works on a new branch in a separate folder while you keep coding.
+- **Commits your way.** Generate commit messages in the Source Control view. See the author and signing that commits use, and set Conventional Commits, `Signed-off-by`, GPG or SSH signing, a different author, and trailers. Phew never adds co-authors by itself.
+- **Code index and memory.** Phew finds relevant code by meaning and remembers durable project facts in `.phew/memory.md`.
+- **Autocomplete and Next Edit.** Inline completions and a predicted next edit, with any model.
+- **Modes.** Ask, Plan, Code, Debug, Review, and your own modes.
 - **Safe by default.** Phew does not read `.env` files and keys, removes secrets from tool output, and always asks before dangerous commands such as `git push --force`, `terraform apply`, or `kubectl delete`.
-- **Any model.** OpenAI, Anthropic, Google Gemini, OpenRouter, Groq, DeepSeek, or local models with Ollama and LM Studio. Your API key stays in the VS Code secret storage.
+- **Any model.** GitHub Copilot without a key, OpenAI, Anthropic, Google Gemini, Azure OpenAI, Mistral, xAI, DeepSeek, Groq, Cerebras, Together AI, Fireworks AI, OpenRouter, LiteLLM, and local models with Ollama, LM Studio, or vLLM.
 - **Know the cost.** Tokens and cost per task, with optional budget limits.
-- **Your rules.** Phew reads `AGENTS.md`, `.phew/rules/`, and the rule files of other agents, such as `.cursorrules`, `.clinerules`, `CLAUDE.md`, and `.github/copilot-instructions.md`.
-- **MCP.** Connect databases, APIs, and cloud tools with Model Context Protocol servers.
 - **Open source.** Apache 2.0, no telemetry.
+
+## Get started
+
+1. Open the **Phew** view in the activity bar, or press `Ctrl+Alt+P` (`Cmd+Alt+P` on macOS).
+2. Choose **Choose a model**. Phew loads the model list of the provider and tests the connection.
+3. Ask a question or describe a change. Type `@` to attach context.
+4. Optional: set **Checks → Verify command**, for example `npm test`, in **Phew: Open Settings**.
+
+**Phew: Get Started** opens a short guide.
 
 ## Modes
 
 | Mode | What Phew does |
 | --- | --- |
-| **Ask** | Answers questions about your code. Reads files and changes nothing. |
-| **Plan** | Explores the code and writes an implementation plan. Changes nothing. |
+| **Ask** | Answers questions. Changes nothing. |
+| **Plan** | Explores the code and writes a plan. Changes nothing. |
 | **Code** | Edits files and runs commands with your approval. |
+| **Debug** | Reproduces the problem, finds the root cause, and fixes it. |
+| **Review** | Reviews the current changes. Changes nothing. |
+| Custom | Your own instructions, tools, and model, from the settings or `.phew/modes.json`. |
 
-## Get started
+## Keyboard shortcuts
 
-1. Open the **Phew** view in the activity bar, or press `Ctrl+Alt+P` (`Cmd+Alt+P` on macOS).
-2. Choose **Choose a model**, select a provider, enter the model name, and enter your API key.
-   Local providers need no key.
-3. Ask a question or describe a change.
-4. Optional: set `phew.verify.command`, for example `npm test`, to let Phew check its own work.
-
-## Commands
-
-| Command | Description |
+| Shortcut | Action |
 | --- | --- |
-| `Phew: Open Chat` | Open the chat view. |
-| `Phew: New Chat` | Start a new conversation. |
-| `Phew: Phew it! Fix Problem at Cursor` | Fix the error or warning at the cursor. Also available as a quick fix on every problem (`Ctrl+Alt+.`). |
-| `Phew: Phew it! Fix All Errors in File` | Fix all errors in the active file. |
-| `Phew: Phew it! Fix Last Failed Terminal Command` | Fix the cause of the last failed command in the integrated terminal. |
-| `Phew: Make Checks Pass` | Run the check command and fix the failures. |
-| `Phew: Ask About Selection` | Ask a question about the selected code. |
-| `Phew: Switch Mode (Ask, Plan, Code)` | Change the mode. |
-| `Phew: Configure Model` | Choose the provider, the model, and the API key. |
-| `Phew: Remove Saved API Key` | Delete the API key of the current provider. |
-| `Phew: Show Statistics` | Show bugs fixed, estimated time saved, tokens, and cost. |
-| `Phew: Stop` | Stop the current task. |
+| `Ctrl+Alt+P` | Open the chat |
+| `Ctrl+Alt+L` | Add the selection or the file to the chat |
+| `Ctrl+Alt+.` | Phew it! Fix the problem at the cursor |
+| `Alt+]` | Suggest the next edit |
+| `Ctrl+Alt+Y` / `Ctrl+Alt+Z` | Keep or undo all changes in the file |
+| `↑` in the input | Reuse an earlier request |
+
+On macOS, use `Cmd` instead of `Ctrl`.
 
 ## Settings
 
-| Setting | Default | Description |
-| --- | --- | --- |
-| `phew.model.baseUrl` | empty | OpenAI-compatible API base URL. |
-| `phew.model.name` | empty | Model name. |
-| `phew.agent.defaultMode` | `code` | Mode for new workspaces. |
-| `phew.agent.maxSteps` | `40` | Maximum model calls per task. |
-| `phew.edits.requireApproval` | `true` | Review every change as hunks before Phew applies it. |
-| `phew.commands.autoApprove` | `[]` | Command prefixes that run without a confirmation, for example `npm test`. |
-| `phew.commands.deny` | `[]` | Command prefixes that never run. |
-| `phew.verify.command` | empty | Check command that Phew runs after changes. |
-| `phew.verify.maxAttempts` | `3` | Check attempts per task. |
-| `phew.budget.maxCostPerTask` | `0` | Cost limit per task in US dollars. `0` means no limit. |
-| `phew.budget.maxTokensPerTask` | `0` | Token limit per task. `0` means no limit. |
-| `phew.budget.pricing` | `{}` | Price per million tokens by model, for the cost display. |
-| `phew.privacy.redactSecrets` | `true` | Remove secrets from tool output before it goes to the model. |
-| `phew.mcp.servers` | `{}` | MCP servers to start over stdio. |
-| `phew.terminal.offerFix` | `true` | Offer **Phew it!** when a terminal command fails. |
-| `phew.ui.celebrate` | `true` | Show the **Phew! Done.** animation. |
+**Phew: Open Settings** opens a settings page with sections for models, the agent, approvals, checks, budget, commits, worktrees, the code index, autocomplete, memory and modes, MCP, privacy, and the interface.
+Every setting is also available in the VS Code settings under **Phew**.
 
 ## Security and privacy
 
 - Phew sends your prompts, the files that the agent reads, and tool output to the model provider that you choose.
   Use a local model if your code must not leave your computer.
 - In Restricted Mode, Phew only answers questions.
-  It does not change files, run commands, start MCP servers, or read project rules.
+  It does not change files, run commands, start MCP servers, or read project rules, memory, or modes.
+- Model profiles come only from the user settings, so a workspace cannot send your API keys to another server.
 - Every tool call is written to the **Phew** output channel (`Phew: Show Log`).
 - Phew collects no telemetry. Statistics stay on your computer.
 

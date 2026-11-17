@@ -15,6 +15,14 @@ const builds = [
     external: ["vscode"],
   },
   {
+    entryPoints: ["src/webview/settings.ts"],
+    outfile: "dist/settings.js",
+    bundle: true,
+    platform: "browser",
+    format: "iife",
+    target: "es2022",
+  },
+  {
     entryPoints: ["src/webview/main.ts"],
     outfile: "dist/webview.js",
     bundle: true,

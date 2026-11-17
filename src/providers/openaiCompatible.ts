@@ -2,8 +2,11 @@ import type { ChatMessage, CompletionRequest, CompletionResult, ModelClient, Too
 import { type FetchFunction, httpError, networkError, postJson, readSse } from "./http";
 import { endpoint, type ModelProfile, requestHeaders } from "./profile";
 
+type ContentPart = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } };
+
 type ApiMessage =
-  | { role: "system" | "user"; content: string }
+  | { role: "system"; content: string }
+  | { role: "user"; content: string | ContentPart[] }
   | {
       role: "assistant";
       content: string | null;
@@ -30,6 +33,20 @@ export function toApiMessages(messages: readonly ChatMessage[]): ApiMessage[] {
         };
       case "tool":
         return { role: "tool", tool_call_id: message.toolCallId, content: message.content };
+      case "user":
+        if (message.images && message.images.length > 0) {
+          return {
+            role: "user",
+            content: [
+              { type: "text", text: message.content },
+              ...message.images.map((image) => ({
+                type: "image_url" as const,
+                image_url: { url: `data:${image.mimeType};base64,${image.data}` },
+              })),
+            ],
+          };
+        }
+        return { role: "user", content: message.content };
       default:
         return { role: message.role, content: message.content };
     }

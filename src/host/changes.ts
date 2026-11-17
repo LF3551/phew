@@ -3,6 +3,8 @@ import type { ToolResult } from "../core/agent";
 import type { CheckpointStore, RestoreWrite } from "../core/checkpoints";
 import { applyHunks, computeHunks, formatHunk } from "../core/diff";
 import type { ApprovalBroker } from "./approvals";
+import type { ReviewManager } from "./reviewManager";
+import type { ReviewMode } from "./settings";
 
 export const diffScheme = "phew-diff";
 
@@ -51,7 +53,7 @@ export interface ProposeOptions {
   readonly uri: vscode.Uri;
   readonly relativePath: string;
   readonly newContent: string;
-  readonly requireApproval: boolean;
+  readonly reviewMode: ReviewMode;
   readonly signal: AbortSignal;
 }
 
@@ -61,6 +63,7 @@ export class ChangeManager {
     private readonly broker: ApprovalBroker,
     private readonly diffs: DiffContentProvider,
     private readonly checkpoints: CheckpointStore,
+    private readonly reviews: ReviewManager,
   ) {}
 
   async propose(options: ProposeOptions): Promise<ToolResult> {
@@ -70,7 +73,7 @@ export class ChangeManager {
     const hunks = computeHunks(original ?? "", newContent);
     let selected = new Set(hunks.map((hunk) => hunk.index));
 
-    if (options.requireApproval) {
+    if (options.reviewMode === "chat") {
       const added = hunks.reduce((sum, hunk) => sum + hunk.newLines.length, 0);
       const removed = hunks.reduce((sum, hunk) => sum + hunk.oldLines.length, 0);
       const decision = await this.broker.request(
@@ -99,11 +102,12 @@ export class ChangeManager {
     const finalContent = all ? newContent : applyHunks(original ?? "", hunks, selected);
     this.checkpoints.record(relativePath, original);
     await writeWorkspaceText(uri, finalContent, original !== null);
+    if (options.reviewMode === "editor") this.reviews.track(uri, original ?? "");
     const skipped = hunks.filter((hunk) => !selected.has(hunk.index)).map((hunk) => hunk.index + 1);
     return {
       changed: true,
       content: all
-        ? `Applied the change to ${relativePath}.`
+        ? `Applied the change to ${relativePath}.${options.reviewMode === "editor" ? " The user can keep or undo it in the editor." : ""}`
         : `Applied ${selected.size} of ${hunks.length} hunks to ${relativePath}. The user skipped hunks ${skipped.join(", ")}. Read the file again before you edit it.`,
     };
   }
