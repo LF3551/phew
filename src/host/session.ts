@@ -642,7 +642,10 @@ export class AgentSession {
     if (prepared.meta.goal && !this.currentPlan.goal) this.setGoal(prepared.meta.goal);
     this.journal({ t: "continued", at: Date.now(), from: prepared.path, narrative: prepared.narrative });
     if (!prepared.state.fresh)
-      this.notice("warning", `Since the handoff note: ${prepared.state.notes.join(" ")} The agent checks these first.`);
+      this.notice(
+        "warning",
+        `${prepared.state.notes.join(" ").replace(/`/g, "")} ${readSettings(this.root.uri).assistant.name} checks this first.`,
+      );
     await this.run({
       text: prepared.prompt,
       kind: "chat",

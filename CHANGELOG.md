@@ -13,6 +13,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - A comfortable reading width in editor tabs, more space between lines and messages, and a short input hint ("Ask Phew…") with the keys in its tooltip.
 - The model button shows the model, such as `gpt-5.1`, and the context meter appears from 50%.
 - **Chat Appearance** in the title of the view.
+- New README and Marketplace pictures that show the real interface.
+- Hover actions of your messages no longer take space, and the plan title has no emoji.
 
 ### Added
 

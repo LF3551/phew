@@ -15,16 +15,26 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/chat.png" alt="The Phew chat in VS Code" width="300">
-  <img src="docs/images/assistant.png" alt="Naming your assistant and choosing its character" width="300">
+  <img src="docs/images/bug-fixed.png" alt="Phew fixed a login bug: the tests pass, and a summary card shows two changed files with Keep all and Undo all" width="800">
+</p>
+
+<p align="center">
+  <a href="https://marketplace.visualstudio.com/items?itemName=alekseialeinikov.phew"><strong>Install from the Visual Studio Marketplace</strong></a>
+  or search for <strong>Phew</strong> in the Extensions view.
 </p>
 
 > [!NOTE]
-> Phew is in preview.
-> Download `phew-<version>.vsix` from the [latest release](https://github.com/LF3551/phew/releases/latest), then run **Extensions: Install from VSIX…** in VS Code.
-> You can also build it from source (see [Development](#development)).
+> Phew is in preview. Each release also has the `.vsix` file on [GitHub Releases](https://github.com/LF3551/phew/releases/latest).
 
 ## Why Phew
+
+<p align="center">
+  <img src="docs/images/calm.png" alt="While Phew works, each step is one quiet line and a live status shows the current command and time" width="800">
+</p>
+
+<p align="center">
+  <img src="docs/images/real-tasks.png" alt="The welcome screen offers real tasks: continue yesterday's work, fix errors, fix a failed command, review changes" width="800">
+</p>
 
 - **Phew it!** One click on an error in the editor, a failed terminal command, or failing tests. Phew finds the cause, fixes it, and checks the result.
 - **Fixes until green.** Phew runs your check command, for example `npm test`, and keeps fixing until it passes.
@@ -58,6 +68,10 @@
 - **Knows what changed.** `/continue` compares the note with the code: new commits, another branch, or files that someone changed after the note. The agent rereads those first.
 - **Open format.** Plain Markdown with a small header. See [docs/HANDOFF.md](docs/HANDOFF.md).
 
+<p align="center">
+  <img src="docs/images/handoff.png" alt="A new chat continues from a handoff note and notices that a file changed after the note" width="800">
+</p>
+
 ## Make it yours
 
 - **Your assistant.** Give it a name, a look, and a character: Partner, Mentor, Quiet, Strict reviewer, or your own words. Tell it how to call you and which language to answer in.
@@ -66,8 +80,11 @@
 - **Phew Wrapped.** A weekly card with bugs fixed and time saved, ready to share, and achievements. All stats stay on your computer.
 
 <p align="center">
-  <img src="docs/images/appearance.png" alt="Quick appearance settings: style, accent color, and text size" width="300">
-  <img src="docs/images/wrapped.png" alt="A Phew Wrapped card with bugs fixed, time saved, tasks done, and the streak" width="520">
+  <img src="docs/images/yours.png" alt="Naming the assistant Max, with the Mentor character and a fox avatar" width="800">
+</p>
+
+<p align="center">
+  <img src="docs/images/wrapped-card.png" alt="A Phew Wrapped card: 12 bugs fixed, about 6 hours saved, 18 tasks, a 5-day streak" width="800">
 </p>
 
 ## Get started

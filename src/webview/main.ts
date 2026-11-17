@@ -852,7 +852,7 @@ function renderPlan(plan: PlanView): void {
   const section = $("plan");
   section.hidden = !plan.goal && plan.items.length === 0;
   const done = plan.items.filter((item) => item.status === "done").length;
-  $("planTitle").textContent = plan.goal ? `🎯 ${plan.goal}` : "Plan";
+  $("planTitle").textContent = plan.goal ? plan.goal : "Plan";
   $("planProgress").textContent = plan.items.length > 0 ? `${done}/${plan.items.length}` : "";
   const list = $("planItems");
   list.hidden = !saved.planOpen;
