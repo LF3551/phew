@@ -241,6 +241,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<PhewTe
       ),
     ),
     vscode.commands.registerCommand("phew.showLog", () => log.show()),
+    vscode.commands.registerCommand("phew.showAppearance", async () => {
+      await view.reveal();
+      view.post({ type: "showAppearance" });
+    }),
     vscode.commands.registerCommand("phew.writeHandoff", async () => {
       await view.reveal();
       const session = manager.active ?? manager.newSession();

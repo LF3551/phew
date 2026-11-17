@@ -52,6 +52,8 @@ export interface ViewState {
   };
   /** True until the user names the assistant or skips the introduction. */
   readonly onboarding: boolean;
+  /** The model id of the active profile, for example gpt-5.1. */
+  readonly modelId: string;
   /** The latest handoff note of the workspace, for "Continue where you left off". */
   readonly handoff?: {
     readonly path: string;
@@ -129,6 +131,7 @@ export type HostMessage = (
       readonly name: string;
     }
   | { readonly type: "showOnboarding" }
+  | { readonly type: "showAppearance" }
   | { readonly type: "handoff"; readonly path: string; readonly manual: boolean }
   | {
       readonly type: "tool";

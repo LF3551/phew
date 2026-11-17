@@ -104,11 +104,13 @@ export function renderChatHtml(options: ChatHtmlOptions): string {
       </div>
     </section>
   </main>
+  <button type="button" class="jump" id="jump" hidden>↓ New</button>
   <div class="review-banner" id="reviewBanner" hidden>
     <span id="reviewText"></span>
     <button type="button" class="link" id="reviewNext">Review</button>
   </div>
   <footer class="footer">
+    <div class="status-line" id="statusLine" role="status" aria-live="polite" hidden><span class="status-mascot" id="statusMascot"></span><span class="status-text" id="statusText"></span><span class="status-time" id="statusTime"></span></div>
     <section class="plan" id="plan" hidden>
       <button type="button" class="plan-header" id="planToggle" aria-expanded="true"><span id="planTitle">Plan</span><span class="plan-progress" id="planProgress"></span></button>
       <ul class="plan-items" id="planItems"></ul>

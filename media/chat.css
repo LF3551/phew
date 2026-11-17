@@ -1898,3 +1898,261 @@ html body.style-compact .message .message-actions {
   font-size: inherit;
   word-break: break-all;
 }
+
+/* Calm: the default look. One accent, the colors of the theme, space instead of lines. */
+
+body {
+  --phew-drop: #22b8cf;
+  --phew-on-accent: #072a30;
+  --phew-success: #3fb68b;
+  --phew-warning: #d9a441;
+  --phew-error: #e5676b;
+  --phew-accent: var(--phew-drop);
+  --phew-user-bg: color-mix(in srgb, var(--vscode-foreground) 8%, transparent);
+  --phew-reading: 46rem;
+}
+
+body.vscode-light {
+  --phew-drop: #0b7f91;
+  --phew-on-accent: #fff;
+  --phew-success: #1f8a63;
+  --phew-warning: #9a6b0f;
+  --phew-error: #c2393e;
+}
+
+body.vscode-high-contrast,
+body.vscode-high-contrast-light {
+  --phew-drop: var(--vscode-focusBorder, #f38518);
+  --phew-user-bg: transparent;
+}
+
+body.vscode-high-contrast .message.user .bubble,
+body.vscode-high-contrast-light .message.user .bubble {
+  border: 1px solid var(--vscode-contrastBorder, currentColor);
+}
+
+html body .send {
+  color: var(--phew-on-accent);
+  background: var(--phew-accent);
+}
+
+/* One header: in the side bar, the chat title is in the title of the view. */
+
+body.in-sidebar .toolbar {
+  display: none;
+}
+
+body.in-sidebar .popover.appearance {
+  top: 6px;
+}
+
+/* A comfortable reading width in wide editor tabs. */
+
+.transcript > *,
+.footer > * {
+  max-width: var(--phew-reading);
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.transcript {
+  padding: 12px 14px;
+}
+
+/* Answers: full width, no avatar or name unless you turn them on. */
+
+html body.no-avatars .message.assistant:not(.btw) > .message-header {
+  position: absolute;
+  top: -6px;
+  right: 0;
+  margin: 0;
+}
+
+html body.no-avatars .message.assistant:not(.btw) > .message-header .who {
+  display: none;
+}
+
+html body.no-avatars.style-bubbles .message.assistant .body {
+  padding-left: 0;
+}
+
+.message.assistant .body {
+  line-height: var(--phew-line-height, 1.6);
+}
+
+.message.assistant .body p {
+  margin: 0 0 0.65em;
+}
+
+.message.assistant .body ul,
+.message.assistant .body ol {
+  margin: 0 0 0.65em;
+  padding-left: 1.25em;
+}
+
+.message.assistant .body li {
+  margin: 0.15em 0;
+}
+
+html body .message.user,
+html body .message.assistant {
+  margin-bottom: 18px;
+}
+
+/* Tools: one quiet line per step. */
+
+.tool-group {
+  margin: 0 0 10px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.92em;
+}
+
+.tool-group > summary {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  list-style: none;
+  cursor: pointer;
+}
+
+.tool-group > summary::-webkit-details-marker {
+  display: none;
+}
+
+.tool-group > summary .icon {
+  display: inline-block;
+  width: 1.2em;
+}
+
+.tool-group[data-status="done"] > summary .icon {
+  color: var(--phew-success);
+}
+
+.tool-group[data-status="error"] > summary .icon {
+  color: var(--phew-error);
+}
+
+.tool-group[data-status="running"] > summary .icon {
+  color: var(--phew-accent);
+}
+
+.group-body {
+  margin: 4px 0 0 0.45em;
+  padding-left: 10px;
+  border-left: 1px solid color-mix(in srgb, var(--vscode-foreground) 15%, transparent);
+}
+
+html body .tool-group .tool {
+  margin: 0 0 3px;
+  font-size: 1em;
+}
+
+html body .tool[data-status="done"] .icon {
+  color: var(--phew-success);
+}
+
+html body .tool[data-status="error"] .icon {
+  color: var(--phew-error);
+}
+
+/* Calm notices: a soft tint, the normal text color. */
+
+html body .notice {
+  padding: 7px 10px;
+  border-radius: 8px;
+}
+
+html body .notice.info {
+  background: color-mix(in srgb, var(--phew-accent) 10%, transparent);
+}
+
+html body .notice.success {
+  background: color-mix(in srgb, var(--phew-success) 14%, transparent);
+}
+
+html body .notice.warning {
+  background: color-mix(in srgb, var(--phew-warning) 14%, transparent);
+}
+
+html body .notice.error {
+  background: color-mix(in srgb, var(--phew-error) 14%, transparent);
+}
+
+/* The live status line while the agent works. */
+
+.status-line {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 18px;
+  margin-bottom: 6px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.92em;
+}
+
+.status-line[hidden] {
+  display: none;
+}
+
+.status-mascot-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.status-mascot-icon.avatar-chip {
+  font-size: 9px;
+}
+
+.status-text {
+  overflow: hidden;
+  flex: 1;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.status-time {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
+/* Jump to new content without moving the text you read. */
+
+.jump {
+  position: relative;
+  top: -10px;
+  z-index: 5;
+  align-self: center;
+  margin-top: -28px;
+  padding: 3px 12px;
+  color: var(--phew-on-accent);
+  font: inherit;
+  font-size: 0.9em;
+  background: var(--phew-accent);
+  border: none;
+  border-radius: 999px;
+  box-shadow: 0 2px 10px rgb(0 0 0 / 25%);
+  cursor: pointer;
+}
+
+.jump[hidden] {
+  display: none;
+}
+
+html body .tool-group .tool > summary {
+  list-style: none;
+}
+
+html body .tool-group .tool > summary::-webkit-details-marker {
+  display: none;
+}
+
+html body .tool-group .tool:has(.detail) > summary:hover {
+  color: var(--vscode-foreground);
+}
+
+body.vscode-light .mascot .m-face {
+  stroke: color-mix(in srgb, var(--vscode-foreground) 25%, transparent);
+  stroke-width: 10;
+}

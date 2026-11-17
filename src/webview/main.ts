@@ -21,6 +21,7 @@ import {
   showAssistantCard,
   showWrapped,
 } from "./persona";
+import { groupSummary, toolLabel } from "./toolLabels";
 
 interface VsCodeApi {
   postMessage(message: WebviewMessage): void;
@@ -121,11 +122,19 @@ function nearBottom(): boolean {
   return transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight < 120;
 }
 
+const jump = $<HTMLButtonElement>("jump");
+
+/** Follows new content only when the reader is already at the end, so text never jumps while you read. */
+function follow(atBottom: boolean): void {
+  if (atBottom) transcript.scrollTop = transcript.scrollHeight;
+  else jump.hidden = false;
+}
+
 function append(node: HTMLElement): void {
   welcome.hidden = true;
   const atBottom = nearBottom();
   transcript.append(node);
-  if (atBottom) transcript.scrollTop = transcript.scrollHeight;
+  follow(atBottom);
 }
 
 // Clickable file references such as src/app.ts:42 or package.json.
@@ -244,6 +253,7 @@ function applyAssistant(next: ViewState): void {
     };
     $("headerAvatar").replaceChildren(live("header-mascot"));
     $("welcomeAvatar").replaceChildren(live("welcome-mascot"));
+    $("statusMascot").replaceChildren(live("status-mascot-icon"));
     $("welcomeName").textContent = next.assistant.name;
     $("welcomeTagline").textContent = next.assistant.userName
       ? `Hi, ${next.assistant.userName}! Bug fixed. Phew.`
@@ -300,6 +310,8 @@ function renderResume(next: ViewState): void {
 
 function applyState(next: ViewState): void {
   state = next;
+  document.body.classList.toggle("in-sidebar", !next.pinned);
+  renderStatus();
   applyAssistant(next);
   renderResume(next);
   applyAppearance(next);
@@ -333,17 +345,20 @@ function applyState(next: ViewState): void {
   modeSelect.title = next.modes.find((mode) => mode.id === next.mode)?.description ?? "Mode";
   modeSelect.disabled = next.busy;
 
-  modelButton.textContent = next.configured ? next.model : "Connect a model";
-  modelButton.title = next.configured ? `${next.model} (${next.provider}). Click to switch.` : "Add a model";
+  modelButton.textContent = next.configured ? next.modelId || next.model : "Connect a model";
+  modelButton.title = next.configured
+    ? `${next.modelId || next.model} · ${next.model} (${next.provider}). Click to switch.`
+    : "Add a model";
   $("setup").hidden = next.configured;
   sendButton.classList.toggle("queue", next.busy);
   sendButton.title = next.busy ? "Queue: the message reaches the agent at its next step" : "Send";
   stopButton.hidden = !next.busy;
   const send = next.sendWith === "ctrlEnter" ? "Ctrl+Enter" : "Enter";
   const modifier = navigator.platform.toLowerCase().includes("mac") ? "Cmd" : "Ctrl";
-  prompt.placeholder = next.busy
-    ? `Enter to queue · ${modifier}+Enter to stop and send · Esc to stop`
-    : `Ask ${next.assistant.name} or describe a change · @ to attach · ${send} to send`;
+  prompt.placeholder = next.busy ? "Add to the queue…" : `Ask ${next.assistant.name}…`;
+  prompt.title = next.busy
+    ? `Enter: add to the queue. ${modifier}+Enter: stop and send now. Esc: stop.`
+    : `${send}: send. @: attach files, problems, Git changes, or the terminal. /: commands.`;
   $<HTMLSelectElement>("approvalReview").value = next.approvals.review;
   $<HTMLSelectElement>("approvalCommands").value = next.approvals.commands;
   $<HTMLSelectElement>("approvalMcp").value = String(next.approvals.mcp);
@@ -354,7 +369,8 @@ function applyState(next: ViewState): void {
 
   const context = $("context");
   const percent = Math.round(next.context * 100);
-  context.hidden = percent <= 0;
+  // The context meter appears only when it starts to matter.
+  context.hidden = percent < 50;
   context.dataset.level = percent >= 85 ? "high" : percent >= 60 ? "medium" : "low";
   context.style.setProperty("--fill", `${percent * 3.6}deg`);
   $("contextLabel").textContent = `${percent}%`;
@@ -363,6 +379,19 @@ function applyState(next: ViewState): void {
   banner.hidden = next.reviewFiles === 0;
   $("reviewText").textContent =
     `${next.reviewFiles} ${next.reviewFiles === 1 ? "file has" : "files have"} changes to keep or undo.`;
+}
+
+/** Dark or light text for a background color, from its luminance. Non-hex colors get white text. */
+function textOn(color: string): string {
+  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color.trim())?.[1];
+  if (!hex) return "#fff";
+  const full = hex.length === 3 ? [...hex].map((c) => c + c).join("") : hex;
+  const [r, g, b] = [0, 2, 4].map((i) => {
+    const value = Number.parseInt(full.slice(i, i + 2), 16) / 255;
+    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  });
+  // The text color with more contrast (WCAG): dark text above a luminance of about 0.18.
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.179 ? "#10181a" : "#fff";
 }
 
 function applyAppearance(next: ViewState): void {
@@ -384,6 +413,7 @@ function applyAppearance(next: ViewState): void {
     value ? body.style.setProperty(name, value) : body.style.removeProperty(name);
   set("--phew-font-size", next.fontSize ? `${next.fontSize}px` : undefined);
   set("--phew-accent", look.accentColor || undefined);
+  set("--phew-on-accent", look.accentColor ? textOn(look.accentColor) : undefined);
   set("--phew-user-bg", look.userBubbleColor || undefined);
   set("--phew-font-family", look.fontFamily || undefined);
   set("--phew-line-height", look.lineHeight ? String(look.lineHeight) : undefined);
@@ -459,7 +489,7 @@ function assistantEntry(id: string, variant?: "btw") {
 function renderAssistant(id: string, text: string, done: boolean, at?: number, variant?: "btw"): void {
   const entry = assistantEntry(id, variant);
   entry.text = text;
-  const follow = nearBottom();
+  const atEnd = nearBottom();
   if (done) {
     entry.element.classList.remove("streaming");
     if (text.trim() === "") {
@@ -467,14 +497,18 @@ function renderAssistant(id: string, text: string, done: boolean, at?: number, v
       return;
     }
     entry.body.replaceChildren(markdown(text));
+    setActivity(undefined);
     const header = entry.element.querySelector(".message-header");
     const done = entry;
     header?.append(
       time(at),
       iconButton("copy", "Copy answer", () => void navigator.clipboard.writeText(done.text)),
     );
-  } else entry.body.textContent = text;
-  if (follow) transcript.scrollTop = transcript.scrollHeight;
+  } else {
+    entry.body.textContent = text;
+    setActivity("Writing…");
+  }
+  follow(atEnd);
 }
 
 function renderThought(id: string, delta: string, done: boolean, full?: string): void {
@@ -489,15 +523,49 @@ function renderThought(id: string, delta: string, done: boolean, full?: string):
     thoughts.set(id, entry);
     append(node);
   }
+  const atEnd = nearBottom();
   entry.text = full ?? entry.text + delta;
   entry.body.textContent = entry.text;
+  if (!done) setActivity("Thinking…");
   if (done) {
     const seconds = Math.max(1, Math.round((Date.now() - entry.started) / 1000));
     const summary = entry.element.querySelector("summary");
     if (summary) summary.textContent = full !== undefined && !delta ? "Thought" : `Thought for ${seconds} s`;
     entry.element.open = false;
   }
-  if (nearBottom()) transcript.scrollTop = transcript.scrollHeight;
+  follow(atEnd);
+}
+
+/** Consecutive tool calls share one quiet line: "Read 3 files and edited 1 file". The details open on click. */
+function toolGroup(): HTMLElement {
+  const last = transcript.lastElementChild;
+  if (last instanceof HTMLDetailsElement && last.classList.contains("tool-group")) return last;
+  const group = element("details", "tool-group");
+  group.append(element("summary", "group-summary"), element("div", "group-body"));
+  append(group);
+  return group;
+}
+
+function refreshGroup(group: Element): void {
+  const items = [...group.querySelectorAll<HTMLElement>(".group-body > .tool")];
+  const status = items.some((item) => item.dataset.status === "running")
+    ? "running"
+    : items.some((item) => item.dataset.status === "error")
+      ? "error"
+      : "done";
+  (group as HTMLElement).dataset.status = status;
+  const summary = group.querySelector(".group-summary");
+  if (!summary) return;
+  const icon = status === "running" ? "⋯" : status === "error" ? "✕" : "✓";
+  const failed = items.filter((item) => item.dataset.status === "error").length;
+  summary.replaceChildren(
+    element("span", "icon", icon),
+    element(
+      "span",
+      "label",
+      `${groupSummary(items.map((item) => item.dataset.name ?? ""))}${failed ? ` · ${failed} failed` : ""}`,
+    ),
+  );
 }
 
 function updateTool(message: Extract<HostMessage, { type: "tool" }>): void {
@@ -505,14 +573,54 @@ function updateTool(message: Extract<HostMessage, { type: "tool" }>): void {
   if (!node) {
     node = element("details", "tool");
     tools.set(message.id, node);
-    append(node);
+    const group = toolGroup();
+    const atEnd = nearBottom();
+    group.querySelector(".group-body")?.append(node);
+    follow(atEnd);
   }
   node.dataset.status = message.status;
+  node.dataset.name = message.name;
+  const running = message.status === "running";
+  const label = toolLabel(message.name, message.summary, running);
   const summary = element("summary");
-  const icon = message.status === "running" ? "⋯" : message.status === "error" ? "✕" : "✓";
-  summary.append(element("span", "icon", icon), element("span", "label", message.summary), time(message.at));
+  const icon = running ? "⋯" : message.status === "error" ? "✕" : "✓";
+  summary.append(element("span", "icon", icon), element("span", "label", label), time(message.at));
+  summary.title = message.summary;
   node.replaceChildren(summary);
   if (message.detail) node.append(element("pre", "detail", message.detail));
+  const group = node.closest(".tool-group");
+  if (group) refreshGroup(group);
+  setActivity(running ? `${label}…` : "Thinking…");
+}
+
+// The live status line: one calm sentence about what the agent does now.
+
+let activity: string | undefined;
+let busySince = 0;
+let activityTimer: ReturnType<typeof setInterval> | undefined;
+
+function setActivity(text: string | undefined): void {
+  activity = text;
+  renderStatus();
+}
+
+function renderStatus(): void {
+  const line = $("statusLine");
+  const busy = state?.busy === true;
+  line.hidden = !busy;
+  if (!busy) {
+    if (activityTimer) clearInterval(activityTimer);
+    activityTimer = undefined;
+    busySince = 0;
+    activity = undefined;
+    return;
+  }
+  if (!busySince) busySince = Date.now();
+  if (!activityTimer) activityTimer = setInterval(renderStatus, 1000);
+  $("statusText").textContent = activity ?? "Working…";
+  const seconds = Math.floor((Date.now() - busySince) / 1000);
+  $("statusTime").textContent =
+    seconds >= 3 ? (seconds < 60 ? `${seconds} s` : `${Math.floor(seconds / 60)} min ${seconds % 60} s`) : "";
 }
 
 function addApproval(message: Extract<HostMessage, { type: "approval" }>): void {
@@ -967,6 +1075,9 @@ function handle(message: HostMessage): void {
       append(node);
       break;
     }
+    case "showAppearance":
+      togglePopover("appearance");
+      break;
     case "showOnboarding":
       showAssistantCard(state?.assistant, false, (next) => vscode.postMessage(next));
       break;
@@ -1263,3 +1374,11 @@ $<HTMLSelectElement>("approvalMcp").addEventListener("change", (event) =>
 );
 window.addEventListener("message", (event: MessageEvent<HostMessage>) => handle(event.data));
 vscode.postMessage({ type: "ready" });
+
+transcript.addEventListener("scroll", () => {
+  if (nearBottom()) jump.hidden = true;
+});
+jump.addEventListener("click", () => {
+  transcript.scrollTo({ top: transcript.scrollHeight, behavior: "smooth" });
+  jump.hidden = true;
+});

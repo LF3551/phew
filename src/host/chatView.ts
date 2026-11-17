@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { homedir } from "node:os";
 import * as vscode from "vscode";
 import { safeColor } from "../core/appearance";
-import { type HostMessage, parseWebviewMessage, type WebviewMessage } from "../shared/protocol";
+import { type HostMessage, parseWebviewMessage, type ViewState, type WebviewMessage } from "../shared/protocol";
 import type { MentionProvider } from "./attachments";
 import { renderChatHtml } from "./html";
 import type { ChatViewHandle, SessionManager } from "./sessionManager";
@@ -70,7 +70,11 @@ class ChatController implements ChatViewHandle {
     this.detach = undefined;
   }
 
+  /** Called with each new state, for example to show the chat title in the view title. */
+  onState: ((state: ViewState) => void) | undefined;
+
   post(message: HostMessage): void {
+    if (message.type === "state") this.onState?.(message.state);
     if (this.webview && this.ready) void this.webview.postMessage(message);
     else if (["addAttachment", "focusInput", "openPanel"].includes(message.type)) this.queue.push(message);
   }
@@ -270,6 +274,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view;
+    // The chat title lives in the view title, so the chat needs no second header.
+    this.controller.onState = (state) => {
+      if (this.view !== view) return;
+      const parts = [state.worktree ? `⑂ ${state.worktree}` : "", state.title];
+      view.description = parts.filter(Boolean).join(" ");
+    };
     setupWebview(view.webview, this.extensionUri);
     this.controller.connect(view.webview);
     view.onDidDispose(() => {

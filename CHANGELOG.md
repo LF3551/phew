@@ -5,6 +5,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Changed
+
+- A calmer chat. In the side bar, the chat title moves into the title of the view, so there is one header. Answers use the full width without an avatar or a name (turn them on in **Appearance**). The Calm palette uses the colors of your theme and one accent: Phew Drop, with darker tones in light themes and the theme border colors in high contrast.
+- Steps of the agent are grouped into one line, such as "Read 2 files, edited 1 file and ran 1 command", and use plain words ("Reading src/auth.ts"). A live status line with the Phew drop shows what the agent does now and for how long.
+- The chat no longer moves while you read: new text follows only when you are at the end, and a **↓ New** button jumps down.
+- A comfortable reading width in editor tabs, more space between lines and messages, and a short input hint ("Ask Phew…") with the keys in its tooltip.
+- The model button shows the model, such as `gpt-5.1`, and the context meter appears from 50%.
+- **Chat Appearance** in the title of the view.
+
 ## [0.1.3] - 2026-11-17
 
 The first public preview of Phew.

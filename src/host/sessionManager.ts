@@ -137,6 +137,7 @@ export class SessionManager implements vscode.Disposable {
       mode: session?.mode.id ?? settings.defaultMode,
       modes: this.modes().map((mode) => ({ id: mode.id, name: mode.name, description: mode.description })),
       model: profile?.name ?? "No model",
+      modelId: profile?.model ?? "",
       provider: profile ? providerNames[profile.provider] : "Not configured",
       configured: profile !== undefined,
       busy: session?.busy ?? false,
