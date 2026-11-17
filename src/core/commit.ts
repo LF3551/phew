@@ -16,6 +16,8 @@ export interface CommitSettings {
   readonly author: string;
   /** Extra trailers that the user configured, for example `Refs: #123`. Phew never adds co-authors by itself. */
   readonly trailers: readonly string[];
+  /** Adds `Assisted-by: Phew` when the user turns it on. Off by default. */
+  readonly assistedBy?: boolean;
   readonly instructions: string;
 }
 
@@ -108,13 +110,15 @@ export function finalizeCommitMessage(
   // Never keep co-author or sign-off trailers that the model invented.
   message = message
     .split("\n")
-    .filter((line) => !/^(co-authored-by|signed-off-by):/i.test(line.trim()))
+    .filter((line) => !/^(co-authored-by|signed-off-by|assisted-by):/i.test(line.trim()))
     .join("\n")
     .trim();
   const [subject, ...rest] = message.split("\n");
   let body = rest.join("\n").trim();
   if (!settings.includeBody) body = "";
   const trailers = [...settings.trailers.map((trailer) => trailer.trim()).filter(Boolean)];
+  if (settings.assistedBy && !trailers.some((trailer) => /^assisted-by:/i.test(trailer)))
+    trailers.push("Assisted-by: Phew");
   if (settings.signOff && identity.name && identity.email)
     trailers.push(`Signed-off-by: ${identity.name} <${identity.email}>`);
   return [subject.trim(), body, trailers.join("\n")].filter(Boolean).join("\n\n");

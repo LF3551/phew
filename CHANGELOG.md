@@ -7,6 +7,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added in the latest update
 
+- Your own assistant: name it, pick a look (the Phew drop, an emoji, or initials), a character (Partner, Mentor, Quiet, Strict reviewer, or your own), how it calls you, and the language of its answers. A short introduction card opens on the first run.
+- A living mascot: the drop sweats while the agent works, sighs with relief when the task is done, and worries when it fails. It respects reduced motion.
+- A soft "phew" sound, and the choice to play sounds always or only when the chat is hidden.
+- Phew Wrapped: a weekly or monthly card with bugs fixed, time saved, tasks, and the streak. Save it as an image or copy the text. Eight local achievements with a small notice when you earn one.
+- An optional `Assisted-by: Phew` commit trailer. It is off by default.
+- The side bar no longer shows the same buttons twice.
+
 - Chat appearance: Bubbles, Classic, and Compact styles, accent and bubble colors, font, text size, line height, code size, times, message actions, and avatars, with quick settings behind the **Aa** button and an Appearance section in the settings.
 - Interrupt: `Esc` stops the agent, and `Ctrl+Enter` (`Cmd+Enter` on macOS) stops the current step and sends the new message at once.
 - Message actions as icons on hover.

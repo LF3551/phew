@@ -1,5 +1,6 @@
 import * as os from "node:os";
 import * as vscode from "vscode";
+import { achievementList } from "../core/achievements";
 import { type AgentResult, runAgent, type VerificationResult } from "../core/agent";
 import type { Attachment } from "../core/attachments";
 import { type ChatMessage, type ModelClient, trimHistory, truncateMiddle } from "../core/chat";
@@ -15,6 +16,7 @@ import {
 import { CostMeter, formatCost, formatTokens } from "../core/cost";
 import { titleFromText } from "../core/export";
 import { canChange, findMode, type Mode, type ModeDefinition } from "../core/modes";
+import { personaPrompt } from "../core/persona";
 import { emptyPlan, type Plan, planPrompt } from "../core/plan";
 import { buildSystemPrompt } from "../core/prompts";
 import { RootSet } from "../core/roots";
@@ -166,6 +168,7 @@ export class AgentSession {
   private sessionTokens: number;
   private sessionCost: number;
   private lastInputTokens = 0;
+  private verifyAttempts = 0;
   private queue: QueuedMessage[] = [];
   private currentPlan: Plan;
   overrides: ApprovalOverrides;
@@ -386,6 +389,7 @@ export class AgentSession {
     await this.pushUser(request.text, request.attachments ?? [], settings, checkpointId, request.display);
 
     const meter = new CostMeter(profile.price, settings.budget);
+    this.verifyAttempts = 0;
     let result: AgentResult | undefined;
     try {
       result = await this.execute(request, profile, mode, settings, meter, controller.signal);
@@ -435,7 +439,7 @@ export class AgentSession {
           messages: [
             {
               role: "system",
-              content: `You are Phew, a coding agent in VS Code. The user asks a quick side question while the main task continues. Answer briefly. Do not change files. Workspace: ${this.root.name}.`,
+              content: `You are ${readSettings(this.root.uri).assistant.name}, a coding agent in VS Code built on Phew. The user asks a quick side question while the main task continues. Answer briefly. Do not change files. Workspace: ${this.root.name}.\n${personaPrompt(readSettings(this.root.uri).assistant)}`,
             },
             ...trimHistory(this.history, 60_000),
             { role: "user", content: question },
@@ -626,9 +630,12 @@ export class AgentSession {
       mcpTools: tools.mcpToolNames,
       memory: memory.map((note) => `- ${note}`).join("\n"),
     });
-    const extra = [roots.multi ? roots.describe() : "", skillsPrompt(skills), planPrompt(this.currentPlan)].filter(
-      Boolean,
-    );
+    const extra = [
+      personaPrompt(settings.assistant),
+      roots.multi ? roots.describe() : "",
+      skillsPrompt(skills),
+      planPrompt(this.currentPlan),
+    ].filter(Boolean);
     const systemPrompt = [basePrompt, ...extra].join("\n\n");
     const window = profile.contextWindow ?? settings.defaultContextWindow;
 
@@ -720,13 +727,15 @@ export class AgentSession {
           if (usage.lastInputTokens > 0) this.lastInputTokens = usage.lastInputTokens;
           this.deps.onChange(this);
         },
-        onVerify: (attempt, verification) =>
+        onVerify: (attempt, verification) => {
+          this.verifyAttempts = attempt;
           this.emit({
             type: "verify",
             attempt,
             passed: verification.passed,
             output: truncateMiddle(verification.output, 4000),
-          }),
+          });
+        },
       },
     });
   }
@@ -759,6 +768,19 @@ export class AgentSession {
     const filesChanged = this.checkpoints.list().at(-1)?.files.size ?? 0;
     const bugFixed = success && filesChanged > 0 && (request.kind === "fix" || result?.verified === true);
     await this.deps.stats.record({ success, bugFixed, filesChanged, tokens: meter.tokens, cost: meter.cost ?? 0 });
+    const fresh = await this.deps.stats.recordTask({
+      date: new Date(),
+      success,
+      bugFixed,
+      verifiedFirstTry: result?.verified === true && this.verifyAttempts === 1,
+      tokens: meter.tokens,
+      cost: meter.cost ?? 0,
+      model: this.profile()?.model ?? "",
+    });
+    for (const id of fresh) {
+      const achievement = achievementList.find((item) => item.id === id);
+      if (achievement) this.emit({ type: "achievement", achievement });
+    }
     this.emit({
       type: "taskEnd",
       status,

@@ -4,6 +4,7 @@ import type { AutoApproveMode, CommandPolicySettings } from "../core/commandPoli
 import type { CommitSettings, CommitStyle, GpgMode } from "../core/commit";
 import type { BudgetLimits } from "../core/cost";
 import { isModeId, type Mode } from "../core/modes";
+import { type Assistant, parseAssistant } from "../core/persona";
 
 export const section = "phew";
 
@@ -36,7 +37,10 @@ export interface Settings {
   readonly sendWith: "enter" | "ctrlEnter";
   readonly appearance: Appearance;
   readonly notifyOnComplete: "unfocused" | "always" | "never";
-  readonly sound: boolean;
+  /** When to play a sound: never, only when the chat is not visible, or always. */
+  readonly sound: "off" | "unfocused" | "always";
+  readonly soundStyle: "phew" | "chime";
+  readonly assistant: Assistant;
   readonly skillsEnabled: boolean;
   readonly skillPaths: readonly string[];
   readonly celebrate: boolean;
@@ -146,7 +150,16 @@ export function readSettings(scope?: vscode.Uri): Settings {
       ["unfocused", "always", "never"] as const,
       "unfocused",
     ),
-    sound: config.get<boolean>("notifications.sound") === true,
+    sound: oneOf(config.get("notifications.sound"), ["off", "unfocused", "always"] as const, "off"),
+    soundStyle: oneOf(config.get("notifications.soundStyle"), ["phew", "chime"] as const, "phew"),
+    assistant: parseAssistant({
+      name: config.get("assistant.name"),
+      avatar: config.get("assistant.avatar"),
+      persona: config.get("assistant.persona"),
+      customPersona: config.get("assistant.customPersona"),
+      userName: config.get("assistant.userName"),
+      language: config.get("assistant.language"),
+    }),
     skillsEnabled: config.get<boolean>("skills.enabled") !== false,
     skillPaths: strings(config.get("skills.paths")),
     celebrate: config.get<boolean>("ui.celebrate") !== false,
@@ -179,6 +192,7 @@ export function readSettings(scope?: vscode.Uri): Settings {
       gpgSign: oneOf<GpgMode>(config.get("commit.gpgSign"), ["git", "always", "never"], "git"),
       author: text(config.get("commit.author")),
       trailers: strings(config.get("commit.trailers")),
+      assistedBy: config.get<boolean>("commit.assistedByTrailer") === true,
       instructions: text(config.get("commit.instructions")),
       model: text(config.get("commit.model")),
     },

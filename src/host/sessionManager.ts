@@ -1,8 +1,10 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
+import { achievementList, wrapped } from "../core/achievements";
 import { conversationToMarkdown } from "../core/export";
 import { builtInModes, type ModeDefinition, parseCustomModes } from "../core/modes";
+import { type Assistant, defaultAssistant, parseAssistant } from "../core/persona";
 import { branchName, isValidBranch, worktreeFolder } from "../core/worktree";
 import type { HostMessage, SessionSummary, ViewState } from "../shared/protocol";
 import { ConversationStore, type StoredConversation } from "./conversationStore";
@@ -156,6 +158,14 @@ export class SessionManager implements vscode.Disposable {
       fontSize: settings.fontSize,
       sendWith: settings.sendWith,
       appearance: settings.appearance,
+      assistant: {
+        name: settings.assistant.name,
+        avatar: settings.assistant.avatar,
+        persona: settings.assistant.persona,
+        userName: settings.assistant.userName,
+        language: settings.assistant.language,
+      },
+      onboarding: !this.deps.context.globalState.get<boolean>("phew.assistantIntroduced"),
       showThinking: settings.showThinking,
       pinned: view?.pinnedId !== undefined,
     };
@@ -442,6 +452,33 @@ export class SessionManager implements vscode.Disposable {
     this.postState();
   }
 
+  /** Saves the assistant from the introduction card and hides the card. */
+  async introduceAssistant(assistant?: Omit<Assistant, never>): Promise<void> {
+    if (assistant) {
+      const clean = parseAssistant(assistant);
+      await updateSetting("assistant.name", clean.name === defaultAssistant.name ? undefined : clean.name);
+      await updateSetting("assistant.avatar", clean.avatar || undefined);
+      await updateSetting("assistant.persona", clean.persona === defaultAssistant.persona ? undefined : clean.persona);
+      await updateSetting("assistant.customPersona", clean.customPersona || undefined);
+      await updateSetting("assistant.userName", clean.userName || undefined);
+      await updateSetting("assistant.language", clean.language === "match" ? undefined : clean.language);
+    }
+    await this.deps.context.globalState.update("phew.assistantIntroduced", true);
+    this.postState();
+  }
+
+  /** The data for the Phew Wrapped card. */
+  wrappedMessage(period: "week" | "month"): HostMessage {
+    const settings = readSettings();
+    const earned = new Set(this.deps.stats.earned());
+    return {
+      type: "wrapped",
+      wrapped: wrapped(this.deps.stats.activity(), period, settings.minutesPerBug),
+      achievements: achievementList.map((item) => ({ ...item, earned: earned.has(item.id) })),
+      name: settings.assistant.name,
+    };
+  }
+
   listHistory() {
     return this.store.list();
   }
@@ -509,20 +546,21 @@ export class SessionManager implements vscode.Disposable {
     const settings = readSettings();
     const visible = [...this.views].some((view) => view.visible && this.shows(view, session));
     const focused = vscode.window.state.focused;
-    if (settings.sound && (event !== "done" || !focused || !visible)) {
-      for (const view of this.views) if (view.visible) view.post({ type: "sound" });
+    if (settings.sound === "always" || (settings.sound === "unfocused" && (!focused || !visible))) {
+      for (const view of this.views) if (view.visible) view.post({ type: "sound", style: settings.soundStyle, event });
     }
     if (settings.notifyOnComplete === "never") return;
     if (settings.notifyOnComplete === "unfocused" && focused && visible) return;
     const key = `${session.id}:${event}:${session.updatedAt}`;
     if (this.notifiedApprovals.has(key)) return;
     this.notifiedApprovals.add(key);
+    const name = settings.assistant.name;
     const text =
       event === "input"
-        ? `Phew: "${session.title}" needs your input.`
+        ? `${name} needs your input in "${session.title}".`
         : event === "done"
-          ? `Phew! "${session.title}" is done.`
-          : `Phew: "${session.title}" stopped.`;
+          ? `Phew! ${name} finished "${session.title}".`
+          : `${name} stopped "${session.title}".`;
     void vscode.window.showInformationMessage(text, "Show").then((answer) => {
       if (answer !== "Show") return;
       if (![...this.views].some((view) => view.pinnedId === session.id)) this.switchTo(session.id);

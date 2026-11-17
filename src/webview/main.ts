@@ -12,6 +12,15 @@ import type {
   WebviewMessage,
 } from "../shared/protocol";
 import { renderMarkdown } from "./markdown";
+import {
+  avatar,
+  type MascotState,
+  playSound,
+  setMascotState,
+  showAchievementToast,
+  showAssistantCard,
+  showWrapped,
+} from "./persona";
 
 interface VsCodeApi {
   postMessage(message: WebviewMessage): void;
@@ -206,8 +215,54 @@ function copyButton(text: () => string, label = "Copy", className = "copy"): HTM
 
 // State
 
+let mascotState: MascotState = "idle";
+let mascotTimer: ReturnType<typeof setTimeout> | undefined;
+let assistantKey = "";
+let introduced = false;
+
+function moveMascot(next: MascotState, settleAfter?: number): void {
+  mascotState = next;
+  setMascotState(next);
+  if (mascotTimer) clearTimeout(mascotTimer);
+  mascotTimer = undefined;
+  if (settleAfter)
+    mascotTimer = setTimeout(() => {
+      if (!state?.busy) moveMascot("idle");
+    }, settleAfter);
+}
+
+/** Shows the name and the avatar of the assistant in the header and on the welcome screen. */
+function applyAssistant(next: ViewState): void {
+  const key = JSON.stringify(next.assistant);
+  if (key !== assistantKey) {
+    assistantKey = key;
+    const live = (className: string) => {
+      const node = avatar(next.assistant, className, mascotState);
+      node.classList.add("live-mascot");
+      return node;
+    };
+    $("headerAvatar").replaceChildren(live("header-mascot"));
+    $("welcomeAvatar").replaceChildren(live("welcome-mascot"));
+    $("welcomeName").textContent = next.assistant.name;
+    $("welcomeTagline").textContent = next.assistant.userName
+      ? `Hi, ${next.assistant.userName}! Bug fixed. Phew.`
+      : "Bug fixed. Phew.";
+    for (const node of document.querySelectorAll(".message.assistant > .message-header > .avatar"))
+      node.replaceWith(avatar(next.assistant, "avatar"));
+    for (const node of document.querySelectorAll(".message.assistant:not(.btw) > .message-header > .who"))
+      node.textContent = next.assistant.name;
+  }
+  if (next.busy && mascotState !== "working") moveMascot("working");
+  if (!next.busy && mascotState === "working") moveMascot("idle");
+  if (next.onboarding && !introduced && next.configured) {
+    introduced = true;
+    showAssistantCard(next.assistant, true, (message) => vscode.postMessage(message));
+  }
+}
+
 function applyState(next: ViewState): void {
   state = next;
+  applyAssistant(next);
   applyAppearance(next);
   $("titleText").textContent = next.title;
   const worktree = $("worktree");
@@ -217,7 +272,10 @@ function applyState(next: ViewState): void {
   running.hidden = next.runningSessions === 0;
   running.textContent = next.runningSessions > 0 ? `● ${next.runningSessions}` : "";
   running.title = `${next.runningSessions} running`;
-  $("popOut").hidden = next.pinned;
+  // In the side bar, VS Code shows these buttons in the view title.
+  $("popOut").hidden = true;
+  $("historyButton").hidden = !next.pinned;
+  $("newChat").hidden = !next.pinned;
 
   if (
     modeSelect.options.length !== next.modes.length ||
@@ -246,7 +304,7 @@ function applyState(next: ViewState): void {
   const modifier = navigator.platform.toLowerCase().includes("mac") ? "Cmd" : "Ctrl";
   prompt.placeholder = next.busy
     ? `Enter to queue · ${modifier}+Enter to stop and send · Esc to stop`
-    : `Ask Phew or describe a change · @ to attach · ${send} to send`;
+    : `Ask ${next.assistant.name} or describe a change · @ to attach · ${send} to send`;
   $<HTMLSelectElement>("approvalReview").value = next.approvals.review;
   $<HTMLSelectElement>("approvalCommands").value = next.approvals.commands;
   $<HTMLSelectElement>("approvalMcp").value = String(next.approvals.mcp);
@@ -345,7 +403,11 @@ function assistantEntry(id: string, variant?: "btw") {
   if (!entry) {
     const node = element("article", `message assistant streaming${variant ? ` ${variant}` : ""}`);
     const header = element("div", "message-header");
-    header.append(element("span", "avatar"), element("span", "who", variant === "btw" ? "Phew · btw" : "Phew"));
+    const name = state?.assistant.name ?? "Phew";
+    header.append(
+      avatar(state?.assistant, "avatar"),
+      element("span", "who", variant === "btw" ? `${name} · btw` : name),
+    );
     const body = element("div", "body");
     node.append(header, body);
     entry = { element: node, body, text: "" };
@@ -567,31 +629,6 @@ function celebrate(): void {
   }, 1800);
 }
 
-/** A short, soft "phew" sound: two falling tones. */
-function playSound(): void {
-  try {
-    const AudioContextClass =
-      window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextClass) return;
-    const audio = new AudioContextClass();
-    const gain = audio.createGain();
-    gain.connect(audio.destination);
-    gain.gain.setValueAtTime(0.0001, audio.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.08, audio.currentTime + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + 0.45);
-    const oscillator = audio.createOscillator();
-    oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(880, audio.currentTime);
-    oscillator.frequency.exponentialRampToValueAtTime(520, audio.currentTime + 0.4);
-    oscillator.connect(gain);
-    oscillator.start();
-    oscillator.stop(audio.currentTime + 0.46);
-    oscillator.onended = () => void audio.close();
-  } catch {
-    // Sound is optional.
-  }
-}
-
 function clearTranscript(): void {
   for (const node of [...transcript.children]) if (node !== welcome) node.remove();
   assistants.clear();
@@ -806,7 +843,9 @@ function handle(message: HostMessage): void {
       const summary = element(
         "summary",
         undefined,
-        message.passed ? "✓ Checks pass" : `✕ Checks fail (attempt ${message.attempt}). Phew keeps fixing…`,
+        message.passed
+          ? "✓ Checks pass"
+          : `✕ Checks fail (attempt ${message.attempt}). ${state?.assistant.name ?? "Phew"} keeps fixing…`,
       );
       summary.append(time(message.at));
       node.append(summary, element("pre", "detail", message.output));
@@ -814,6 +853,7 @@ function handle(message: HostMessage): void {
       break;
     }
     case "taskEnd":
+      moveMascot(message.status === "done" ? "done" : message.status === "aborted" ? "idle" : "failed", 2600);
       if (message.status !== "done" && message.message) append(element("p", "notice warning", message.message));
       if (message.verified) append(element("p", "notice success", "Phew! All checks pass."));
       if (message.celebrate && state?.celebrate !== false) celebrate();
@@ -837,7 +877,22 @@ function handle(message: HostMessage): void {
       renderQueue(message.items);
       break;
     case "sound":
-      playSound();
+      playSound(message.style, message.event);
+      break;
+    case "achievement":
+      showAchievementToast(message.achievement, () => vscode.postMessage({ type: "showWrapped", period: "week" }));
+      break;
+    case "wrapped":
+      showWrapped(
+        message.wrapped,
+        message.achievements,
+        message.name,
+        state?.appearance.accentColor || "#22b8cf",
+        (next) => vscode.postMessage(next),
+      );
+      break;
+    case "showOnboarding":
+      showAssistantCard(state?.assistant, false, (next) => vscode.postMessage(next));
       break;
     case "sessions":
       sessions = [...message.sessions];
@@ -1035,6 +1090,17 @@ $("fontDown").addEventListener("click", () => changeFont(-1));
 $("fontUp").addEventListener("click", () => changeFont(1));
 $<HTMLSelectElement>("timestampChoice").addEventListener("change", (event) =>
   vscode.postMessage({ type: "setAppearance", key: "timestamps", value: (event.target as HTMLSelectElement).value }),
+);
+$("editAssistant").addEventListener("click", () => {
+  closePopovers();
+  showAssistantCard(state?.assistant, false, (message) => vscode.postMessage(message));
+});
+$("openWrapped").addEventListener("click", () => {
+  closePopovers();
+  vscode.postMessage({ type: "showWrapped", period: "week" });
+});
+$("headerAvatar").addEventListener("click", () =>
+  showAssistantCard(state?.assistant, false, (message) => vscode.postMessage(message)),
 );
 $("moreAppearance").addEventListener("click", () => {
   closePopovers();

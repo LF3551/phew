@@ -239,6 +239,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<PhewTe
       ),
     ),
     vscode.commands.registerCommand("phew.showLog", () => log.show()),
+    vscode.commands.registerCommand("phew.editAssistant", async () => {
+      await view.reveal();
+      view.post({ type: "showOnboarding" });
+    }),
+    vscode.commands.registerCommand("phew.showWrapped", async (period?: unknown) => {
+      await view.reveal();
+      view.post(manager.wrappedMessage(period === "month" ? "month" : "week"));
+    }),
     vscode.commands.registerCommand("phew.showStats", async () => {
       const answer = await vscode.window.showInformationMessage(
         "Phew statistics",

@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { homedir } from "node:os";
 import * as vscode from "vscode";
 import { safeColor } from "../core/appearance";
 import { type HostMessage, parseWebviewMessage, type WebviewMessage } from "../shared/protocol";
@@ -153,6 +154,27 @@ class ChatController implements ChatViewHandle {
       case "compact":
         await session?.compactNow();
         return;
+      case "saveAssistant":
+        await sessions.introduceAssistant(message);
+        return;
+      case "skipOnboarding":
+        await sessions.introduceAssistant();
+        return;
+      case "showWrapped":
+        this.post(sessions.wrappedMessage(message.period));
+        return;
+      case "saveImage": {
+        const folder = vscode.workspace.workspaceFolders?.[0]?.uri ?? vscode.Uri.file(homedir());
+        const target = await vscode.window.showSaveDialog({
+          defaultUri: vscode.Uri.joinPath(folder, message.fileName),
+          filters: { Images: ["png"] },
+        });
+        if (!target) return;
+        const bytes = Buffer.from(message.dataUrl.slice(message.dataUrl.indexOf(",") + 1), "base64");
+        await vscode.workspace.fs.writeFile(target, bytes);
+        this.post({ type: "notice", level: "info", text: `Saved ${vscode.workspace.asRelativePath(target)}.` });
+        return;
+      }
       case "openFile": {
         const absolute = session?.roots.resolve(message.path);
         if (!absolute) {

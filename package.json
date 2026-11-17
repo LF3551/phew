@@ -2,7 +2,7 @@
   "name": "phew",
   "displayName": "Phew",
   "description": "Bug fixed. Phew. Open-source AI coding agent for VS Code: one-click fixes, review in the editor, checkpoints, chat history, worktree agents, and any model.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "alekseialeinikov",
   "author": {
     "name": "Aleksei Aleinikov",
@@ -348,6 +348,18 @@
         "command": "phew.showLog",
         "title": "Show Log",
         "category": "Phew"
+      },
+      {
+        "command": "phew.editAssistant",
+        "title": "Customize Your Assistant",
+        "category": "Phew",
+        "icon": "$(account)"
+      },
+      {
+        "command": "phew.showWrapped",
+        "title": "Phew Wrapped: Your Week and Achievements",
+        "category": "Phew",
+        "icon": "$(star)"
       }
     ],
     "menus": {
@@ -403,6 +415,11 @@
           "group": "2_agent@3"
         },
         {
+          "command": "phew.showWrapped",
+          "when": "view == phew.chatView",
+          "group": "3_more@0"
+        },
+        {
           "command": "phew.showStats",
           "when": "view == phew.chatView",
           "group": "3_more@1"
@@ -426,6 +443,11 @@
           "command": "phew.renameChat",
           "when": "view == phew.chatView",
           "group": "2_agent@0"
+        },
+        {
+          "command": "phew.editAssistant",
+          "when": "view == phew.chatView",
+          "group": "3_more@0"
         }
       ],
       "editor/context": [
@@ -792,9 +814,95 @@
             "markdownDescription": "Notify when a chat finishes or needs your input."
           },
           "phew.notifications.sound": {
-            "type": "boolean",
-            "default": false,
-            "markdownDescription": "Play a short sound when a chat finishes or needs your input."
+            "type": "string",
+            "enum": [
+              "off",
+              "unfocused",
+              "always"
+            ],
+            "enumDescriptions": [
+              "No sound.",
+              "Only when the chat is hidden or VS Code is not focused.",
+              "Every time a task ends or needs your input."
+            ],
+            "default": "off",
+            "order": 0,
+            "markdownDescription": "When to play a sound at the end of a task or when the agent needs your input."
+          },
+          "phew.notifications.soundStyle": {
+            "type": "string",
+            "enum": [
+              "phew",
+              "chime"
+            ],
+            "enumDescriptions": [
+              "A soft sigh of relief.",
+              "A short chime."
+            ],
+            "default": "phew",
+            "order": 0,
+            "description": "The sound to play."
+          }
+        }
+      },
+      {
+        "title": "Assistant",
+        "properties": {
+          "phew.assistant.name": {
+            "type": "string",
+            "default": "Phew",
+            "maxLength": 32,
+            "order": 0,
+            "description": "The name of your assistant, for example Max. It is shown in the chat and in notifications."
+          },
+          "phew.assistant.avatar": {
+            "type": "string",
+            "default": "",
+            "maxLength": 16,
+            "order": 1,
+            "markdownDescription": "One emoji or up to two letters. Leave empty for the living Phew drop."
+          },
+          "phew.assistant.persona": {
+            "type": "string",
+            "enum": [
+              "partner",
+              "mentor",
+              "quiet",
+              "reviewer",
+              "custom"
+            ],
+            "enumDescriptions": [
+              "Short and to the point, like a senior pair programmer.",
+              "Explains why, and teaches while it works.",
+              "Minimal words, maximum code.",
+              "Cares about quality, security, and tests.",
+              "Uses your own description below."
+            ],
+            "default": "partner",
+            "order": 2,
+            "description": "The character of the assistant."
+          },
+          "phew.assistant.customPersona": {
+            "type": "string",
+            "default": "",
+            "maxLength": 1000,
+            "editPresentation": "multilineText",
+            "order": 3,
+            "markdownDescription": "Your own description of the character. Used when **Persona** is `custom`."
+          },
+          "phew.assistant.userName": {
+            "type": "string",
+            "default": "",
+            "maxLength": 40,
+            "order": 4,
+            "description": "How the assistant calls you. Leave empty to skip names."
+          },
+          "phew.assistant.language": {
+            "type": "string",
+            "default": "match",
+            "maxLength": 40,
+            "order": 5,
+            "markdownDescription": "The language of the answers: `match` answers in your language. Or a language name, for example `Russian` or `English`."
           }
         }
       },
@@ -1071,6 +1179,12 @@
             "type": "string",
             "default": "",
             "markdownDescription": "The `id` of the model for commit messages. Leave empty to use the active model."
+          },
+          "phew.commit.assistedByTrailer": {
+            "type": "boolean",
+            "default": false,
+            "order": 99,
+            "markdownDescription": "Add an `Assisted-by: Phew` line to generated commit messages. Off by default: Phew never adds trailers unless you ask."
           }
         }
       },
@@ -1314,7 +1428,7 @@
                 "type": "string"
               }
             },
-            "markdownDescription": "MCP tools that the agent cannot use, by server. Use **Phew: Manage MCP Servers \u2192 Choose tools**."
+            "markdownDescription": "MCP tools that the agent cannot use, by server. Use **Phew: Manage MCP Servers → Choose tools**."
           }
         }
       },

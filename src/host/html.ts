@@ -36,6 +36,7 @@ export function renderChatHtml(options: ChatHtmlOptions): string {
 <body>
 <div class="app" id="app">
   <header class="toolbar">
+    <span class="header-avatar" id="headerAvatar" title="Your assistant"></span>
     <button type="button" class="title" id="title" title="Chats and history"><span id="titleText">New chat</span><span class="badge" id="worktree" hidden></span><span class="running" id="running" hidden></span></button>
     <div class="icons">
       <button type="button" class="icon-button" id="appearanceButton" title="Appearance" aria-label="Appearance">${icon("type")}</button>
@@ -63,7 +64,11 @@ export function renderChatHtml(options: ChatHtmlOptions): string {
         <option value="never">Never</option>
       </select>
     </label>
-    <button type="button" class="link" id="moreAppearance">More options in settings</button>
+    <div class="popover-links">
+      <button type="button" class="link" id="editAssistant">Name and character</button>
+      <button type="button" class="link" id="openWrapped">Wrapped and achievements</button>
+      <button type="button" class="link" id="moreAppearance">More options</button>
+    </div>
   </section>
   <section class="panel" id="panel" hidden>
     <div class="panel-header">
@@ -83,9 +88,9 @@ export function renderChatHtml(options: ChatHtmlOptions): string {
   </section>
   <main class="transcript" id="transcript" aria-live="polite">
     <section class="welcome" id="welcome">
-      <img class="logo" src="${e(options.iconUri)}" alt="" width="72" height="72">
-      <h1>Phew</h1>
-      <p class="tagline">Bug fixed. Phew.</p>
+      <div class="logo" id="welcomeAvatar"></div>
+      <h1 id="welcomeName">Phew</h1>
+      <p class="tagline" id="welcomeTagline">Bug fixed. Phew.</p>
       <ul class="tips">
         <li>Ask about your code, or describe a change.</li>
         <li>Type <kbd>@</kbd> to attach files, problems, Git changes, or the terminal.</li>
@@ -160,6 +165,7 @@ export function renderChatHtml(options: ChatHtmlOptions): string {
       </div>
     </form>
   </footer>
+  <div class="overlay" id="overlay" hidden></div>
   <div class="celebration" id="celebration" hidden aria-hidden="true"><span>Phew! Done.</span></div>
 </div>
 <script nonce="${e(options.nonce)}" src="${e(options.scriptUri)}"></script>

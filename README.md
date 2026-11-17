@@ -46,6 +46,13 @@
 - **Know the cost.** Tokens and cost per task, with optional budget limits.
 - **Open source.** Apache 2.0, no telemetry.
 
+## Make it yours
+
+- **Your assistant.** Give it a name, a look, and a character: Partner, Mentor, Quiet, Strict reviewer, or your own words. Tell it how to call you and which language to answer in.
+- **A living drop.** The Phew mascot sweats while it works and sighs with relief when your bug is fixed.
+- **Your chat.** Bubbles, Classic, or Compact style, your accent color, font, and text size: click **Aa** in the chat.
+- **Phew Wrapped.** A weekly card with bugs fixed and time saved, ready to share, and achievements. All stats stay on your computer.
+
 ## Get started
 
 1. Open the **Phew** view in the activity bar, or press `Ctrl+Alt+P` (`Cmd+Alt+P` on macOS).

@@ -1,6 +1,8 @@
+import type { Achievement, Wrapped } from "../core/achievements";
 import type { Appearance } from "../core/appearance";
 import { type Attachment, attachmentLabel, maximumAttachments, parseAttachment } from "../core/attachments";
 import { isModeId, type Mode } from "../core/modes";
+import { type Persona, personas } from "../core/persona";
 
 export interface ModeView {
   readonly id: Mode;
@@ -41,6 +43,15 @@ export interface ViewState {
   readonly fontSize: number | null;
   readonly sendWith: "enter" | "ctrlEnter";
   readonly appearance: Appearance;
+  readonly assistant: {
+    readonly name: string;
+    readonly avatar: string;
+    readonly persona: Persona;
+    readonly userName: string;
+    readonly language: string;
+  };
+  /** True until the user names the assistant or skips the introduction. */
+  readonly onboarding: boolean;
   readonly showThinking: boolean;
   /** True when this view shows one fixed chat, for example in an editor tab. */
   readonly pinned: boolean;
@@ -102,7 +113,15 @@ export type HostMessage = (
   | { readonly type: "reasoningEnd"; readonly id: string; readonly text: string }
   | { readonly type: "plan"; readonly plan: PlanView }
   | { readonly type: "queue"; readonly items: readonly QueuedView[] }
-  | { readonly type: "sound" }
+  | { readonly type: "sound"; readonly style: "phew" | "chime"; readonly event: "done" | "failed" | "input" }
+  | { readonly type: "achievement"; readonly achievement: Achievement }
+  | {
+      readonly type: "wrapped";
+      readonly wrapped: Wrapped;
+      readonly achievements: readonly (Achievement & { readonly earned: boolean })[];
+      readonly name: string;
+    }
+  | { readonly type: "showOnboarding" }
   | {
       readonly type: "tool";
       readonly id: string;
@@ -190,7 +209,19 @@ export type WebviewMessage =
   | { readonly type: "renameChat"; readonly id?: string }
   | { readonly type: "openInEditor"; readonly id?: string }
   | { readonly type: "resetApprovals" }
-  | { readonly type: "compact" };
+  | { readonly type: "compact" }
+  | {
+      readonly type: "saveAssistant";
+      readonly name: string;
+      readonly avatar: string;
+      readonly persona: Persona;
+      readonly customPersona: string;
+      readonly userName: string;
+      readonly language: string;
+    }
+  | { readonly type: "skipOnboarding" }
+  | { readonly type: "showWrapped"; readonly period: "week" | "month" }
+  | { readonly type: "saveImage"; readonly dataUrl: string; readonly fileName: string };
 
 export type AppearanceKey = "style" | "accentColor" | "fontSize" | "timestamps";
 
@@ -217,7 +248,33 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
     case "openWalkthrough":
     case "resetApprovals":
     case "compact":
+    case "skipOnboarding":
       return { type: message.type };
+    case "saveAssistant": {
+      const text = (key: string, max: number) =>
+        typeof message[key] === "string" ? (message[key] as string).slice(0, max) : "";
+      if (!personas.includes(message.persona as Persona)) return undefined;
+      return {
+        type: "saveAssistant",
+        name: text("name", 32),
+        avatar: text("avatar", 16),
+        persona: message.persona as Persona,
+        customPersona: text("customPersona", 1000),
+        userName: text("userName", 40),
+        language: text("language", 40),
+      };
+    }
+    case "showWrapped":
+      return message.period === "week" || message.period === "month"
+        ? { type: "showWrapped", period: message.period }
+        : undefined;
+    case "saveImage": {
+      const dataUrl = typeof message.dataUrl === "string" ? message.dataUrl : "";
+      const fileName = typeof message.fileName === "string" ? message.fileName : "";
+      if (!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(dataUrl) || dataUrl.length > 15_000_000) return undefined;
+      if (!/^[\w.-]{1,80}\.png$/.test(fileName)) return undefined;
+      return { type: "saveImage", dataUrl, fileName };
+    }
     case "removeQueued": {
       const value = id("id");
       return value ? { type: "removeQueued", id: value } : undefined;
