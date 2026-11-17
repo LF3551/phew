@@ -73,7 +73,8 @@ Pure TypeScript without the `vscode` module, so unit tests run in Node.js.
 | `toolHost.ts` | Executes tools inside the workspace with path, secret, trust, and command checks. |
 | `changes.ts` | Shows changes as hunks, applies the selected hunks, records checkpoints, and serves the diff editor. |
 | `approvals.ts` | Sends approval requests to the view and waits for the decision. |
-| `commandRunner.ts` | Runs shell commands with a timeout, an output limit, and cancellation. |
+| `commandRunner.ts` | Runs shell commands with a timeout, an output limit, and cancellation. Keeps the folder and the exported variables of a chat between commands, and passes typed input to the command. |
+| `agentTerminal.ts` | The terminal of a chat in the panel (a pseudoterminal). It mirrors the output of the agent's commands in color, and its keys go to the running command. |
 | `mcpManager.ts` | Reads MCP configurations, connects stdio and HTTP servers, signs in with OAuth, filters tools, and logs. |
 | `phewIt.ts` | The "Phew it!" quick fix on problems. |
 | `terminalWatcher.ts` | Remembers failed terminal commands through shell integration. |
@@ -86,6 +87,9 @@ Pure TypeScript without the `vscode` module, so unit tests run in Node.js.
 The chat view runs in a sandboxed webview with a strict Content Security Policy and a script nonce.
 `markdown.ts` builds DOM nodes from a safe Markdown subset and never parses HTML.
 `src/shared/protocol.ts` defines the messages between the view and the host, and the host validates every message.
+`terminalBlock.ts` shows each command in a terminal inside the chat (xterm.js), like the Copilot agent: the same live output as the terminal in the panel, and keys go to the command through `core/lineEditor.ts`.
+xterm.js adds `<style>` elements; they get the nonce of the page, so the policy needs no `unsafe-inline`.
+The menus under the input are separate modules: `modeMenu.ts`, `modelMenu.ts`, `attachMenu.ts`, and `approvalsPanel.ts`.
 
 ## Tests
 

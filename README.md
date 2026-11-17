@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="resources/icon.png" alt="Phew logo: two relieved closed eyes and a sweat drop" width="128" height="128">
+  <img src="docs/images/mascot-alive.png" alt="The Phew mascot looks at you, thinks, reads a file, waits for your answer with a drop of sweat, and wipes the drop away when the bug is fixed" width="128" height="128">
 </p>
 
 <h1 align="center">Phew</h1>
@@ -29,37 +29,49 @@
 ## Why Phew
 
 <p align="center">
-  <img src="docs/images/calm.png" alt="While Phew works, each step is one quiet line and a live status shows the current command and time" width="800">
+  <img src="docs/images/terminal.png" alt="A command runs in a terminal inside the chat: npm test shows passing and failing tests in color, with Stop, Show terminal, and Copy" width="800">
 </p>
 
 <p align="center">
   <img src="docs/images/real-tasks.png" alt="The welcome screen offers real tasks: continue yesterday's work, fix errors, fix a failed command, review changes" width="800">
 </p>
 
+- **Watch every command.** Each command of the agent runs in a real terminal inside the chat, live and in color, and the terminal of the chat in the panel shows the same output. Type an answer or press Ctrl+C in either one. Commands of a chat work like one shell: `cd` and exported variables carry over.
 - **Phew it!** One click on an error in the editor, a failed terminal command, or failing tests. Phew finds the cause, fixes it, and checks the result.
 - **Fixes until green.** Phew runs your check command, for example `npm test`, and keeps fixing until it passes.
 - **Review in the editor.** Each change has **Keep** and **Undo** buttons in the file, and **Keep All** and **Undo All** in the editor title. Prefer to approve first? Switch **Edits** to **Ask first** in the chat.
 - **Undo anything.** Each request is a checkpoint. **Restore checkpoint** reverts all file changes made after it, even after a restart.
-- **Chat history.** Chats are saved per workspace. Search, rename, open them again, and export them as Markdown. Every message shows its time, and every answer has a Copy button.
+- **Chat history.** Chats are saved per workspace, named automatically after the first answer, and grouped by day with a line from each conversation. Pin, search, rename, open them in a new tab, and export them as Markdown. Delete has Undo. Every message shows its time, and every answer has a Copy button.
+- **A mascot that shows the work.** The Phew drop blinks, looks up while it thinks, reads along a line while it reads files, and sweats while it waits for your answer. The Phew icon shows a number when a chat needs you. Choose **Lively**, **Calm**, or **Still** in **Appearance**.
 - **Parallel chats.** Open a second chat in an editor tab (⧉) and let two agents work at the same time. Phew warns before two chats change the same file.
 - **Steer while it works.** Keep typing while the agent works: messages wait in a queue and reach the agent at its next step. `/btw` asks a quick side question without stopping the task.
 - **See the thinking and the context.** Phew shows the reasoning of models that stream it, and a context meter. Long chats are compacted automatically, or with `/compact`.
 - **Questions and a checklist.** The agent asks you with clickable answers when something is unclear, and keeps a checklist of the task. `/goal` sets the goal of a chat.
 - **Clickable files.** `src/app.ts:42` in an answer opens the file at that line.
 - **Survives rate limits.** Phew retries rate limits and server errors as long as the provider asks, and explains a missing quota or credit in plain words.
-- **Rich context.** Type `@` to attach files, `@problems`, `@git`, or `@terminal`. Paste or drop screenshots. Use **Add to Chat** in the editor, the explorer, and the terminal.
+- **Rich context.** The paperclip adds the current file, the selection, the problems, the Git changes, or the last terminal output in one click, and shows what exactly it adds. Type `@` to attach any file. Paste or drop screenshots. Use **Add to Chat** in the editor, the explorer, and the terminal.
 - **Parallel agents.** **New Agent in Worktree** works on a new branch in a separate folder while you keep coding.
 - **Commits your way.** Generate commit messages in the Source Control view. See the author and signing that commits use, and set Conventional Commits, `Signed-off-by`, GPG or SSH signing, a different author, and trailers. Phew never adds co-authors by itself.
 - **Code index and memory.** Phew finds relevant code by meaning and remembers durable project facts in `.phew/memory.md`.
 - **Agent Skills.** Phew uses `SKILL.md` skills from `.phew/skills`, `.agents/skills`, `.claude/skills`, and `.opencode/skills`, in the project and in your home folder, the same format as Claude Code.
 - **Several folders.** In a multi-root workspace, the agent works across all folders.
-- **MCP done right.** Phew reads `.vscode/mcp.json`, `.mcp.json` (Claude Code), and its own settings, supports local and remote (HTTP) servers with OAuth sign-in, and lets you choose the tools of each server and read the logs (**Phew: Manage MCP Servers**).
+- **MCP done right.** Phew reads `.vscode/mcp.json`, `.mcp.json` (Claude Code), and its own settings, supports local and remote (HTTP) servers with OAuth sign-in, and lets you choose the tools of each server and read the logs (**Phew: Manage MCP Servers…**).
 - **Autocomplete and Next Edit.** Inline completions and a predicted next edit, with any model.
-- **Modes.** Ask, Plan, Code, Debug, Review, and your own modes.
+- **Modes.** Ask, Plan, Code, Debug, Review, and your own modes, each with its color. `Shift+Tab` switches the mode.
+- **Any model, one click away.** The model menu opens above the input and shows the provider and the context size of each model.
+- **You decide how far it goes.** **Careful**, **Balanced**, or **Autopilot** in one click, or set edits, commands, and MCP tools one by one. The panel shows the commands of your allowlist and what differs from your defaults.
 - **Safe by default.** Phew does not read `.env` files and keys, removes secrets from tool output, and always asks before dangerous commands such as `git push --force`, `terraform apply`, or `kubectl delete`.
 - **Any model.** GitHub Copilot without a key or with a GitHub token, OpenAI, Anthropic, Google Gemini, Azure OpenAI, Mistral, xAI, DeepSeek, Groq, Cerebras, Together AI, Fireworks AI, OpenRouter, LiteLLM, and local models with Ollama, LM Studio, or vLLM.
 - **Know the cost.** Tokens and cost per task, with optional budget limits.
 - **Open source.** Apache 2.0, no telemetry.
+
+<p align="center">
+  <img src="docs/images/modes.png" alt="The mode menu above the input: Ask, Plan, Code, Debug, and Review, each with a color, a description, and read-only marks" width="800">
+</p>
+
+<p align="center">
+  <img src="docs/images/approvals.png" alt="The auto-approve panel: Careful, Balanced, and Autopilot levels, and rows for edits, commands with the allowlist, and MCP tools" width="800">
+</p>
 
 ## Continue anywhere
 
@@ -74,13 +86,13 @@
 
 ## Make it yours
 
-- **Your assistant.** Give it a name, a look, and a character: Partner, Mentor, Quiet, Strict reviewer, or your own words. Tell it how to call you and which language to answer in.
-- **A living drop.** The Phew mascot sweats while it works and sighs with relief when your bug is fixed.
+- **Your assistant.** Give it a name, a look, and a character: Partner, Mentor, Quiet, Strict reviewer, or your own words. Tell it how to call you and which language to answer in. The dice picks a look and a name for you.
+- **The Phew family.** The drop, Cat, Bot, Ghost, Sprout, Nerd, Night owl, Angel, and Ninja. Each one is the same living mascot: it blinks, follows your pointer, sweats while it works, and sighs with relief when your bug is fixed. The send button wears its symbol.
 - **Your chat.** Bubbles, Classic, or Compact style, your accent color, font, and text size: click **Aa** in the chat.
 - **Phew Wrapped.** A weekly card with bugs fixed and time saved, ready to share, and achievements. All stats stay on your computer.
 
 <p align="center">
-  <img src="docs/images/yours.png" alt="Naming the assistant Max, with the Mentor character and a fox avatar" width="800">
+  <img src="docs/images/family.png" alt="The assistant card: a cat named Mochi with the Mentor character, and the Phew family of looks: drop, cat, bot, ghost, sprout, nerd, night owl, angel, ninja" width="800">
 </p>
 
 <p align="center">
@@ -107,6 +119,8 @@
 | **Review** | Reviews the current changes. Changes nothing. |
 | Custom | Your own instructions, tools, and model, from the settings or `.phew/modes.json`. |
 
+Ask, Plan, and Review are read-only: the mode switch shows a lock for them.
+
 ## Keyboard shortcuts
 
 | Shortcut | Action |
@@ -118,6 +132,8 @@
 | `Alt+]` | Suggest the next edit |
 | `Ctrl+Alt+Y` / `Ctrl+Alt+Z` | Keep or undo all changes in the file |
 | `↑` in the input | Reuse an earlier request |
+| `Shift+Tab` in the input | Switch the mode |
+| `Ctrl+C` in a command terminal | Stop the command (typing answers its prompt) |
 | `/btw`, `/goal`, `/compact` | Side question, goal of the chat, compact the chat |
 
 On macOS, use `Cmd` instead of `Ctrl`.
@@ -127,6 +143,7 @@ On macOS, use `Cmd` instead of `Ctrl`.
 **Phew: Open Settings** opens a settings page with sections for models, the agent, approvals, checks, budget, commits, worktrees, the code index, autocomplete, memory, modes, and skills, MCP, privacy, and the interface.
 The approval toggles in the chat change only that chat; **save as default** makes them the default.
 Notifications, the sound, the font size of the chat, and the send key (`Enter` or `Ctrl+Enter`) are in **Agent**.
+`phew.commands.terminal` chooses whether the terminal of the chat opens in the panel with the first command, only on request, or never.
 Every setting is also available in the VS Code settings under **Phew**.
 
 ## Security and privacy
@@ -151,6 +168,7 @@ npm run check            # type check, lint, and unit tests
 npm run build            # build dist/ with esbuild
 npm run test:integration # run the extension in VS Code with a fake model server
 npm run package          # create phew.vsix
+npm run images           # render the README pictures from the real chat (needs Playwright)
 ```
 
 Press `F5` in VS Code to start an Extension Development Host.
