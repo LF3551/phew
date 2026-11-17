@@ -4,10 +4,21 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    open-pull-requests-limit: 10
     groups:
       dev-dependencies:
         dependency-type: development
+        update-types: [minor, patch]
+    ignore:
+      # Must match the minimum VS Code version in engines.vscode. Update both together by hand.
+      - dependency-name: "@types/vscode"
+      # Must match the Node.js major version inside the VS Code extension host.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]

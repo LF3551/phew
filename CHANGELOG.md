@@ -18,3 +18,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Project rules from `AGENTS.md`, `.phew/rules/`, and the rule files of other agents.
 - MCP servers over stdio.
 - Local statistics and the **Phew! Done.** animation.
+
+### Changed
+
+- TypeScript 7 and GitHub Actions `checkout` and `setup-node` v7.
+- Dependabot keeps `@types/vscode` aligned with the minimum VS Code version and `@types/node` on the VS Code Node.js major version.

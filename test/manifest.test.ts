@@ -40,3 +40,8 @@ test("packaged files exist", () => {
     expect(existsSync(path), path).toBe(true);
   }
 });
+
+test("the VS Code API types match the minimum VS Code version", () => {
+  const minimum = String(manifest.engines.vscode).replace(/^\^/, "");
+  expect(manifest.devDependencies["@types/vscode"]).toBe(minimum);
+});

@@ -1,3 +1,4 @@
+import * as path from "node:path";
 import { expect, test } from "vitest";
 import { resolveInside, toRelative } from "../src/core/paths";
 import { emptyStats, estimatedMinutesSaved, normalizeStats, recordOutcome } from "../src/core/stats";
@@ -29,12 +30,13 @@ test.each([
 });
 
 test("keeps paths inside the workspace", () => {
-  expect(resolveInside("/w", "src/a.ts")).toBe("/w/src/a.ts");
-  expect(resolveInside("/w", "/w/b")).toBe("/w/b");
-  expect(resolveInside("/w", "../etc/passwd")).toBeUndefined();
-  expect(resolveInside("/w", "/etc/passwd")).toBeUndefined();
-  expect(resolveInside("/w", "a\0b")).toBeUndefined();
-  expect(toRelative("/w", "/w/src/a.ts")).toBe("src/a.ts");
+  const root = path.resolve("w");
+  expect(resolveInside(root, "src/a.ts")).toBe(path.join(root, "src", "a.ts"));
+  expect(resolveInside(root, path.join(root, "b"))).toBe(path.join(root, "b"));
+  expect(resolveInside(root, "../etc/passwd")).toBeUndefined();
+  expect(resolveInside(root, path.resolve("etc", "passwd"))).toBeUndefined();
+  expect(resolveInside(root, "a\0b")).toBeUndefined();
+  expect(toRelative(root, path.join(root, "src", "a.ts"))).toBe("src/a.ts");
 });
 
 test("the chat page uses a strict policy and escapes values", () => {
