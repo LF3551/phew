@@ -38,6 +38,18 @@ async function script(data) {
   if (!data.tools || data.tools.length === 0) {
     if (/side question/.test(messages[0].content)) return { content: "BTW-ANSWER" };
     if (/summarize a coding conversation/.test(messages[0].content)) return { content: "## Summary\nEarlier work." };
+    if (/write a handoff note/.test(messages[0].content))
+      return {
+        content: JSON.stringify({
+          title: "Integration handoff",
+          status: "in-progress",
+          summary: "math.js was fixed.",
+          decisions: [{ id: "D1", text: "Use + in add — the check expects a sum", status: "active" }],
+          deadEnds: ["Changing check.js"],
+          nextSteps: ["Run node check.js"],
+          preferences: ["Do not push without asking"],
+        }),
+      };
     return {
       content:
         "fix(math): add numbers instead of subtracting\n\nThe add function used minus.\n\nCo-authored-by: Robot <robot@example.com>",
@@ -290,8 +302,52 @@ async function run() {
     diagnostics.dispose();
     void secondFolder;
 
+    // 8. Handoff notes: journal, note, freshness, /continue, and the AGENTS.md pointer.
+    fs.writeFileSync(file, "exports.add = (a, b) => a - b;\n");
+    sessions.newSession();
+    const worker = sessions.active;
+    await worker.run({ text: "Make node check.js pass.", kind: "fix", mode: "code" });
+    const notePath = await worker.writeHandoff(false);
+    assert.match(notePath ?? "", /^\.phew\/handoff\/.+-integration-handoff-.+\.md$/, "the note has a readable name");
+    const latest = fs.readFileSync(path.join(mainFolder, ".phew", "handoff", "LATEST.md"), "utf8");
+    assert.match(latest, /^---\nschema: "phew-handoff\/1"/);
+    assert.match(latest, /# Handoff: Integration handoff/);
+    assert.match(latest, /\*\*D1\*\* Use \+ in add/);
+    assert.match(latest, /- `math\.js`/, "the changed file comes from the journal");
+    assert.match(latest, /## Dead ends: do not repeat\n\n- Changing check\.js/);
+    const ignore = fs.readFileSync(path.join(mainFolder, ".phew", ".gitignore"), "utf8");
+    assert.match(ignore, /^sessions\/$/m);
+    assert.match(ignore, /^handoff\/$/m);
+    const journal = fs.readFileSync(path.join(mainFolder, ".phew", "sessions", worker.id, "journal.jsonl"), "utf8");
+    assert.match(journal, /"t":"tool","at":\d+,"name":"edit_file"/);
+    for (let index = 0; index < 40 && !sessions.state().handoff; index++) await delay(50);
+    assert.equal(sessions.state().handoff?.title, "Integration handoff", "the welcome screen offers to continue");
+
+    // Someone changes the code after the note. /continue notices it.
+    fs.writeFileSync(file, "exports.add = (a, b) => b + a;\n");
+    sessions.newSession();
+    const next = sessions.active;
+    const before = requests.length;
+    await next.submit("/continue");
+    const continued = requests.slice(before).find((item) => item.tools?.length > 0);
+    const firstUser = continued.messages.find((item) => item.role === "user").content;
+    assert.match(firstUser, /Continue the work from the handoff note `\.phew\/handoff\/.+\.md`/);
+    assert.match(firstUser, /This file changed after the note: `math\.js`/);
+    assert.ok(
+      next.transcript.all().some((item) => item.type === "notice" && /math\.js/.test(item.text)),
+      "the user sees that the code changed",
+    );
+    assert.equal(next.title, "Integration handoff");
+
+    await vscode.commands.executeCommand("phew.updateAgentsFile");
+    const agents = fs.readFileSync(path.join(mainFolder, "AGENTS.md"), "utf8");
+    assert.match(
+      agents,
+      /<!-- phew:handoff:begin -->[\s\S]*\.phew\/handoff\/LATEST\.md[\s\S]*<!-- phew:handoff:end -->/,
+    );
+
     console.log(
-      "PHEW_INTEGRATION_OK: fix, review, commit, checkpoint, ask_user, skills, MCP HTTP, multi-root, plan, queue, btw, parallel chats, rename, approvals, context, Phew it!",
+      "PHEW_INTEGRATION_OK: fix, review, commit, checkpoint, ask_user, skills, MCP HTTP, multi-root, plan, queue, btw, parallel chats, rename, approvals, context, Phew it!, handoff",
     );
   } finally {
     server.close();

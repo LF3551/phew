@@ -166,6 +166,7 @@ export class SessionManager implements vscode.Disposable {
         language: settings.assistant.language,
       },
       onboarding: !this.deps.context.globalState.get<boolean>("phew.assistantIntroduced"),
+      handoff: session && settings.handoff.enabled ? this.deps.handoffs.latest(session.root.uri.fsPath) : undefined,
       showThinking: settings.showThinking,
       pinned: view?.pinnedId !== undefined,
     };
@@ -424,6 +425,18 @@ export class SessionManager implements vscode.Disposable {
       );
       if (answer !== "Remove") return;
       session.stop();
+      // Keep what the agent learned: the note moves to the main repository before the folder is removed.
+      const note = await session.writeHandoff(false).catch(() => undefined);
+      if (note) {
+        try {
+          await this.deps.handoffs.ensureGitignore(info.repository);
+          await fs.promises.mkdir(path.join(info.repository, ".phew", "handoff"), { recursive: true });
+          await fs.promises.copyFile(path.join(info.path, note), path.join(info.repository, note));
+          this.deps.log.info(`Handoff of the worktree kept in ${path.join(info.repository, note)}.`);
+        } catch (error) {
+          this.deps.log.warn(`Could not keep the handoff of the worktree: ${String(error)}`);
+        }
+      }
       await git(info.repository, ["worktree", "remove", "--force", info.path]);
       await git(info.repository, ["branch", "-D", info.branch]);
       this.deps.log.info(`[audit] worktree removed: ${info.path}`);

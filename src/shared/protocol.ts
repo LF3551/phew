@@ -52,6 +52,13 @@ export interface ViewState {
   };
   /** True until the user names the assistant or skips the introduction. */
   readonly onboarding: boolean;
+  /** The latest handoff note of the workspace, for "Continue where you left off". */
+  readonly handoff?: {
+    readonly path: string;
+    readonly title: string;
+    readonly status: string;
+    readonly created: string;
+  };
   readonly showThinking: boolean;
   /** True when this view shows one fixed chat, for example in an editor tab. */
   readonly pinned: boolean;
@@ -122,6 +129,7 @@ export type HostMessage = (
       readonly name: string;
     }
   | { readonly type: "showOnboarding" }
+  | { readonly type: "handoff"; readonly path: string; readonly manual: boolean }
   | {
       readonly type: "tool";
       readonly id: string;
@@ -220,6 +228,7 @@ export type WebviewMessage =
       readonly language: string;
     }
   | { readonly type: "skipOnboarding" }
+  | { readonly type: "continueHandoff"; readonly path?: string }
   | { readonly type: "showWrapped"; readonly period: "week" | "month" }
   | { readonly type: "saveImage"; readonly dataUrl: string; readonly fileName: string };
 
@@ -264,6 +273,11 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
         language: text("language", 40),
       };
     }
+    case "continueHandoff":
+      if (message.path === undefined) return { type: "continueHandoff" };
+      return typeof message.path === "string" && /^\.phew\/handoff\/[\w.-]{1,120}\.md$/.test(message.path)
+        ? { type: "continueHandoff", path: message.path }
+        : undefined;
     case "showWrapped":
       return message.period === "week" || message.period === "month"
         ? { type: "showWrapped", period: message.period }

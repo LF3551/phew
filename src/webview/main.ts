@@ -53,7 +53,8 @@ const thoughts = new Map<string, { element: HTMLDetailsElement; body: HTMLElemen
 const tools = new Map<string, HTMLDetailsElement>();
 const approvals = new Map<string, HTMLElement>();
 let attachments: { attachment: Attachment; label: string }[] = [];
-let mentionItems: MentionItem[] = [];
+type MenuItem = MentionItem | { readonly label: string; readonly detail: string; readonly command: string };
+let mentionItems: MenuItem[] = [];
 let mentionIndex = 0;
 let mentionStart = -1;
 let sessions: SessionSummary[] = [];
@@ -260,9 +261,47 @@ function applyAssistant(next: ViewState): void {
   }
 }
 
+let resumeKey = "";
+
+/** "Continue where you left off" on the welcome screen, from the latest handoff note. */
+function renderResume(next: ViewState): void {
+  const card = $("resumeCard");
+  const key = next.handoff ? `${next.handoff.path}|${next.handoff.created}|${next.handoff.title}` : "";
+  if (key === resumeKey) return;
+  resumeKey = key;
+  card.hidden = !next.handoff;
+  if (!next.handoff) {
+    card.replaceChildren();
+    return;
+  }
+  const status =
+    { "in-progress": "In progress", done: "Done", blocked: "Blocked" }[next.handoff.status] ?? next.handoff.status;
+  const text = element("div", "resume-text");
+  text.append(
+    element("small", undefined, "Continue where you left off"),
+    element("strong", undefined, next.handoff.title),
+    element(
+      "span",
+      "resume-meta",
+      `${status} · ${((when) => (when === "now" ? "just now" : `${when} ago`))(relativeTime(Date.parse(next.handoff.created)))}`,
+    ),
+  );
+  const open = element("button", "link", "Read the note");
+  open.type = "button";
+  const path = next.handoff.path;
+  open.addEventListener("click", () => vscode.postMessage({ type: "openFile", path }));
+  const go = element("button", "primary", "Continue");
+  go.type = "button";
+  go.addEventListener("click", () => vscode.postMessage({ type: "continueHandoff" }));
+  const actions = element("div", "resume-actions");
+  actions.append(open, go);
+  card.replaceChildren(text, actions);
+}
+
 function applyState(next: ViewState): void {
   state = next;
   applyAssistant(next);
+  renderResume(next);
   applyAppearance(next);
   $("titleText").textContent = next.title;
   const worktree = $("worktree");
@@ -700,7 +739,26 @@ function currentMention(): string | undefined {
   return match[2];
 }
 
-function showMentions(items: MentionItem[]): void {
+const slashCommands = [
+  { command: "/continue", detail: "Continue from the latest handoff note" },
+  { command: "/handoff", detail: "Write a handoff note so any agent can continue" },
+  { command: "/btw", detail: "Ask a side question while the agent works" },
+  { command: "/goal", detail: "Set the goal of this chat" },
+  { command: "/compact", detail: "Summarize the chat to free context" },
+];
+
+/** Shows the slash commands while the input starts with "/" and has no space yet. */
+function slashMenu(): boolean {
+  const match = /^\/(\w*)$/.exec(prompt.value.slice(0, prompt.selectionStart));
+  if (!match || prompt.value.includes(" ")) return false;
+  const items = slashCommands
+    .filter((item) => item.command.slice(1).startsWith(match[1].toLowerCase()))
+    .map((item) => ({ label: item.command, detail: item.detail, command: item.command }));
+  showMentions(items);
+  return items.length > 0;
+}
+
+function showMentions(items: MenuItem[]): void {
   mentionItems = items;
   mentionIndex = 0;
   mentionsBox.hidden = items.length === 0;
@@ -727,6 +785,13 @@ function renderMentions(): void {
 function chooseMention(index: number): void {
   const item = mentionItems[index];
   if (!item) return;
+  if ("command" in item) {
+    prompt.value = `${item.command} `;
+    prompt.selectionStart = prompt.selectionEnd = prompt.value.length;
+    showMentions([]);
+    prompt.focus();
+    return;
+  }
   const end = prompt.selectionStart;
   prompt.value = `${prompt.value.slice(0, mentionStart)}${prompt.value.slice(end)}`;
   prompt.selectionStart = prompt.selectionEnd = mentionStart;
@@ -789,6 +854,7 @@ function renderPanel(): void {
 
 function relativeTime(at: number): string {
   const minutes = Math.round((Date.now() - at) / 60_000);
+  if (!Number.isFinite(minutes)) return "";
   if (minutes < 1) return "now";
   if (minutes < 60) return `${minutes} min`;
   const hours = Math.round(minutes / 60);
@@ -891,6 +957,16 @@ function handle(message: HostMessage): void {
         (next) => vscode.postMessage(next),
       );
       break;
+    case "handoff": {
+      const node = element("p", "notice handoff-note");
+      node.append(element("span", undefined, message.manual ? "Handoff note saved: " : "Handoff note updated: "));
+      const link = element("button", "link", message.path);
+      link.type = "button";
+      link.addEventListener("click", () => vscode.postMessage({ type: "openFile", path: message.path }));
+      node.append(link);
+      append(node);
+      break;
+    }
     case "showOnboarding":
       showAssistantCard(state?.assistant, false, (next) => vscode.postMessage(next));
       break;
@@ -1005,6 +1081,7 @@ prompt.addEventListener("keydown", (event) => {
 let mentionTimer: ReturnType<typeof setTimeout> | undefined;
 prompt.addEventListener("input", () => {
   historyPosition = -1;
+  if (slashMenu()) return;
   const query = currentMention();
   if (query === undefined) {
     showMentions([]);

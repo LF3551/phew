@@ -36,20 +36,26 @@ export function splitForCompaction(
 
 const maximumTranscriptForSummary = 120_000;
 
-/** The request that asks the model to summarize the older part of a conversation. */
-export function buildCompactionMessages(older: readonly ChatMessage[]): ChatMessage[] {
+/** A plain-text transcript of a conversation for summaries. Long transcripts keep their end. */
+export function conversationTranscript(
+  messages: readonly ChatMessage[],
+  maximum = maximumTranscriptForSummary,
+): string {
   const lines: string[] = [];
-  for (const message of older) {
+  for (const message of messages) {
     if (message.role === "user") lines.push(`USER: ${message.content}`);
     else if (message.role === "assistant") {
       if (message.content.trim()) lines.push(`ASSISTANT: ${message.content}`);
       for (const call of message.toolCalls ?? []) lines.push(`TOOL CALL ${call.name}: ${call.arguments.slice(0, 300)}`);
     } else if (message.role === "tool") lines.push(`TOOL RESULT: ${message.content.slice(0, 800)}`);
   }
-  let transcript = lines.join("\n");
-  if (transcript.length > maximumTranscriptForSummary) {
-    transcript = `[Earlier part omitted]\n${transcript.slice(-maximumTranscriptForSummary)}`;
-  }
+  const transcript = lines.join("\n");
+  return transcript.length > maximum ? `[Earlier part omitted]\n${transcript.slice(-maximum)}` : transcript;
+}
+
+/** The request that asks the model to summarize the older part of a conversation. */
+export function buildCompactionMessages(older: readonly ChatMessage[]): ChatMessage[] {
+  const transcript = conversationTranscript(older);
   return [
     {
       role: "system",

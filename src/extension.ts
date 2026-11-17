@@ -11,6 +11,7 @@ import { CodeIndexManager } from "./host/codeIndexManager";
 import { describeResult, runShellCommand } from "./host/commandRunner";
 import { CommitAssistant } from "./host/commitAssistant";
 import { CompletionProvider, NextEditPredictor } from "./host/completions";
+import { HandoffService } from "./host/handoffs";
 import { McpManager } from "./host/mcpManager";
 import { MemoryStore } from "./host/memoryStore";
 import { ModelManager } from "./host/models";
@@ -78,8 +79,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<PhewTe
       });
   });
 
+  const handoffs = new HandoffService(context.workspaceState, log, () => sessions?.postState());
   const manager = new SessionManager(
-    { context, log, diffs, mcp, stats, models, reviews, index, memory, skills, terminal },
+    { context, log, diffs, mcp, stats, models, reviews, index, memory, skills, terminal, handoffs },
     (running) => {
       updateStatus();
       panels?.refreshTitles();
@@ -239,6 +241,47 @@ export async function activate(context: vscode.ExtensionContext): Promise<PhewTe
       ),
     ),
     vscode.commands.registerCommand("phew.showLog", () => log.show()),
+    vscode.commands.registerCommand("phew.writeHandoff", async () => {
+      await view.reveal();
+      const session = manager.active ?? manager.newSession();
+      await session?.writeHandoff(true);
+    }),
+    vscode.commands.registerCommand("phew.continueFromHandoff", async (relative?: unknown) => {
+      const root = vscode.workspace.workspaceFolders?.[0];
+      if (!root) return;
+      let target = typeof relative === "string" ? relative : undefined;
+      if (!target) {
+        const notes = await handoffs.list(root.uri.fsPath);
+        if (notes.length === 0) {
+          void vscode.window.showInformationMessage(
+            "There is no handoff note yet. Use /handoff in a chat to write one.",
+          );
+          return;
+        }
+        const picked = await vscode.window.showQuickPick(
+          notes.map((note) => ({
+            label: note.title,
+            description: `${note.status} · ${new Date(note.created).toLocaleString()}`,
+            detail: note.path,
+            path: note.path,
+          })),
+          { title: "Continue from a handoff note", placeHolder: "Choose the work to continue" },
+        );
+        if (!picked) return;
+        target = picked.path;
+      }
+      await view.reveal();
+      const session = manager.newSession();
+      await session?.continueFrom(target);
+    }),
+    vscode.commands.registerCommand("phew.updateAgentsFile", async () => {
+      const root = vscode.workspace.workspaceFolders?.[0];
+      if (!root || !vscode.workspace.isTrusted) return;
+      const written = await handoffs.writeAgentsPointer(root.uri.fsPath);
+      void vscode.window.showInformationMessage(
+        written.length > 0 ? `Updated ${written.join(", ")}.` : "AGENTS.md already points to the handoff notes.",
+      );
+    }),
     vscode.commands.registerCommand("phew.editAssistant", async () => {
       await view.reveal();
       view.post({ type: "showOnboarding" });

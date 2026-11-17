@@ -41,6 +41,12 @@ export interface Settings {
   readonly sound: "off" | "unfocused" | "always";
   readonly soundStyle: "phew" | "chime";
   readonly assistant: Assistant;
+  readonly handoff: {
+    readonly enabled: boolean;
+    readonly auto: "changes" | "always" | "manual";
+    readonly share: "local" | "commit";
+    readonly agentsFile: "ask" | "always" | "never";
+  };
   readonly skillsEnabled: boolean;
   readonly skillPaths: readonly string[];
   readonly celebrate: boolean;
@@ -152,6 +158,12 @@ export function readSettings(scope?: vscode.Uri): Settings {
     ),
     sound: oneOf(config.get("notifications.sound"), ["off", "unfocused", "always"] as const, "off"),
     soundStyle: oneOf(config.get("notifications.soundStyle"), ["phew", "chime"] as const, "phew"),
+    handoff: {
+      enabled: config.get<boolean>("handoff.enabled") !== false,
+      auto: oneOf(config.get("handoff.auto"), ["changes", "always", "manual"] as const, "changes"),
+      share: oneOf(config.get("handoff.share"), ["local", "commit"] as const, "local"),
+      agentsFile: oneOf(config.get("handoff.agentsFile"), ["ask", "always", "never"] as const, "ask"),
+    },
     assistant: parseAssistant({
       name: config.get("assistant.name"),
       avatar: config.get("assistant.avatar"),

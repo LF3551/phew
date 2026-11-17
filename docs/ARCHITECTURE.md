@@ -27,6 +27,8 @@ Pure TypeScript without the `vscode` module, so unit tests run in Node.js.
 | `review.ts` | Keep and undo of single hunks for the review in the editor. |
 | `worktree.ts` | Branch names, worktree folders, and `git worktree list` parsing. |
 | `compaction.ts` | Context estimates and the summary of older messages. |
+| `journal.ts`, `handoff.ts` | The session journal (facts) and handoff notes: the request to the model, rendering, freshness checks, and the `AGENTS.md` section. See [HANDOFF.md](HANDOFF.md). |
+| `persona.ts`, `achievements.ts`, `appearance.ts` | The assistant persona, local achievements and Wrapped, and the chat appearance. |
 | `skills.ts` | `SKILL.md` parsing and the skills prompt. |
 | `plan.ts` | The checklist and the questions of the agent. |
 | `roots.ts` | Paths across the folders of a multi-root workspace. |
@@ -65,6 +67,7 @@ Pure TypeScript without the `vscode` module, so unit tests run in Node.js.
 | `commitAssistant.ts`, `git.ts` | Commit messages, commits, Git identity, and Git commands without a shell. |
 | `completions.ts` | Inline completions and next edit prediction. |
 | `memoryStore.ts`, `attachments.ts` | Project memory and attachment resolution with the `@` menu. |
+| `handoffs.ts` | Writes journals and notes in `.phew/`, keeps `.phew/.gitignore`, reads Git state and file fingerprints, and asks before it changes `AGENTS.md`. |
 | `models.ts`, `vscodeLmClient.ts` | Model profiles, setup, tests, and VS Code language models. |
 | `settingsPanel.ts` | The settings page, generated from the configuration schema. |
 | `toolHost.ts` | Executes tools inside the workspace with path, secret, trust, and command checks. |

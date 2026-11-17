@@ -157,6 +157,11 @@ class ChatController implements ChatViewHandle {
       case "saveAssistant":
         await sessions.introduceAssistant(message);
         return;
+      case "continueHandoff": {
+        const target = session?.isEmpty && !session.busy ? session : sessions.newSession();
+        await target?.continueFrom(message.path);
+        return;
+      }
       case "skipOnboarding":
         await sessions.introduceAssistant();
         return;

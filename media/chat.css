@@ -1847,3 +1847,54 @@ html body.style-compact .message .message-actions {
     transform: translate(-50%, -12px);
   }
 }
+
+/* Handoff */
+
+.resume-card {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 420px;
+  margin: 0 auto 16px;
+  padding: 10px 12px;
+  text-align: left;
+  background: color-mix(in srgb, var(--phew-accent) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--phew-accent) 45%, transparent);
+  border-radius: 10px;
+}
+
+.resume-card[hidden] {
+  display: none;
+}
+
+.resume-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.resume-text small,
+.resume-meta {
+  font-size: 0.85em;
+  color: var(--vscode-descriptionForeground);
+}
+
+.resume-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.notice.handoff-note {
+  color: var(--vscode-descriptionForeground);
+}
+
+.notice.handoff-note .link {
+  display: inline;
+  padding: 0;
+  font-size: inherit;
+  word-break: break-all;
+}

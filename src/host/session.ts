@@ -3,7 +3,7 @@ import * as vscode from "vscode";
 import { achievementList } from "../core/achievements";
 import { type AgentResult, runAgent, type VerificationResult } from "../core/agent";
 import type { Attachment } from "../core/attachments";
-import { type ChatMessage, type ModelClient, trimHistory, truncateMiddle } from "../core/chat";
+import { type ChatMessage, type ModelClient, type ToolCall, trimHistory, truncateMiddle } from "../core/chat";
 import { CheckpointStore } from "../core/checkpoints";
 import { decideCommand } from "../core/commandPolicy";
 import {
@@ -15,6 +15,7 @@ import {
 } from "../core/compaction";
 import { CostMeter, formatCost, formatTokens } from "../core/cost";
 import { titleFromText } from "../core/export";
+import { exitCodeOf, type JournalEvent } from "../core/journal";
 import { canChange, findMode, type Mode, type ModeDefinition } from "../core/modes";
 import { personaPrompt } from "../core/persona";
 import { emptyPlan, type Plan, planPrompt } from "../core/plan";
@@ -29,6 +30,7 @@ import { ChangeManager, type DiffContentProvider } from "./changes";
 import type { CodeIndexManager } from "./codeIndexManager";
 import { describeResult, runShellCommand } from "./commandRunner";
 import type { StoredConversation } from "./conversationStore";
+import type { HandoffService } from "./handoffs";
 import type { McpManager } from "./mcpManager";
 import type { MemoryStore } from "./memoryStore";
 import type { ModelManager } from "./models";
@@ -49,6 +51,8 @@ export interface TaskRequest {
   readonly kind: "chat" | "fix";
   readonly mode?: Mode;
   readonly attachments?: readonly Attachment[];
+  /** The title of a new chat. Defaults to the start of the text. */
+  readonly title?: string;
 }
 
 export interface FileClaimRegistry {
@@ -71,6 +75,7 @@ export interface SessionDependencies {
   readonly terminal: TerminalWatcher;
   readonly modes: () => readonly ModeDefinition[];
   readonly claims: FileClaimRegistry;
+  readonly handoffs: HandoffService;
   /** Delivers a message of this session to the views that show it. */
   readonly emit: (session: AgentSession, message: HostMessage) => void;
   readonly onChange: (session: AgentSession) => void;
@@ -332,11 +337,14 @@ export class AgentSession {
    * compacts the history. While a task runs, other messages wait in the queue and reach the agent at its next step.
    */
   async submit(text: string, attachments: readonly Attachment[] = [], interrupt = false): Promise<void> {
-    const command = /^\/(btw|goal|compact)\b\s*([\s\S]*)$/i.exec(text.trim());
+    const command = /^\/(btw|goal|compact|handoff|continue)\b\s*([\s\S]*)$/i.exec(text.trim());
     if (command) {
       const [, name, rest] = command;
-      if (name.toLowerCase() === "btw") await this.btw(rest.trim() || "What are you doing right now?");
-      else if (name.toLowerCase() === "goal") this.setGoal(rest.trim());
+      const lower = name.toLowerCase();
+      if (lower === "btw") await this.btw(rest.trim() || "What are you doing right now?");
+      else if (lower === "goal") this.setGoal(rest.trim());
+      else if (lower === "handoff") await this.writeHandoff(true);
+      else if (lower === "continue") await this.continueFrom(rest.trim() || undefined);
       else await this.compactNow();
       return;
     }
@@ -385,8 +393,9 @@ export class AgentSession {
 
     const checkpointId = `cp_${Date.now().toString(36)}_${++this.counter}`;
     this.checkpoints.begin(checkpointId, request.display ?? request.text);
-    if (this.history.length === 0) this.title = titleFromText(request.display ?? request.text);
+    if (this.history.length === 0) this.title = request.title ?? titleFromText(request.display ?? request.text);
     await this.pushUser(request.text, request.attachments ?? [], settings, checkpointId, request.display);
+    this.journal({ t: "user", at: Date.now(), text: request.display ?? request.text });
 
     const meter = new CostMeter(profile.price, settings.budget);
     this.verifyAttempts = 0;
@@ -498,6 +507,125 @@ export class AgentSession {
     await this.restore(checkpointId, files);
   }
 
+  private handoffHint(settings: Settings): string {
+    if (!settings.handoff.enabled) return "";
+    const latest = this.deps.handoffs.latest(this.root.uri.fsPath);
+    if (!latest || latest.status === "done" || latest.session === this.id) return "";
+    return `An earlier session left a handoff note: \`${latest.path}\` ("${latest.title}", ${latest.status}, ${latest.created.slice(0, 10)}). If the request of the user continues that work, read the note first and check it against the code.`;
+  }
+
+  private journal(event: JournalEvent): void {
+    this.deps.handoffs.record(this.root.uri.fsPath, this.id, this.title, event);
+  }
+
+  private journalTool(call: ToolCall, content: string): void {
+    let args: Record<string, unknown> = {};
+    try {
+      args = JSON.parse(call.arguments || "{}") as Record<string, unknown>;
+    } catch {
+      // Keep the summary only.
+    }
+    const ok = !content.startsWith("Error:");
+    const file =
+      (call.name === "edit_file" || call.name === "write_file") && typeof args.path === "string"
+        ? args.path
+        : undefined;
+    const command = call.name === "run_command" && typeof args.command === "string" ? args.command : undefined;
+    const exit = command !== undefined ? exitCodeOf(content) : undefined;
+    this.journal({
+      t: "tool",
+      at: Date.now(),
+      name: call.name,
+      summary: ToolHost.summarize(call),
+      ok: command !== undefined ? ok && (exit === undefined || exit === 0) : ok,
+      ...(file ? { file } : {}),
+      ...(command !== undefined ? { command, exit } : {}),
+    });
+  }
+
+  private handoffWriting: Promise<string | undefined> | undefined;
+
+  /** Writes a handoff note for this chat. Manual notes are opened in the editor. */
+  async writeHandoff(manual: boolean): Promise<string | undefined> {
+    const settings = readSettings(this.root.uri);
+    if (!settings.handoff.enabled) {
+      if (manual) this.notice("info", "Handoff notes are turned off in the settings (Phew › Handoff).");
+      return undefined;
+    }
+    if (!vscode.workspace.isTrusted) {
+      if (manual) this.notice("warning", "Phew writes handoff notes only in trusted workspaces.");
+      return undefined;
+    }
+    if (manual && this.history.length === 0) {
+      this.notice("info", "There is nothing to hand off yet.");
+      return undefined;
+    }
+    const profile = this.profile();
+    if (!profile) return undefined;
+    if (this.handoffWriting) return this.handoffWriting;
+    if (manual) this.notice("info", "Writing a handoff note…");
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 120_000);
+    this.handoffWriting = (async () => {
+      try {
+        const relative = await this.deps.handoffs.write(
+          {
+            id: this.id,
+            title: this.title,
+            root: this.root.uri.fsPath,
+            history: this.history,
+            plan: this.currentPlan,
+            client: await this.deps.models.client(profile),
+          },
+          controller.signal,
+        );
+        if (relative) {
+          this.emit({ type: "handoff", path: relative, manual });
+          if (manual)
+            await vscode.window.showTextDocument(vscode.Uri.joinPath(this.root.uri, relative), { preview: true });
+        }
+        return relative;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.deps.log.warn(`Could not write the handoff note: ${message}`);
+        if (manual) this.notice("warning", `Could not write the handoff note: ${message}`);
+        return undefined;
+      } finally {
+        clearTimeout(timer);
+        this.handoffWriting = undefined;
+      }
+    })();
+    return this.handoffWriting;
+  }
+
+  /** Starts a task that continues the work of a handoff note. */
+  async continueFrom(relative?: string): Promise<void> {
+    if (this.busy) {
+      this.notice("info", "Wait until the current task ends, or stop it first.");
+      return;
+    }
+    const prepared = await this.deps.handoffs.prepareContinue(this.root.uri.fsPath, relative);
+    if (!prepared) {
+      this.notice(
+        "info",
+        relative
+          ? `${relative} is not a Phew handoff note.`
+          : "There is no handoff note yet. Use /handoff in a chat to write one.",
+      );
+      return;
+    }
+    if (prepared.meta.goal && !this.currentPlan.goal) this.setGoal(prepared.meta.goal);
+    this.journal({ t: "continued", at: Date.now(), from: prepared.path, narrative: prepared.narrative });
+    if (!prepared.state.fresh)
+      this.notice("warning", `Since the handoff note: ${prepared.state.notes.join(" ")} The agent checks these first.`);
+    await this.run({
+      text: prepared.prompt,
+      kind: "chat",
+      display: `Continue: ${prepared.meta.title} (${prepared.path})`,
+      title: prepared.meta.title,
+    });
+  }
+
   /** Restores the first checkpoint without a confirmation. Only the integration tests use it. */
   async restoreFirstForTest(): Promise<void> {
     const first = this.checkpoints.list()[0];
@@ -580,6 +708,7 @@ export class AgentSession {
     this.lastInputTokens = 0;
     const after = estimateTokens(this.history);
     this.notice("info", `Compacted the chat from about ${formatTokens(before)} to ${formatTokens(after)} tokens.`);
+    if (readSettings(this.root.uri).handoff.auto !== "manual") void this.writeHandoff(false);
     this.deps.log.info(`Chat compacted: ${before} -> ${after} estimated tokens.`);
     return true;
   }
@@ -632,6 +761,7 @@ export class AgentSession {
     });
     const extra = [
       personaPrompt(settings.assistant),
+      this.handoffHint(settings),
       roots.multi ? roots.describe() : "",
       skillsPrompt(skills),
       planPrompt(this.currentPlan),
@@ -714,6 +844,7 @@ export class AgentSession {
           this.emit({ type: "tool", id, name: call.name, summary: ToolHost.summarize(call), status: "running" });
         },
         onToolEnd: (call, toolResult) => {
+          this.journalTool(call, toolResult.content);
           this.emit({
             type: "tool",
             id: toolIds.get(call.id) ?? call.id,
@@ -729,6 +860,13 @@ export class AgentSession {
         },
         onVerify: (attempt, verification) => {
           this.verifyAttempts = attempt;
+          this.journal({
+            t: "verify",
+            at: Date.now(),
+            command: settings.verifyCommand,
+            passed: verification.passed,
+            attempt,
+          });
           this.emit({
             type: "verify",
             attempt,
@@ -765,7 +903,15 @@ export class AgentSession {
   ): Promise<void> {
     const status = aborted ? "aborted" : (result?.status ?? "error");
     const success = status === "done";
-    const filesChanged = this.checkpoints.list().at(-1)?.files.size ?? 0;
+    const changedFiles = [...(this.checkpoints.list().at(-1)?.files.keys() ?? [])];
+    const filesChanged = changedFiles.length;
+    this.journal({ t: "task", at: Date.now(), status, files: changedFiles, message: result?.message?.slice(0, 500) });
+    if (
+      !aborted &&
+      settings.handoff.enabled &&
+      (settings.handoff.auto === "always" || (settings.handoff.auto === "changes" && filesChanged > 0))
+    )
+      void this.writeHandoff(false);
     const bugFixed = success && filesChanged > 0 && (request.kind === "fix" || result?.verified === true);
     await this.deps.stats.record({ success, bugFixed, filesChanged, tokens: meter.tokens, cost: meter.cost ?? 0 });
     const fresh = await this.deps.stats.recordTask({

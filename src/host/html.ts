@@ -91,6 +91,7 @@ export function renderChatHtml(options: ChatHtmlOptions): string {
       <div class="logo" id="welcomeAvatar"></div>
       <h1 id="welcomeName">Phew</h1>
       <p class="tagline" id="welcomeTagline">Bug fixed. Phew.</p>
+      <div class="resume-card" id="resumeCard" hidden></div>
       <ul class="tips">
         <li>Ask about your code, or describe a change.</li>
         <li>Type <kbd>@</kbd> to attach files, problems, Git changes, or the terminal.</li>

@@ -2,7 +2,7 @@
   "name": "phew",
   "displayName": "Phew",
   "description": "Bug fixed. Phew. Open-source AI coding agent for VS Code: one-click fixes, review in the editor, checkpoints, chat history, worktree agents, and any model.",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "publisher": "alekseialeinikov",
   "author": {
     "name": "Aleksei Aleinikov",
@@ -360,6 +360,23 @@
         "title": "Phew Wrapped: Your Week and Achievements",
         "category": "Phew",
         "icon": "$(star)"
+      },
+      {
+        "command": "phew.writeHandoff",
+        "title": "Write Handoff Note",
+        "category": "Phew",
+        "icon": "$(note)"
+      },
+      {
+        "command": "phew.continueFromHandoff",
+        "title": "Continue from Handoff Note…",
+        "category": "Phew",
+        "icon": "$(debug-continue)"
+      },
+      {
+        "command": "phew.updateAgentsFile",
+        "title": "Point Other Agents to Handoff Notes (AGENTS.md)",
+        "category": "Phew"
       }
     ],
     "menus": {
@@ -448,6 +465,16 @@
           "command": "phew.editAssistant",
           "when": "view == phew.chatView",
           "group": "3_more@0"
+        },
+        {
+          "command": "phew.continueFromHandoff",
+          "when": "view == phew.chatView",
+          "group": "2_agent@5"
+        },
+        {
+          "command": "phew.writeHandoff",
+          "when": "view == phew.chatView",
+          "group": "2_agent@6"
         }
       ],
       "editor/context": [
@@ -1338,6 +1365,63 @@
             },
             "default": [],
             "markdownDescription": "Extra folders with skills. `~` means the home folder."
+          }
+        }
+      },
+      {
+        "title": "Handoff",
+        "properties": {
+          "phew.handoff.enabled": {
+            "type": "boolean",
+            "default": true,
+            "order": 0,
+            "markdownDescription": "Keep a journal of each chat in `.phew/sessions/` and write handoff notes in `.phew/handoff/`, so that Phew or any other agent can continue the work. The journal never leaves your computer."
+          },
+          "phew.handoff.auto": {
+            "type": "string",
+            "enum": [
+              "changes",
+              "always",
+              "manual"
+            ],
+            "enumDescriptions": [
+              "After a task that changed files, and when the chat is compacted.",
+              "After every task.",
+              "Only with /handoff."
+            ],
+            "default": "changes",
+            "order": 1,
+            "description": "When Phew writes a handoff note. Each note uses one short model request."
+          },
+          "phew.handoff.share": {
+            "type": "string",
+            "enum": [
+              "local",
+              "commit"
+            ],
+            "enumDescriptions": [
+              "Notes stay on this computer: .phew/handoff/ is in .phew/.gitignore.",
+              "Notes can be committed, so teammates and their agents can continue the work. Journals always stay local."
+            ],
+            "default": "local",
+            "order": 2,
+            "description": "Whether handoff notes are kept out of Git."
+          },
+          "phew.handoff.agentsFile": {
+            "type": "string",
+            "enum": [
+              "ask",
+              "always",
+              "never"
+            ],
+            "enumDescriptions": [
+              "Ask once per workspace.",
+              "Always keep the section up to date.",
+              "Never change these files."
+            ],
+            "default": "ask",
+            "order": 3,
+            "markdownDescription": "Add a short section to `AGENTS.md` (and to `CLAUDE.md` and `GEMINI.md` when they exist) that points other agents to the latest handoff note. Phew changes only its own section."
           }
         }
       },

@@ -51,6 +51,13 @@
 - **Know the cost.** Tokens and cost per task, with optional budget limits.
 - **Open source.** Apache 2.0, no telemetry.
 
+## Continue anywhere
+
+- **Handoff notes.** After each task that changes files, Phew writes a short note in `.phew/handoff/`: the goal, decisions and why, dead ends not to repeat, next steps, and how to verify. Changed files, commands, and check results come from a journal, not from the model.
+- **Any agent can continue.** With your consent, Phew points `AGENTS.md` (and `CLAUDE.md` and `GEMINI.md`) to the latest note, so Codex, Copilot, Cursor, Claude Code, and others pick up where Phew stopped.
+- **Knows what changed.** `/continue` compares the note with the code: new commits, another branch, or files that someone changed after the note. The agent rereads those first.
+- **Open format.** Plain Markdown with a small header. See [docs/HANDOFF.md](docs/HANDOFF.md).
+
 ## Make it yours
 
 - **Your assistant.** Give it a name, a look, and a character: Partner, Mentor, Quiet, Strict reviewer, or your own words. Tell it how to call you and which language to answer in.
