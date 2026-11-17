@@ -1,6 +1,12 @@
 import * as vscode from "vscode";
 import type { ModelClient } from "../core/chat";
-import { createHttpClient, listModels, type ModelInfo, testConnection } from "../providers/factory";
+import {
+  type ConnectionTestResult,
+  createHttpClient,
+  listModels,
+  type ModelInfo,
+  testConnection,
+} from "../providers/factory";
 import { apiKeySecretName, type ProviderPreset, providerPresets, validateBaseUrl } from "../providers/presets";
 import {
   type ModelProfile,
@@ -13,6 +19,23 @@ import { readSettings } from "./settings";
 import { listVsCodeModels, VsCodeLanguageModelClient } from "./vscodeLmClient";
 
 const section = "phew";
+
+export interface ProviderStatus {
+  readonly id: string;
+  readonly label: string;
+  readonly group: string;
+  readonly description: string;
+  readonly needsKey: boolean;
+  readonly keyUrl?: string;
+  readonly keyEnv?: string;
+  readonly envFound: boolean;
+  readonly askBaseUrl?: string;
+  readonly baseUrl: string;
+  readonly modelHint: string;
+  /** For local servers and VS Code models: true when they are ready. */
+  readonly available?: boolean;
+  readonly note?: string;
+}
 
 export const providerNames: Readonly<Record<ModelProfile["provider"], string>> = {
   openai: "OpenAI-compatible",
@@ -61,6 +84,146 @@ export class ModelManager {
     return createHttpClient(profile, await this.apiKey(profile), fetch, readSettings().maxRetries);
   }
 
+  // A programmatic API for the settings page. It never shows quick picks or input boxes.
+
+  /** Facts about each provider for the setup page: env keys, local servers, and VS Code models. */
+  async detectProviders(): Promise<ProviderStatus[]> {
+    const vscodeModels = await listVsCodeModels().catch(() => []);
+    const local = async (url: string) => {
+      try {
+        const response = await fetch(`${url}/models`, { signal: AbortSignal.timeout(1500) });
+        if (!response.ok) return undefined;
+        const data = (await response.json()) as { data?: unknown[]; models?: unknown[] };
+        return (data.data ?? data.models ?? []).length;
+      } catch {
+        return undefined;
+      }
+    };
+    return Promise.all(
+      providerPresets.map(async (preset) => {
+        const status: ProviderStatus = {
+          id: preset.id,
+          label: preset.label,
+          group: preset.group,
+          description: preset.description,
+          needsKey: preset.needsKey,
+          keyUrl: preset.keyUrl,
+          keyEnv: preset.keyEnv,
+          envFound: !!(preset.keyEnv && process.env[preset.keyEnv]),
+          askBaseUrl: preset.askBaseUrl,
+          baseUrl: preset.baseUrl,
+          modelHint: preset.modelHint,
+        };
+        if (preset.provider === "vscode")
+          return { ...status, available: vscodeModels.length > 0, note: `${vscodeModels.length} models` };
+        if (preset.group === "Local") {
+          const count = await local(preset.baseUrl);
+          return {
+            ...status,
+            available: count !== undefined,
+            note: count === undefined ? "Not running" : `Running · ${count} models`,
+          };
+        }
+        return status;
+      }),
+    );
+  }
+
+  /** Builds a profile for a preset and the values from the setup page. */
+  draftProfile(
+    presetId: string,
+    options: { baseUrl?: string; apiKeyEnv?: string; model?: string; name?: string },
+  ): ModelProfile {
+    const preset = providerPresets.find((item) => item.id === presetId);
+    if (!preset) throw new Error("Unknown provider.");
+    const baseUrl = (options.baseUrl?.trim() || preset.baseUrl).replace(/\/+$/, "");
+    if (preset.provider !== "vscode") {
+      const error = validateBaseUrl(baseUrl);
+      if (error) throw new Error(error);
+    }
+    return {
+      id: "draft",
+      name: options.name?.trim() || preset.label,
+      provider: preset.provider,
+      baseUrl: preset.provider === "vscode" ? "" : baseUrl,
+      model: options.model ?? preset.modelHint,
+      auth: preset.auth,
+      apiKeyEnv: options.apiKeyEnv,
+      headers: preset.headers ?? {},
+      query: {},
+      extraBody: {},
+    };
+  }
+
+  /** Loads the models of a provider with a key that is not saved yet. */
+  async modelsFor(draft: ModelProfile, apiKey: string | undefined): Promise<ModelInfo[]> {
+    if (draft.provider === "vscode") return listVsCodeModels();
+    const key = apiKey || (draft.apiKeyEnv ? process.env[draft.apiKeyEnv] : undefined);
+    return listModels(draft, key, fetch, AbortSignal.timeout(20_000));
+  }
+
+  /** Saves a new profile, stores the key, makes it active, and tests it. */
+  async create(
+    draft: ModelProfile,
+    apiKey: string | undefined,
+    contextWindow?: number,
+  ): Promise<{ profile: ModelProfile; test: ConnectionTestResult }> {
+    const existing = this.profiles().profiles;
+    const name =
+      draft.name === providerPresets.find((item) => item.label === draft.name)?.label
+        ? `${draft.name} · ${draft.model}`
+        : draft.name;
+    const profile: ModelProfile = {
+      ...draft,
+      name,
+      id: uniqueId(
+        name,
+        existing.map((item) => item.id),
+      ),
+      ...(contextWindow ? { contextWindow } : {}),
+    };
+    if (apiKey?.trim()) await this.secrets.store(apiKeySecretName(profile.id), apiKey.trim());
+    await this.save([...existing, profile]);
+    await this.setActive(profile.id);
+    this.log.info(`Model added: ${profile.id} (${profile.provider} ${profile.model})`);
+    return { profile, test: await this.check(profile) };
+  }
+
+  /** Tests a profile and returns the result without a notification. */
+  async check(profile: ModelProfile): Promise<ConnectionTestResult> {
+    try {
+      return await testConnection(await this.client(profile), AbortSignal.timeout(60_000));
+    } catch (error) {
+      return {
+        ok: false,
+        toolCalling: false,
+        milliseconds: 0,
+        message: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  async hasKey(profile: ModelProfile): Promise<"saved" | "env" | "none"> {
+    if (await this.secrets.get(apiKeySecretName(profile.id))) return "saved";
+    return profile.apiKeyEnv && process.env[profile.apiKeyEnv] ? "env" : "none";
+  }
+
+  async setKey(id: string, key: string): Promise<void> {
+    if (key.trim()) await this.secrets.store(apiKeySecretName(id), key.trim());
+    else await this.secrets.delete(apiKeySecretName(id));
+  }
+
+  async update(id: string, changes: Partial<ModelProfile>): Promise<void> {
+    const profile = this.profiles().profiles.find((item) => item.id === id);
+    if (!profile) return;
+    await this.replace({ ...profile, ...changes, id: profile.id });
+  }
+
+  async delete(id: string): Promise<void> {
+    await this.secrets.delete(apiKeySecretName(id));
+    await this.save(this.profiles().profiles.filter((item) => item.id !== id));
+  }
+
   async setActive(id: string): Promise<void> {
     await vscode.workspace.getConfiguration(section).update("activeModel", id, vscode.ConfigurationTarget.Global);
   }
@@ -69,7 +232,7 @@ export class ModelManager {
   async switchModel(): Promise<void> {
     const { profiles } = this.profiles();
     if (profiles.length === 0) {
-      await this.addModel();
+      await vscode.commands.executeCommand("phew.addModel");
       return;
     }
     const active = this.active();
@@ -82,13 +245,12 @@ export class ModelManager {
         profile,
       })),
       { label: "", kind: vscode.QuickPickItemKind.Separator, action: "use" },
-      { label: "$(add) Add model…", action: "add" },
+      { label: "$(add) Connect another model…", action: "add" },
       { label: "$(settings-gear) Manage models…", action: "manage" },
     ];
     const pick = await vscode.window.showQuickPick(items, { title: "Phew: Switch model", placeHolder: "Model" });
     if (!pick) return;
-    if (pick.action === "add") await this.addModel();
-    else if (pick.action === "manage") await this.manage();
+    if (pick.action === "add" || pick.action === "manage") await vscode.commands.executeCommand("phew.addModel");
     else if (pick.profile) await this.setActive(pick.profile.id);
   }
 

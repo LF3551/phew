@@ -49,7 +49,7 @@
 ## Get started
 
 1. Open the **Phew** view in the activity bar, or press `Ctrl+Alt+P` (`Cmd+Alt+P` on macOS).
-2. Choose **Choose a model**. Phew loads the model list of the provider and tests the connection.
+2. Choose **Connect a model**. Click a provider, paste the key (or use the key from your environment), click **Load models**, pick a model, and click **Connect and test**.
 3. Ask a question or describe a change. Type `@` to attach context.
 4. Optional: set **Checks → Verify command**, for example `npm test`, in **Phew: Open Settings**.
 

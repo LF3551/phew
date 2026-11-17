@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import * as vscode from "vscode";
 import { describeCommitIdentity } from "../core/commit";
+import { providerPresets } from "../providers/presets";
 import type { CodeIndexManager } from "./codeIndexManager";
 import { gitIdentity } from "./git";
 import { escapeHtml } from "./html";
@@ -92,8 +93,121 @@ export class SettingsPanel implements vscode.Disposable {
     this.panel = panel;
   }
 
+  private post(message: unknown): void {
+    void this.panel?.webview.postMessage(message);
+  }
+
+  /** Model setup without quick picks: everything happens on the page. */
+  private async handleModels(message: Record<string, unknown>): Promise<boolean> {
+    const text = (key: string, max = 2000) =>
+      typeof message[key] === "string" && (message[key] as string).length <= max ? (message[key] as string) : undefined;
+    const requestId = text("requestId", 64);
+    const id = text("id", 64);
+    const profile = id ? this.models.profiles().profiles.find((item) => item.id === id) : undefined;
+    const draft = () => {
+      const preset = providerPresets.find((item) => item.id === text("presetId", 64));
+      if (!preset) throw new Error("Choose a provider.");
+      return this.models.draftProfile(preset.id, {
+        baseUrl: text("baseUrl"),
+        apiKeyEnv: message.useEnv === true ? preset.keyEnv : undefined,
+        model: text("model", 300),
+        name: text("name", 120),
+      });
+    };
+    try {
+      switch (message.type) {
+        case "providers":
+          this.post({ type: "providers", items: await this.models.detectProviders() });
+          return true;
+        case "loadModels": {
+          const models = await this.models.modelsFor(draft(), text("apiKey", 4000));
+          this.post({ type: "models", requestId, ok: true, models });
+          return true;
+        }
+        case "createModel": {
+          const contextWindow = typeof message.contextWindow === "number" ? message.contextWindow : undefined;
+          const result = await this.models.create(draft(), text("apiKey", 4000), contextWindow);
+          this.post({ type: "created", requestId, ok: true, id: result.profile.id, test: result.test });
+          await this.refresh();
+          return true;
+        }
+        case "testModel":
+          if (profile) this.post({ type: "testResult", id: profile.id, result: await this.models.check(profile) });
+          return true;
+        case "setKey":
+          if (profile) {
+            await this.models.setKey(profile.id, text("key", 4000) ?? "");
+            await this.refresh();
+            this.post({ type: "testResult", id: profile.id, result: await this.models.check(profile) });
+          }
+          return true;
+        case "removeModel":
+          if (profile) {
+            const answer = await vscode.window.showWarningMessage(
+              `Remove "${profile.name}" and its saved API key?`,
+              { modal: true },
+              "Remove",
+            );
+            if (answer === "Remove") await this.models.delete(profile.id);
+            await this.refresh();
+          }
+          return true;
+        case "updateModel": {
+          if (!profile) return true;
+          const field = text("field", 40);
+          const value = message.value;
+          const number = (min: number, max: number) =>
+            value === null || value === ""
+              ? undefined
+              : typeof value === "number" && value >= min && value <= max
+                ? value
+                : Number.NaN;
+          let changes: Partial<typeof profile> | undefined;
+          if (field === "name" && typeof value === "string" && value.trim())
+            changes = { name: value.trim().slice(0, 120) };
+          if (field === "model" && typeof value === "string" && value.trim()) changes = { model: value.trim() };
+          if (field === "temperature") changes = { temperature: number(0, 2) };
+          if (field === "maxTokens") changes = { maxTokens: number(1, 10_000_000) };
+          if (field === "contextWindow") changes = { contextWindow: number(1000, 100_000_000) };
+          if (field === "price" && (value === null || (typeof value === "object" && value !== null))) {
+            const price = value as { input?: unknown; output?: unknown } | null;
+            changes = {
+              price:
+                price &&
+                typeof price.input === "number" &&
+                typeof price.output === "number" &&
+                price.input >= 0 &&
+                price.output >= 0
+                  ? { input: price.input, output: price.output }
+                  : undefined,
+            };
+          }
+          if (!changes || Object.values(changes).some((item) => typeof item === "number" && Number.isNaN(item))) {
+            this.post({ type: "error", key: `model:${profile.id}:${field}`, text: "This value is not valid." });
+            return true;
+          }
+          await this.models.update(profile.id, changes);
+          return true;
+        }
+        default:
+          return false;
+      }
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      this.post({
+        type: requestId ? (message.type === "loadModels" ? "models" : "created") : "error",
+        requestId,
+        ok: false,
+        error: reason,
+        text: reason,
+      });
+      return true;
+    }
+  }
+
   private async handle(raw: unknown): Promise<void> {
     if (typeof raw !== "object" || raw === null) return;
+    if (await this.handleModels(raw as Record<string, unknown>)) return;
     const message = raw as { type?: unknown; key?: unknown; value?: unknown; command?: unknown; id?: unknown };
     switch (message.type) {
       case "ready":
@@ -130,11 +244,6 @@ export class SettingsPanel implements vscode.Disposable {
           await this.models.setActive(message.id);
         }
         return;
-      case "testModel": {
-        const profile = this.models.profiles().profiles.find((item) => item.id === message.id);
-        if (profile) await this.models.test(profile);
-        return;
-      }
       case "openJson":
         await vscode.commands.executeCommand("workbench.action.openSettingsJson");
         return;
@@ -176,12 +285,23 @@ export class SettingsPanel implements vscode.Disposable {
       categories: this.categories(),
       values,
       modified,
-      models: this.models.profiles().profiles.map((profile) => ({
-        id: profile.id,
-        name: profile.name,
-        detail: `${providerNames[profile.provider]} · ${profile.model}${profile.baseUrl ? ` · ${profile.baseUrl}` : ""}`,
-        active: profile.id === active?.id,
-      })),
+      models: await Promise.all(
+        this.models.profiles().profiles.map(async (profile) => ({
+          id: profile.id,
+          name: profile.name,
+          provider: providerNames[profile.provider],
+          model: profile.model,
+          baseUrl: profile.baseUrl,
+          active: profile.id === active?.id,
+          needsKey: profile.provider !== "vscode" && profile.auth !== "none",
+          key: await this.models.hasKey(profile),
+          keyEnv: profile.apiKeyEnv,
+          temperature: profile.temperature ?? null,
+          maxTokens: profile.maxTokens ?? null,
+          contextWindow: profile.contextWindow ?? null,
+          price: profile.price ?? null,
+        })),
+      ),
       identity: folder
         ? describeCommitIdentity(settings.commit, await gitIdentity(folder.uri.fsPath))
         : "Open a folder to see the Git identity.",

@@ -75,7 +75,7 @@ export function renderChatHtml(options: ChatHtmlOptions): string {
         <li>Keep or undo each change in the editor. Restore a checkpoint at any time.</li>
       </ul>
       <div class="welcome-actions">
-        <button type="button" class="primary" id="setup" hidden>Choose a model</button>
+        <button type="button" class="primary" id="setup" hidden>Connect a model</button>
         <button type="button" class="secondary" id="guide">Get started</button>
       </div>
     </section>

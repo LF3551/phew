@@ -1,4 +1,5 @@
 import { renderMarkdown } from "./markdown";
+import { type ModelItem, ModelsSection } from "./modelsSection";
 
 interface VsCodeApi {
   postMessage(message: unknown): void;
@@ -22,7 +23,7 @@ interface Init {
   categories: { title: string; properties: Record<string, Property> }[];
   values: Record<string, unknown>;
   modified: string[];
-  models: { id: string; name: string; detail: string; active: boolean }[];
+  models: ModelItem[];
   identity: string;
   index: string;
   memory: string[];
@@ -30,6 +31,7 @@ interface Init {
 }
 
 const vscode = acquireVsCodeApi();
+const modelsSection = new ModelsSection((message) => vscode.postMessage(message));
 const app = document.getElementById("app") as HTMLElement;
 let filter = "";
 
@@ -194,32 +196,8 @@ function render(data: Init): void {
   const main = el("main");
   const sections: [string, HTMLElement][] = [];
 
-  const models = el("section", "card");
-  models.id = "models";
-  models.append(el("h2", undefined, "Models"));
-  models.append(
-    description(
-      "Phew works with OpenAI, Anthropic, Gemini, Azure, Mistral, xAI, DeepSeek, Groq, OpenRouter, local models, and GitHub Copilot. API keys are stored in the VS Code secret storage.",
-    ),
-  );
-  for (const model of data.models) {
-    const row = el("div", `model${model.active ? " active" : ""}`);
-    const info = el("div");
-    info.append(el("strong", undefined, `${model.active ? "✓ " : ""}${model.name}`), el("div", "hint", model.detail));
-    const actions = el("div", "actions");
-    if (!model.active) actions.append(button("Use", () => vscode.postMessage({ type: "useModel", id: model.id })));
-    actions.append(button("Test", () => vscode.postMessage({ type: "testModel", id: model.id })));
-    row.append(info, actions);
-    models.append(row);
-  }
-  if (data.models.length === 0) models.append(el("p", "hint", "No models yet."));
-  const modelActions = el("div", "actions");
-  modelActions.append(
-    button("Add model", () => vscode.postMessage({ type: "command", command: "phew.addModel" }), true),
-    button("Manage models", () => vscode.postMessage({ type: "command", command: "phew.manageModels" })),
-  );
-  models.append(modelActions);
-  sections.push(["Models", models]);
+  modelsSection.setModels(data.models);
+  sections.push(["Models", modelsSection.root]);
 
   for (const category of data.categories) {
     if (Object.keys(category.properties).length === 0) continue;
@@ -297,7 +275,9 @@ function applyFilter(): void {
 
 window.addEventListener("message", (event: MessageEvent) => {
   const message = event.data as { type?: string; section?: string };
+  if (modelsSection.receive(event.data as Record<string, unknown>)) return;
   if (message.type === "init") render(event.data as Init);
   else if (message.type === "focus" && message.section) document.getElementById(message.section)?.scrollIntoView();
 });
 vscode.postMessage({ type: "ready" });
+vscode.postMessage({ type: "providers" });

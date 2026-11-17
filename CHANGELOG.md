@@ -7,6 +7,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added in the latest update
 
+- A visual model setup in **Phew: Open Settings → Models**: provider cards that show missing keys, keys found in the environment, and running local servers; one form for the key, the URL, the model list, and a connection test; and model cards with Use, Test, Change key, More, and Remove.
+
 - Message queue: messages written while the agent works reach it at its next step. `/btw` side questions, `/goal`, and `/compact`.
 - Reasoning display for OpenAI-compatible, Anthropic (signed thinking is sent back for tool use), and Gemini models.
 - Context meter with automatic and manual compaction, and a context window per model profile, loaded from the provider when available.

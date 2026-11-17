@@ -213,3 +213,244 @@ button {
   /* biome-ignore lint/complexity/noImportantStyles: the hidden attribute must win over display rules. */
   display: none !important;
 }
+
+/* Models */
+
+.models-section h3 {
+  margin: 14px 0 8px;
+  font-size: 1em;
+}
+
+.group-title {
+  margin: 12px 0 6px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.85em;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.provider-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+}
+
+.provider {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 10px;
+  color: var(--vscode-foreground);
+  background: var(--vscode-editorWidget-background, #252526);
+  border: 1px solid var(--vscode-panel-border, #8884);
+  border-radius: 8px;
+  text-align: left;
+}
+
+.provider:hover {
+  border-color: var(--vscode-focusBorder);
+}
+
+.provider.selected {
+  border-color: var(--vscode-focusBorder);
+  box-shadow: 0 0 0 1px var(--vscode-focusBorder);
+}
+
+.provider-description {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.9em;
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.badge.ok {
+  color: #fff;
+  background: #2e7d32;
+}
+
+.badge.error {
+  color: #fff;
+  background: #c62828;
+}
+
+.badge.muted {
+  color: var(--vscode-descriptionForeground);
+  background: var(--vscode-input-background);
+}
+
+.setup {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--vscode-focusBorder);
+  border-radius: 8px;
+}
+
+.setup h3 {
+  margin-top: 0;
+}
+
+.setup > input,
+.setup > button {
+  display: block;
+  margin: 6px 0;
+}
+
+.step {
+  margin: 14px 0 4px;
+  font-weight: 600;
+}
+
+.inline-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+}
+
+.inline-form input {
+  flex: 1;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.model-list {
+  overflow-y: auto;
+  max-width: 520px;
+  max-height: 260px;
+  margin: 6px 0;
+  border: 1px solid var(--vscode-panel-border, #8884);
+  border-radius: 4px;
+}
+
+.model-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.model-option:hover,
+.model-option.chosen {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.model-id {
+  font-family: var(--vscode-editor-font-family);
+}
+
+.notice {
+  max-width: 640px;
+  margin: 8px 0;
+  padding: 8px 10px;
+  border-radius: 4px;
+}
+
+.notice.error {
+  background: var(--vscode-inputValidation-errorBackground, #5a1d1d);
+}
+
+.notice.warn {
+  background: var(--vscode-inputValidation-warningBackground, #4d3c0a);
+}
+
+.model-card {
+  margin-bottom: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--vscode-panel-border, #8884);
+  border-radius: 8px;
+}
+
+.model-card.active {
+  border-color: #2e7d32;
+}
+
+.model-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.model-header .actions {
+  margin-top: 0;
+}
+
+.model-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0;
+  color: var(--vscode-descriptionForeground);
+}
+
+.status {
+  display: block;
+  margin-top: 4px;
+}
+
+.status.ok {
+  color: var(--vscode-testing-iconPassed, #3fb950);
+}
+
+.status.warn {
+  color: var(--vscode-editorWarning-foreground, #cca700);
+}
+
+.status.error {
+  color: var(--vscode-errorForeground, #f85149);
+}
+
+.advanced {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--vscode-panel-border, #8882);
+}
+
+.field {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 2px;
+  font-weight: 600;
+}
+
+.pair {
+  display: flex;
+  gap: 8px;
+}
+
+.pair input {
+  max-width: 160px;
+}
+
+input[type="password"],
+input[type="url"] {
+  width: 100%;
+  max-width: 520px;
+  padding: 4px 6px;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 3px;
+  font: inherit;
+}

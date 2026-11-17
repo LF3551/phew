@@ -193,7 +193,7 @@
       },
       {
         "command": "phew.addModel",
-        "title": "Add Model",
+        "title": "Connect a Model",
         "category": "Phew",
         "icon": "$(add)"
       },
@@ -202,6 +202,11 @@
         "title": "Manage Models",
         "category": "Phew",
         "icon": "$(settings)"
+      },
+      {
+        "command": "phew.addModelQuick",
+        "title": "Connect a Model (Quick Pick)",
+        "category": "Phew"
       },
       {
         "command": "phew.testModel",
@@ -577,7 +582,7 @@
     ],
     "configuration": [
       {
-        "title": "Models",
+        "title": "Model Connection",
         "properties": {
           "phew.models": {
             "type": "array",

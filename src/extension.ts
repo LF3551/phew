@@ -219,11 +219,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<PhewTe
       await models.switchModel();
       manager.postState();
     }),
-    vscode.commands.registerCommand("phew.addModel", async () => {
+    vscode.commands.registerCommand("phew.addModel", () => settingsPanel.show("models")),
+    vscode.commands.registerCommand("phew.manageModels", () => settingsPanel.show("models")),
+    vscode.commands.registerCommand("phew.addModelQuick", async () => {
       await models.addModel();
       manager.postState();
     }),
-    vscode.commands.registerCommand("phew.manageModels", () => models.manage()),
     vscode.commands.registerCommand("phew.testModel", () => models.test()),
 
     // Settings, onboarding, and statistics

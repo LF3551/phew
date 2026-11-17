@@ -218,7 +218,7 @@ function applyState(next: ViewState): void {
   modeSelect.title = next.modes.find((mode) => mode.id === next.mode)?.description ?? "Mode";
   modeSelect.disabled = next.busy;
 
-  modelButton.textContent = next.configured ? `${next.model} ▾` : "Choose a model ▾";
+  modelButton.textContent = next.configured ? `${next.model} ▾` : "Connect a model ▾";
   modelButton.title = next.configured ? `${next.model} (${next.provider}). Click to switch.` : "Add a model";
   $("setup").hidden = next.configured;
   sendButton.textContent = next.busy ? "Queue" : "Send";
