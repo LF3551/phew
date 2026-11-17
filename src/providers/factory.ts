@@ -4,6 +4,7 @@ import { GeminiClient } from "./gemini";
 import { errorMessage, type FetchFunction, httpError, networkError } from "./http";
 import { OpenAiCompatibleClient } from "./openaiCompatible";
 import { endpoint, type ModelProfile, requestHeaders } from "./profile";
+import { ResponsesClient } from "./responses";
 
 /** Creates the HTTP client of a profile. The `vscode` provider is created by the host. */
 export function createHttpClient(
@@ -18,7 +19,9 @@ export function createHttpClient(
     case "gemini":
       return new GeminiClient(profile, apiKey, fetchFunction, retries);
     case "openai":
-      return new OpenAiCompatibleClient(profile, apiKey, fetchFunction, retries);
+      return profile.api === "responses"
+        ? new ResponsesClient(profile, apiKey, fetchFunction, retries)
+        : new OpenAiCompatibleClient(profile, apiKey, fetchFunction, retries);
     case "vscode":
       throw new Error("VS Code language models are created by the extension host.");
   }
@@ -29,6 +32,16 @@ export interface ModelInfo {
   readonly label?: string;
   /** Context window in tokens, when the provider reports it. */
   readonly contextWindow?: number;
+  /** API paths that the model supports, for example `/chat/completions` or `/responses`. */
+  readonly endpoints?: readonly string[];
+}
+
+/** The API format to use for a model: the Responses API when the model does not support Chat Completions. */
+export function apiFor(model: ModelInfo | undefined): "chat" | "responses" | undefined {
+  const endpoints = model?.endpoints;
+  if (!endpoints || endpoints.length === 0) return undefined;
+  if (endpoints.includes("/chat/completions")) return "chat";
+  return endpoints.some((item) => item.includes("/responses")) ? "responses" : undefined;
 }
 
 const contextFields = [
@@ -46,7 +59,9 @@ function contextOf(item: Record<string, unknown>): number | undefined {
     if (typeof value === "number" && Number.isFinite(value) && value >= 1000) return Math.round(value);
   }
   const top = item.top_provider as { context_length?: unknown } | undefined;
-  return typeof top?.context_length === "number" ? top.context_length : undefined;
+  if (typeof top?.context_length === "number") return top.context_length;
+  const limits = (item.capabilities as { limits?: { max_context_window_tokens?: unknown } } | undefined)?.limits;
+  return typeof limits?.max_context_window_tokens === "number" ? limits.max_context_window_tokens : undefined;
 }
 
 /** Loads the models that the provider offers. */
@@ -118,9 +133,25 @@ export function parseModelList(provider: ModelProfile["provider"], data: unknown
             ? item.model
             : "";
     if (!id) continue;
-    const label = typeof item.display_name === "string" ? item.display_name : undefined;
+    // GitHub Copilot lists embedding models too. Keep chat models only.
+    const capabilities = item.capabilities as { type?: unknown } | undefined;
+    if (typeof capabilities?.type === "string" && capabilities.type !== "chat") continue;
+    const label =
+      typeof item.display_name === "string"
+        ? item.display_name
+        : typeof item.name === "string" && item.name !== id
+          ? item.name
+          : undefined;
     const contextWindow = contextOf(item);
-    models.push({ id, label, ...(contextWindow ? { contextWindow } : {}) });
+    const endpoints = Array.isArray(item.supported_endpoints)
+      ? item.supported_endpoints.filter((value): value is string => typeof value === "string")
+      : undefined;
+    models.push({
+      id,
+      label,
+      ...(contextWindow ? { contextWindow } : {}),
+      ...(endpoints?.length ? { endpoints } : {}),
+    });
   }
   const unique = new Map(models.map((model) => [model.id, model]));
   return [...unique.values()].sort((a, b) => a.id.localeCompare(b.id));

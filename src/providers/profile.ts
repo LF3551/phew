@@ -35,6 +35,8 @@ export interface ModelProfile {
   readonly price?: { readonly input: number; readonly output: number };
   /** Size of the context window in tokens, for the context meter and automatic compaction. */
   readonly contextWindow?: number;
+  /** For OpenAI-compatible providers: Chat Completions (`chat`) or the Responses API (`responses`). */
+  readonly api?: "chat" | "responses";
 }
 
 export const defaultAuth: Readonly<Record<ProviderKind, AuthStyle>> = {
@@ -115,6 +117,7 @@ export function parseProfile(value: unknown): ModelProfile | string {
     maxTokens: maxTokens === undefined ? undefined : Math.round(maxTokens),
     price: input !== undefined && output !== undefined ? { input, output } : undefined,
     contextWindow: contextWindow === undefined ? undefined : Math.round(contextWindow),
+    api: kind === "openai" && raw.api === "responses" ? "responses" : undefined,
   };
 }
 
@@ -158,6 +161,7 @@ export function serializeProfile(profile: ModelProfile): Record<string, unknown>
   if (profile.maxTokens !== undefined) result.maxTokens = profile.maxTokens;
   if (profile.price) result.price = profile.price;
   if (profile.contextWindow) result.contextWindow = profile.contextWindow;
+  if (profile.api === "responses") result.api = "responses";
   return result;
 }
 

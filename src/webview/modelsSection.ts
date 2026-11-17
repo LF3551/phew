@@ -14,6 +14,7 @@ export interface ProviderItem {
   modelHint: string;
   available?: boolean;
   note?: string;
+  piKey?: boolean;
 }
 
 export interface ModelItem {
@@ -30,6 +31,7 @@ export interface ModelItem {
   maxTokens: number | null;
   contextWindow: number | null;
   price: { input: number; output: number } | null;
+  api: "chat" | "responses" | null;
 }
 
 interface TestResult {
@@ -43,6 +45,7 @@ interface ModelInfo {
   id: string;
   label?: string;
   contextWindow?: number;
+  endpoints?: string[];
 }
 
 type Post = (message: Record<string, unknown>) => void;
@@ -111,7 +114,16 @@ export class ModelsSection {
   private tests = new Map<string, TestResult | "running">();
   private open = new Set<string>();
   private selected: ProviderItem | undefined;
-  private form = { apiKey: "", useEnv: true, baseUrl: "", model: "", name: "", filter: "" };
+  private form = {
+    apiKey: "",
+    useEnv: true,
+    usePi: false,
+    baseUrl: "",
+    foundBaseUrl: "",
+    model: "",
+    name: "",
+    filter: "",
+  };
   private loaded: ModelInfo[] | undefined;
   private loading = false;
   private connecting = false;
@@ -140,6 +152,7 @@ export class ModelsSection {
         this.loading = false;
         if (message.ok) {
           this.loaded = message.models as ModelInfo[];
+          if (typeof message.baseUrl === "string" && message.baseUrl) this.form.foundBaseUrl = message.baseUrl;
           this.error = this.loaded.length === 0 ? "The provider returned no models. Type the model name below." : "";
           if (!this.form.model && this.loaded.length > 0) {
             this.form.model =
@@ -159,7 +172,16 @@ export class ModelsSection {
           this.selected = undefined;
           this.loaded = undefined;
           this.error = "";
-          this.form = { apiKey: "", useEnv: true, baseUrl: "", model: "", name: "", filter: "" };
+          this.form = {
+            apiKey: "",
+            useEnv: true,
+            usePi: false,
+            baseUrl: "",
+            foundBaseUrl: "",
+            model: "",
+            name: "",
+            filter: "",
+          };
         } else this.error = String(message.error ?? "Phew could not connect the model.");
         this.render();
         return true;
@@ -298,6 +320,22 @@ export class ModelsSection {
       "0 to 2. Empty uses the provider default.",
     );
     field("Max output tokens", number("maxTokens", model.maxTokens, "Provider default", "1"));
+    if (model.api) {
+      const select = el("select");
+      for (const [value, label] of [
+        ["chat", "Chat Completions (/chat/completions)"],
+        ["responses", "Responses API (/responses)"],
+      ]) {
+        const option = el("option", undefined, label);
+        option.value = value;
+        option.selected = model.api === value;
+        select.append(option);
+      }
+      select.addEventListener("change", () =>
+        this.post({ type: "updateModel", id: model.id, field: "api", value: select.value }),
+      );
+      field("API format", select, "Newer OpenAI and GitHub Copilot GPT models need the Responses API.");
+    }
     const priceIn = input("number", model.price ? String(model.price.input) : "", "Input $/1M");
     const priceOut = input("number", model.price ? String(model.price.output) : "", "Output $/1M");
     const savePrice = () =>
@@ -342,6 +380,7 @@ export class ModelsSection {
         const badges = el("div", "badges");
         if (!provider.needsKey && provider.group !== "Local") badges.append(el("span", "badge ok", "No key"));
         if (provider.envFound) badges.append(el("span", "badge ok", `Key found: $${provider.keyEnv}`));
+        else if (provider.piKey) badges.append(el("span", "badge ok", "Token found in Pi"));
         else if (provider.needsKey) badges.append(el("span", "badge muted", "🔑 API key"));
         if (provider.note) badges.append(el("span", `badge ${provider.available ? "ok" : "muted"}`, provider.note));
         card.append(
@@ -363,6 +402,8 @@ export class ModelsSection {
     this.error = "";
     this.form = {
       apiKey: "",
+      usePi: !provider.envFound && provider.piKey === true,
+      foundBaseUrl: "",
       useEnv: provider.envFound,
       baseUrl: provider.askBaseUrl || provider.group === "Local" ? provider.baseUrl : "",
       model: "",
@@ -377,13 +418,16 @@ export class ModelsSection {
   private request(type: string, extra: Record<string, unknown> = {}): void {
     if (!this.selected) return;
     this.pending = `r${++this.requestCounter}`;
+    const useEnv = this.form.useEnv && this.selected.envFound;
+    const usePi = !useEnv && this.form.usePi && this.selected.piKey === true;
     this.post({
       type,
       requestId: this.pending,
       presetId: this.selected.id,
-      apiKey: this.form.useEnv && this.selected.envFound ? undefined : this.form.apiKey,
-      useEnv: this.form.useEnv && this.selected.envFound,
-      baseUrl: this.form.baseUrl || undefined,
+      apiKey: useEnv || usePi ? undefined : this.form.apiKey,
+      useEnv,
+      usePi,
+      baseUrl: this.form.baseUrl || (type === "createModel" ? this.form.foundBaseUrl : "") || undefined,
       ...extra,
     });
   }
@@ -407,7 +451,8 @@ export class ModelsSection {
         ),
       );
     }
-    const needsTypedKey = () => provider.needsKey && !(this.form.useEnv && provider.envFound);
+    const needsTypedKey = () =>
+      provider.needsKey && !(this.form.useEnv && provider.envFound) && !(this.form.usePi && provider.piKey);
     const load = button(
       this.loading ? "Loading models…" : this.loaded ? "Refresh list" : "Load models",
       () => this.loadModels(),
@@ -454,7 +499,18 @@ export class ModelsSection {
         label.append(box, el("span", undefined, `Use $${provider.keyEnv} from your environment`));
         form.append(label);
       }
-      if (!(this.form.useEnv && provider.envFound)) {
+      if (provider.piKey && !(this.form.useEnv && provider.envFound)) {
+        const label = el("label", "check");
+        const box = input("checkbox", "");
+        box.checked = this.form.usePi;
+        box.addEventListener("change", () => {
+          this.form.usePi = box.checked;
+          this.render();
+        });
+        label.append(box, el("span", undefined, "Use the GitHub Copilot token of Pi (~/.pi/agent/auth.json)"));
+        form.append(label);
+      }
+      if (!(this.form.useEnv && provider.envFound) && !(this.form.usePi && provider.piKey)) {
         const row = el("div", "inline-form");
         const key = input("password", this.form.apiKey, "Paste your API key");
         key.dataset.focusKey = "apiKey";
@@ -486,6 +542,10 @@ export class ModelsSection {
     form.append(load);
     if (this.error) form.append(el("p", "notice error", this.error));
 
+    if (this.loaded && this.form.foundBaseUrl && provider.id === "copilot-token") {
+      const plan = /api\.([a-z]+)\.githubcopilot\.com/.exec(this.form.foundBaseUrl)?.[1] ?? "custom";
+      form.append(el("p", "notice info", `Found your GitHub Copilot plan: ${plan} (${this.form.foundBaseUrl}).`));
+    }
     if (this.loaded) {
       stepTitle("Choose a model");
       if (this.loaded.length > 0) {
@@ -531,6 +591,7 @@ export class ModelsSection {
             model: this.form.model.trim(),
             name: this.form.name.trim() || undefined,
             contextWindow: info?.contextWindow,
+            endpoints: info?.endpoints,
           });
           this.render();
         },
@@ -572,6 +633,13 @@ export class ModelsSection {
         row.append(radio, el("span", "model-id", model.id));
         if (model.label && model.label !== model.id) row.append(el("span", "hint", model.label));
         if (model.contextWindow) row.append(el("span", "hint", `${formatTokens(model.contextWindow)} context`));
+        if (
+          model.endpoints &&
+          !model.endpoints.includes("/chat/completions") &&
+          model.endpoints.some((item) => item.includes("/responses"))
+        ) {
+          row.append(el("span", "hint", "Responses API"));
+        }
         return row;
       }),
     );

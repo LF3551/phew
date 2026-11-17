@@ -1,12 +1,13 @@
 import { randomBytes } from "node:crypto";
 import * as vscode from "vscode";
 import { describeCommitIdentity } from "../core/commit";
+import { apiFor } from "../providers/factory";
 import { providerPresets } from "../providers/presets";
 import type { CodeIndexManager } from "./codeIndexManager";
 import { gitIdentity } from "./git";
 import { escapeHtml } from "./html";
 import type { MemoryStore } from "./memoryStore";
-import { type ModelManager, providerNames } from "./models";
+import { type ModelManager, piCopilotToken, providerNames } from "./models";
 import { readSettings, updateSetting } from "./settings";
 import type { StatsStore } from "./statsStore";
 
@@ -104,29 +105,35 @@ export class SettingsPanel implements vscode.Disposable {
     const requestId = text("requestId", 64);
     const id = text("id", 64);
     const profile = id ? this.models.profiles().profiles.find((item) => item.id === id) : undefined;
+    const preset = providerPresets.find((item) => item.id === text("presetId", 64));
+    const endpoints = Array.isArray(message.endpoints)
+      ? message.endpoints.filter((item): item is string => typeof item === "string")
+      : undefined;
     const draft = () => {
-      const preset = providerPresets.find((item) => item.id === text("presetId", 64));
       if (!preset) throw new Error("Choose a provider.");
       return this.models.draftProfile(preset.id, {
         baseUrl: text("baseUrl"),
         apiKeyEnv: message.useEnv === true ? preset.keyEnv : undefined,
         model: text("model", 300),
         name: text("name", 120),
+        api: apiFor({ id: "", endpoints }),
       });
     };
+    const key = async () => (message.usePi === true ? await piCopilotToken() : text("apiKey", 4000));
     try {
       switch (message.type) {
         case "providers":
           this.post({ type: "providers", items: await this.models.detectProviders() });
           return true;
         case "loadModels": {
-          const models = await this.models.modelsFor(draft(), text("apiKey", 4000));
-          this.post({ type: "models", requestId, ok: true, models });
+          const probe = text("baseUrl") ? [] : (preset?.probeBaseUrls ?? []);
+          const result = await this.models.modelsFor(draft(), await key(), probe);
+          this.post({ type: "models", requestId, ok: true, models: result.models, baseUrl: result.baseUrl });
           return true;
         }
         case "createModel": {
           const contextWindow = typeof message.contextWindow === "number" ? message.contextWindow : undefined;
-          const result = await this.models.create(draft(), text("apiKey", 4000), contextWindow);
+          const result = await this.models.create(draft(), await key(), contextWindow);
           this.post({ type: "created", requestId, ok: true, id: result.profile.id, test: result.test });
           await this.refresh();
           return true;
@@ -169,6 +176,8 @@ export class SettingsPanel implements vscode.Disposable {
           if (field === "temperature") changes = { temperature: number(0, 2) };
           if (field === "maxTokens") changes = { maxTokens: number(1, 10_000_000) };
           if (field === "contextWindow") changes = { contextWindow: number(1000, 100_000_000) };
+          if (field === "api" && (value === "chat" || value === "responses"))
+            changes = { api: value === "responses" ? "responses" : undefined };
           if (field === "price" && (value === null || (typeof value === "object" && value !== null))) {
             const price = value as { input?: unknown; output?: unknown } | null;
             changes = {
@@ -300,6 +309,7 @@ export class SettingsPanel implements vscode.Disposable {
           maxTokens: profile.maxTokens ?? null,
           contextWindow: profile.contextWindow ?? null,
           price: profile.price ?? null,
+          api: profile.provider === "openai" ? (profile.api ?? "chat") : null,
         })),
       ),
       identity: folder

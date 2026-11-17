@@ -1,3 +1,5 @@
+import * as os from "node:os";
+import * as path from "node:path";
 import * as vscode from "vscode";
 import type { ModelClient } from "../core/chat";
 import {
@@ -35,6 +37,24 @@ export interface ProviderStatus {
   /** For local servers and VS Code models: true when they are ready. */
   readonly available?: boolean;
   readonly note?: string;
+  /** True when the Pi coding agent on this computer has a GitHub Copilot token that Phew can use. */
+  readonly piKey?: boolean;
+}
+
+/** Reads the GitHub Copilot token of the Pi coding agent, if the user configured one. */
+export async function piCopilotToken(): Promise<string | undefined> {
+  try {
+    const file = path.join(process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent"), "auth.json");
+    const data = JSON.parse(
+      new TextDecoder().decode(await vscode.workspace.fs.readFile(vscode.Uri.file(file))),
+    ) as Record<string, { type?: unknown; key?: unknown }>;
+    const entry = data["github-copilot"];
+    return entry?.type === "api_key" && typeof entry.key === "string" && entry.key.trim()
+      ? entry.key.trim()
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export const providerNames: Readonly<Record<ModelProfile["provider"], string>> = {
@@ -116,6 +136,7 @@ export class ModelManager {
         };
         if (preset.provider === "vscode")
           return { ...status, available: vscodeModels.length > 0, note: `${vscodeModels.length} models` };
+        if (preset.id === "copilot-token") return { ...status, piKey: (await piCopilotToken()) !== undefined };
         if (preset.group === "Local") {
           const count = await local(preset.baseUrl);
           return {
@@ -132,7 +153,7 @@ export class ModelManager {
   /** Builds a profile for a preset and the values from the setup page. */
   draftProfile(
     presetId: string,
-    options: { baseUrl?: string; apiKeyEnv?: string; model?: string; name?: string },
+    options: { baseUrl?: string; apiKeyEnv?: string; model?: string; name?: string; api?: "chat" | "responses" },
   ): ModelProfile {
     const preset = providerPresets.find((item) => item.id === presetId);
     if (!preset) throw new Error("Unknown provider.");
@@ -152,14 +173,32 @@ export class ModelManager {
       headers: preset.headers ?? {},
       query: {},
       extraBody: {},
+      ...(options.api === "responses" ? { api: "responses" as const } : {}),
     };
   }
 
-  /** Loads the models of a provider with a key that is not saved yet. */
-  async modelsFor(draft: ModelProfile, apiKey: string | undefined): Promise<ModelInfo[]> {
-    if (draft.provider === "vscode") return listVsCodeModels();
+  /**
+   * Loads the models of a provider with a key that is not saved yet. For presets with several possible URLs,
+   * such as the GitHub Copilot plans, it tries each URL and returns the one that works.
+   */
+  async modelsFor(
+    draft: ModelProfile,
+    apiKey: string | undefined,
+    probeBaseUrls: readonly string[] = [],
+  ): Promise<{ models: ModelInfo[]; baseUrl: string }> {
+    if (draft.provider === "vscode") return { models: await listVsCodeModels(), baseUrl: "" };
     const key = apiKey || (draft.apiKeyEnv ? process.env[draft.apiKeyEnv] : undefined);
-    return listModels(draft, key, fetch, AbortSignal.timeout(20_000));
+    const candidates = probeBaseUrls.length > 0 ? probeBaseUrls : [draft.baseUrl];
+    let lastError: unknown;
+    for (const baseUrl of candidates) {
+      try {
+        const models = await listModels({ ...draft, baseUrl }, key, fetch, AbortSignal.timeout(20_000));
+        return { models, baseUrl };
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error(String(lastError));
   }
 
   /** Saves a new profile, stores the key, makes it active, and tests it. */

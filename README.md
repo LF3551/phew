@@ -42,7 +42,7 @@
 - **Autocomplete and Next Edit.** Inline completions and a predicted next edit, with any model.
 - **Modes.** Ask, Plan, Code, Debug, Review, and your own modes.
 - **Safe by default.** Phew does not read `.env` files and keys, removes secrets from tool output, and always asks before dangerous commands such as `git push --force`, `terraform apply`, or `kubectl delete`.
-- **Any model.** GitHub Copilot without a key, OpenAI, Anthropic, Google Gemini, Azure OpenAI, Mistral, xAI, DeepSeek, Groq, Cerebras, Together AI, Fireworks AI, OpenRouter, LiteLLM, and local models with Ollama, LM Studio, or vLLM.
+- **Any model.** GitHub Copilot without a key or with a GitHub token, OpenAI, Anthropic, Google Gemini, Azure OpenAI, Mistral, xAI, DeepSeek, Groq, Cerebras, Together AI, Fireworks AI, OpenRouter, LiteLLM, and local models with Ollama, LM Studio, or vLLM.
 - **Know the cost.** Tokens and cost per task, with optional budget limits.
 - **Open source.** Apache 2.0, no telemetry.
 

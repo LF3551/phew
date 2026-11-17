@@ -18,6 +18,8 @@ export interface ProviderPreset {
   readonly askBaseUrl?: string;
   readonly headers?: Readonly<Record<string, string>>;
   readonly description: string;
+  /** Base URLs to try in order when the user does not change the URL, for example the GitHub Copilot plans. */
+  readonly probeBaseUrls?: readonly string[];
 }
 
 /**
@@ -36,6 +38,26 @@ export const providerPresets: readonly ProviderPreset[] = [
     modelHint: "",
     description:
       "Uses models that VS Code already provides, for example with a GitHub Copilot subscription. No API key.",
+  },
+  {
+    id: "copilot-token",
+    label: "GitHub Copilot (token)",
+    group: "Cloud",
+    provider: "openai",
+    baseUrl: "https://api.individual.githubcopilot.com",
+    probeBaseUrls: [
+      "https://api.individual.githubcopilot.com",
+      "https://api.business.githubcopilot.com",
+      "https://api.enterprise.githubcopilot.com",
+    ],
+    auth: "bearer",
+    needsKey: true,
+    keyEnv: "COPILOT_GITHUB_TOKEN",
+    keyUrl: "https://github.com/settings/personal-access-tokens/new",
+    modelHint: "claude-sonnet-4.5",
+    headers: { "Copilot-Integration-Id": "copilot-developer-cli" },
+    description:
+      "Your GitHub Copilot subscription with a GitHub token (github_pat_…). Phew finds your plan: Individual, Business, or Enterprise.",
   },
   {
     id: "openai",
