@@ -21,5 +21,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Model profiles: several models, quick switch, a guided setup that loads the model list and tests the connection, API keys in the secret storage or from environment variables, and custom auth, headers, query parameters, and request fields.
+- Native Anthropic Messages and Google Gemini clients, VS Code language models such as GitHub Copilot, and presets for Azure OpenAI, Mistral, xAI, DeepSeek, Groq, Cerebras, Together AI, Fireworks AI, OpenRouter, LiteLLM, Ollama, LM Studio, and vLLM.
+- Fix tasks remind the model to apply the change with the tools when it only shows code.
+
 - TypeScript 7 and GitHub Actions `checkout` and `setup-node` v7.
 - Dependabot keeps `@types/vscode` aligned with the minimum VS Code version and `@types/node` on the VS Code Node.js major version.

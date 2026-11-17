@@ -138,13 +138,23 @@
         "category": "Phew"
       },
       {
-        "command": "phew.configureModel",
-        "title": "Configure Model",
+        "command": "phew.switchModel",
+        "title": "Switch Model",
         "category": "Phew"
       },
       {
-        "command": "phew.clearApiKey",
-        "title": "Remove Saved API Key",
+        "command": "phew.addModel",
+        "title": "Add Model",
+        "category": "Phew"
+      },
+      {
+        "command": "phew.manageModels",
+        "title": "Manage Models",
+        "category": "Phew"
+      },
+      {
+        "command": "phew.testModel",
+        "title": "Test Current Model",
         "category": "Phew"
       },
       {
@@ -182,7 +192,12 @@
           "group": "navigation@3"
         },
         {
-          "command": "phew.configureModel",
+          "command": "phew.switchModel",
+          "when": "view == phew.chatView",
+          "group": "overflow@1"
+        },
+        {
+          "command": "phew.manageModels",
           "when": "view == phew.chatView",
           "group": "overflow@1"
         },
@@ -232,28 +247,122 @@
     "configuration": {
       "title": "Phew",
       "properties": {
-        "phew.model.baseUrl": {
-          "type": "string",
-          "default": "",
+        "phew.models": {
+          "type": "array",
           "order": 1,
-          "markdownDescription": "Base URL of an OpenAI-compatible API, for example `https://api.openai.com/v1` or `http://localhost:11434/v1`. Use **Phew: Configure Model** to set it up. The API key is stored in the VS Code secret storage, not here."
+          "scope": "application",
+          "default": [],
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "provider",
+              "model"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.-]{1,64}$",
+                "description": "Stable identifier. The API key in the secret storage uses it."
+              },
+              "name": {
+                "type": "string",
+                "description": "Display name in the model switcher."
+              },
+              "provider": {
+                "type": "string",
+                "enum": [
+                  "openai",
+                  "anthropic",
+                  "gemini",
+                  "vscode"
+                ],
+                "enumDescriptions": [
+                  "OpenAI Chat Completions format: OpenAI, Azure OpenAI, OpenRouter, Mistral, xAI, DeepSeek, Groq, Ollama, LM Studio, vLLM, LiteLLM, and more.",
+                  "Native Anthropic Messages API.",
+                  "Native Google Gemini API.",
+                  "Language models that VS Code provides, for example GitHub Copilot."
+                ]
+              },
+              "baseUrl": {
+                "type": "string",
+                "description": "API base URL, for example https://api.openai.com/v1."
+              },
+              "model": {
+                "type": "string",
+                "description": "Model name of the provider, or the VS Code language model ID."
+              },
+              "auth": {
+                "type": "string",
+                "enum": [
+                  "bearer",
+                  "api-key",
+                  "x-api-key",
+                  "x-goog-api-key",
+                  "none"
+                ],
+                "description": "How the API key is sent. The default depends on the provider."
+              },
+              "apiKeyEnv": {
+                "type": "string",
+                "description": "Environment variable with the API key. A key in the secret storage wins."
+              },
+              "headers": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Extra HTTP headers. Do not put secrets here."
+              },
+              "query": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Extra URL query parameters, for example api-version."
+              },
+              "extraBody": {
+                "type": "object",
+                "description": "Extra JSON fields for the request body, for example reasoning_effort, thinking, or generationConfig."
+              },
+              "temperature": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 2
+              },
+              "maxTokens": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Maximum output tokens. Anthropic uses 8192 when empty."
+              },
+              "price": {
+                "type": "object",
+                "required": [
+                  "input",
+                  "output"
+                ],
+                "properties": {
+                  "input": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "output": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                },
+                "description": "Price in US dollars per million tokens."
+              }
+            }
+          },
+          "markdownDescription": "Model profiles. Use **Phew: Add Model** and **Phew: Manage Models** instead of editing by hand. API keys are stored in the VS Code secret storage, not here. Only user settings can define models, so a workspace cannot redirect your API keys."
         },
-        "phew.model.name": {
+        "phew.activeModel": {
           "type": "string",
-          "default": "",
           "order": 2,
-          "markdownDescription": "Model name, for example `gpt-4.1` or `qwen2.5-coder:14b`."
-        },
-        "phew.model.temperature": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "default": null,
-          "minimum": 0,
-          "maximum": 2,
-          "order": 3,
-          "markdownDescription": "Sampling temperature. Leave empty to use the provider default."
+          "default": "",
+          "markdownDescription": "The `id` of the model in `#phew.models#` that Phew uses. Use **Phew: Switch Model** or the model button in the chat."
         },
         "phew.agent.defaultMode": {
           "type": "string",
@@ -322,35 +431,13 @@
           "type": "number",
           "default": 0,
           "minimum": 0,
-          "markdownDescription": "Stop a task when its cost reaches this amount in US dollars. `0` means no limit. Needs a price in `#phew.budget.pricing#`."
+          "markdownDescription": "Stop a task when its cost reaches this amount in US dollars. `0` means no limit. Needs a `price` in the model profile."
         },
         "phew.budget.maxTokensPerTask": {
           "type": "number",
           "default": 0,
           "minimum": 0,
           "markdownDescription": "Stop a task when it uses this number of tokens. `0` means no limit."
-        },
-        "phew.budget.pricing": {
-          "type": "object",
-          "default": {},
-          "additionalProperties": {
-            "type": "object",
-            "properties": {
-              "input": {
-                "type": "number",
-                "minimum": 0
-              },
-              "output": {
-                "type": "number",
-                "minimum": 0
-              }
-            },
-            "required": [
-              "input",
-              "output"
-            ]
-          },
-          "markdownDescription": "Price per one million tokens in US dollars, by model name. A key can end with `*`. Example: `{ \"gpt-4.1\": { \"input\": 2, \"output\": 8 } }`. Check the current prices of your provider."
         },
         "phew.privacy.redactSecrets": {
           "type": "boolean",
@@ -429,7 +516,8 @@
     "check": "npm run typecheck && npm run lint && npm test",
     "package": "npm run check && node scripts/build.mjs --production && vsce package --out phew.vsix",
     "vscode:prepublish": "node scripts/build.mjs --production",
-    "test:integration": "node scripts/build.mjs && node test/integration/run.mjs"
+    "test:integration": "node scripts/build.mjs && node test/integration/run.mjs",
+    "check:providers": "node scripts/check-providers.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.8",

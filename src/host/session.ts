@@ -4,17 +4,16 @@ import { type AgentResult, runAgent, type VerificationResult } from "../core/age
 import { type ChatMessage, trimHistory, truncateMiddle } from "../core/chat";
 import { CheckpointStore } from "../core/checkpoints";
 import { decideCommand } from "../core/commandPolicy";
-import { CostMeter, findPrice, formatCost, formatTokens } from "../core/cost";
+import { CostMeter, formatCost, formatTokens } from "../core/cost";
 import { type Mode, modeInfo } from "../core/modes";
 import { buildSystemPrompt } from "../core/prompts";
-import { OpenAiCompatibleClient } from "../providers/openaiCompatible";
-import { apiKeySecretName } from "../providers/presets";
+import type { ModelProfile } from "../providers/profile";
 import type { HostMessage, ViewState } from "../shared/protocol";
 import { ApprovalBroker } from "./approvals";
 import { ChangeManager, type DiffContentProvider } from "./changes";
 import { describeResult, runShellCommand } from "./commandRunner";
 import type { McpManager } from "./mcpManager";
-import { providerLabel } from "./providerSetup";
+import { type ModelManager, providerNames } from "./models";
 import { loadRules } from "./rulesLoader";
 import { readSettings, type Settings } from "./settings";
 import type { StatsStore } from "./statsStore";
@@ -37,6 +36,7 @@ export interface SessionDependencies {
   readonly diffs: DiffContentProvider;
   readonly mcp: McpManager;
   readonly stats: StatsStore;
+  readonly models: ModelManager;
   readonly onBusyChange: (busy: boolean) => void;
 }
 
@@ -78,11 +78,12 @@ export class AgentSession {
 
   state(): ViewState {
     const settings = readSettings();
+    const profile = this.deps.models.active();
     return {
       mode: this.mode,
-      model: settings.model || "No model",
-      provider: settings.baseUrl ? providerLabel(settings.baseUrl) : "Not configured",
-      configured: settings.baseUrl.length > 0 && settings.model.length > 0,
+      model: profile?.name ?? "No model",
+      provider: profile ? providerNames[profile.provider] : "Not configured",
+      configured: profile !== undefined,
       busy: this.busy,
       trusted: vscode.workspace.isTrusted,
       tokens: formatTokens(this.sessionTokens),
@@ -122,9 +123,10 @@ export class AgentSession {
       return;
     }
     const settings = readSettings();
-    if (!settings.baseUrl || !settings.model) {
-      this.notice("info", "Choose a model first with Phew: Configure Model.");
-      void vscode.commands.executeCommand("phew.configureModel");
+    const profile = this.deps.models.active();
+    if (!profile) {
+      this.notice("info", "Add a model first.");
+      void vscode.commands.executeCommand("phew.addModel");
       return;
     }
     let mode = request.mode ?? this.mode;
@@ -143,10 +145,10 @@ export class AgentSession {
     this.deps.post({ type: "user", id: checkpointId, text: request.display ?? request.text, checkpointId });
     this.history.push({ role: "user", content: request.text });
 
-    const meter = new CostMeter(findPrice(settings.model, settings.pricing), settings.budget);
+    const meter = new CostMeter(profile.price, settings.budget);
     let result: AgentResult | undefined;
     try {
-      result = await this.execute(mode, folder, settings, meter, controller.signal);
+      result = await this.execute(request, profile, mode, folder, settings, meter, controller.signal);
     } catch (error) {
       if (controller.signal.aborted) result = undefined;
       else {
@@ -218,19 +220,15 @@ export class AgentSession {
   }
 
   private async execute(
+    request: TaskRequest,
+    profile: ModelProfile,
     mode: Mode,
     folder: vscode.WorkspaceFolder,
     settings: Settings,
     meter: CostMeter,
     signal: AbortSignal,
   ): Promise<AgentResult> {
-    const apiKey = await this.deps.context.secrets.get(apiKeySecretName(settings.baseUrl));
-    const client = new OpenAiCompatibleClient({
-      baseUrl: settings.baseUrl,
-      model: settings.model,
-      apiKey,
-      temperature: settings.temperature,
-    });
+    const client = await this.deps.models.client(profile);
     const tools = new ToolHost({
       root: folder,
       mode,
@@ -277,6 +275,7 @@ export class AgentSession {
       executeTool: (call, toolSignal) => tools.execute(call, toolSignal),
       verify,
       maxVerifyAttempts: settings.verifyMaxAttempts,
+      requireChanges: mode === "code" && request.kind === "fix",
       maxSteps: settings.maxSteps,
       meter,
       signal,

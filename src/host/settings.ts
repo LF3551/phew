@@ -12,9 +12,6 @@ export interface McpServerConfig {
 }
 
 export interface Settings {
-  readonly baseUrl: string;
-  readonly model: string;
-  readonly temperature: number | undefined;
   readonly defaultMode: Mode;
   readonly maxSteps: number;
   readonly requireEditApproval: boolean;
@@ -23,7 +20,6 @@ export interface Settings {
   readonly verifyCommand: string;
   readonly verifyMaxAttempts: number;
   readonly budget: BudgetLimits;
-  readonly pricing: Readonly<Record<string, unknown>>;
   readonly sensitiveNames: readonly string[];
   readonly redactSecrets: boolean;
   readonly mcpServers: Readonly<Record<string, McpServerConfig>>;
@@ -57,12 +53,8 @@ function mcpServers(value: unknown): Record<string, McpServerConfig> {
 
 export function readSettings(): Settings {
   const config = vscode.workspace.getConfiguration(section);
-  const temperature = config.get<unknown>("model.temperature");
   const mode = config.get<unknown>("agent.defaultMode");
   return {
-    baseUrl: (config.get<string>("model.baseUrl") ?? "").trim(),
-    model: (config.get<string>("model.name") ?? "").trim(),
-    temperature: typeof temperature === "number" && temperature >= 0 && temperature <= 2 ? temperature : undefined,
     defaultMode: isMode(mode) ? mode : "code",
     maxSteps: Math.max(1, Math.round(positive(config.get("agent.maxSteps"), 40, 200))),
     requireEditApproval: config.get<boolean>("edits.requireApproval") !== false,
@@ -77,7 +69,6 @@ export function readSettings(): Settings {
       maxCostPerTask: positive(config.get("budget.maxCostPerTask"), 0),
       maxTokensPerTask: Math.round(positive(config.get("budget.maxTokensPerTask"), 0)),
     },
-    pricing: (config.get<Record<string, unknown>>("budget.pricing") ?? {}) as Record<string, unknown>,
     sensitiveNames: strings(config.get("privacy.sensitiveNames")),
     redactSecrets: config.get<boolean>("privacy.redactSecrets") !== false,
     mcpServers: mcpServers(config.get("mcp.servers")),

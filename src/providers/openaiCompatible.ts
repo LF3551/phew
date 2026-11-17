@@ -1,16 +1,6 @@
 import type { ChatMessage, CompletionRequest, CompletionResult, ModelClient, ToolCall } from "../core/chat";
-import { redactSecrets } from "../core/secrets";
-import { SseParser } from "../core/sse";
-
-export interface OpenAiCompatibleOptions {
-  /** Base URL that ends before `/chat/completions`, for example `https://api.openai.com/v1`. */
-  readonly baseUrl: string;
-  readonly model: string;
-  readonly apiKey?: string;
-  readonly temperature?: number;
-  readonly extraHeaders?: Readonly<Record<string, string>>;
-  readonly fetch?: typeof fetch;
-}
+import { type FetchFunction, httpError, networkError, postJson, readSse } from "./http";
+import { endpoint, type ModelProfile, requestHeaders } from "./profile";
 
 type ApiMessage =
   | { role: "system" | "user"; content: string }
@@ -53,15 +43,22 @@ interface StreamState {
   finishReason?: string;
 }
 
-/** Applies one streamed chunk to the state. Exported for tests. */
+export function newStreamState(): StreamState {
+  return { content: "", calls: new Map() };
+}
+
+/** Applies one streamed chunk to the state. */
 export function applyChunk(state: StreamState, chunk: unknown, onText: (delta: string) => void): void {
   if (typeof chunk !== "object" || chunk === null) return;
   const data = chunk as {
-    choices?: { delta?: Record<string, unknown>; finish_reason?: unknown }[];
+    choices?: { delta?: Record<string, unknown>; message?: Record<string, unknown>; finish_reason?: unknown }[];
     usage?: { prompt_tokens?: unknown; completion_tokens?: unknown } | null;
-    error?: { message?: unknown };
+    error?: { message?: unknown } | string;
   };
-  if (data.error) throw new Error(`The model returned an error: ${String(data.error.message ?? "unknown error")}`);
+  if (data.error) {
+    const message = typeof data.error === "string" ? data.error : String(data.error.message ?? "unknown error");
+    throw new Error(`The model returned an error: ${message}`);
+  }
   if (data.usage && typeof data.usage.prompt_tokens === "number") {
     state.usage = {
       inputTokens: data.usage.prompt_tokens,
@@ -70,21 +67,24 @@ export function applyChunk(state: StreamState, chunk: unknown, onText: (delta: s
   }
   for (const choice of data.choices ?? []) {
     if (typeof choice.finish_reason === "string") state.finishReason = choice.finish_reason;
-    const delta = choice.delta ?? {};
+    const delta = choice.delta ?? choice.message ?? {};
     if (typeof delta.content === "string" && delta.content.length > 0) {
       state.content += delta.content;
       onText(delta.content);
     }
     const toolCalls = Array.isArray(delta.tool_calls) ? delta.tool_calls : [];
-    for (const raw of toolCalls) {
+    toolCalls.forEach((raw, position) => {
       const item = raw as { index?: unknown; id?: unknown; function?: { name?: unknown; arguments?: unknown } };
-      const index = typeof item.index === "number" ? item.index : state.calls.size;
+      const index = typeof item.index === "number" ? item.index : position;
       const call = state.calls.get(index) ?? { id: "", name: "", arguments: "" };
       if (typeof item.id === "string" && item.id) call.id = item.id;
       if (typeof item.function?.name === "string") call.name += item.function.name;
       if (typeof item.function?.arguments === "string") call.arguments += item.function.arguments;
+      else if (typeof item.function?.arguments === "object" && item.function.arguments !== null) {
+        call.arguments = JSON.stringify(item.function.arguments);
+      }
       state.calls.set(index, call);
-    }
+    });
   }
 }
 
@@ -96,103 +96,85 @@ export function finishState(state: StreamState): CompletionResult {
   return { content: state.content, toolCalls, usage: state.usage, finishReason: state.finishReason };
 }
 
-/** A client for any API that implements the OpenAI chat completions format with streaming and tools. */
+/** A client for the OpenAI Chat Completions format with streaming and tools. Many providers implement it. */
 export class OpenAiCompatibleClient implements ModelClient {
   private sendUsageOption = true;
 
-  constructor(private readonly options: OpenAiCompatibleOptions) {}
+  constructor(
+    private readonly profile: ModelProfile,
+    private readonly apiKey: string | undefined,
+    private readonly fetchFunction: FetchFunction = fetch,
+  ) {}
 
   async complete(request: CompletionRequest, onText: (delta: string) => void): Promise<CompletionResult> {
     const response = await this.post(request);
-    if (!response.body) throw new Error("The model response has no body.");
-    const state: StreamState = { content: "", calls: new Map() };
-    let failure: Error | undefined;
-    const parser = new SseParser((data) => {
-      if (failure || data.trim() === "[DONE]") return;
-      try {
-        applyChunk(state, JSON.parse(data), onText);
-      } catch (error) {
-        failure = error instanceof Error ? error : new Error(String(error));
-      }
-    });
-    const decoder = new TextDecoder();
-    const reader = response.body.getReader();
-    try {
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        parser.push(decoder.decode(value, { stream: true }));
-        if (failure) throw failure;
-      }
-      parser.push(decoder.decode());
-      parser.flush();
-    } finally {
-      reader.releaseLock();
-    }
-    if (failure) throw failure;
+    const state = newStreamState();
+    if ((response.headers.get("content-type") ?? "").includes("application/json")) {
+      // Some servers ignore `stream` and return one JSON object.
+      applyChunk(state, await response.json(), onText);
+    } else await readSse(response, (data) => applyChunk(state, data, onText));
     return finishState(state);
   }
 
-  private async post(request: CompletionRequest): Promise<Response> {
-    const fetchFunction = this.options.fetch ?? fetch;
-    const url = `${this.options.baseUrl.replace(/\/+$/, "")}/chat/completions`;
-    const send = (withUsage: boolean) =>
-      fetchFunction(url, {
-        method: "POST",
-        signal: request.signal,
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "text/event-stream",
-          ...(this.options.apiKey ? { Authorization: `Bearer ${this.options.apiKey}` } : {}),
-          ...this.options.extraHeaders,
-        },
-        body: JSON.stringify({
-          model: this.options.model,
-          messages: toApiMessages(request.messages),
-          stream: true,
-          ...(withUsage ? { stream_options: { include_usage: true } } : {}),
-          ...(request.tools.length > 0
-            ? {
-                tools: request.tools.map((tool) => ({
-                  type: "function",
-                  function: { name: tool.name, description: tool.description, parameters: tool.parameters },
-                })),
-              }
-            : {}),
-          ...(this.options.temperature !== undefined ? { temperature: this.options.temperature } : {}),
-        }),
-      });
+  /** Builds the request body. Exported for tests through the class. */
+  body(request: CompletionRequest, withUsage: boolean): Record<string, unknown> {
+    const { profile } = this;
+    const officialOpenAi = /(^|\.)api\.openai\.com$/.test(safeHost(profile.baseUrl));
+    return {
+      model: profile.model,
+      messages: toApiMessages(request.messages),
+      stream: true,
+      ...(withUsage ? { stream_options: { include_usage: true } } : {}),
+      ...(request.tools.length > 0
+        ? {
+            tools: request.tools.map((tool) => ({
+              type: "function",
+              function: { name: tool.name, description: tool.description, parameters: tool.parameters },
+            })),
+          }
+        : {}),
+      ...(profile.temperature !== undefined ? { temperature: profile.temperature } : {}),
+      ...(profile.maxTokens !== undefined
+        ? officialOpenAi
+          ? { max_completion_tokens: profile.maxTokens }
+          : { max_tokens: profile.maxTokens }
+        : {}),
+      ...profile.extraBody,
+    };
+  }
 
-    let response = await send(this.sendUsageOption);
-    if (response.status === 400 && this.sendUsageOption) {
-      const body = await response.text();
-      if (/stream_options|include_usage/i.test(body)) {
-        this.sendUsageOption = false;
-        response = await send(false);
-      } else throw httpError(response.status, body);
+  private async post(request: CompletionRequest): Promise<Response> {
+    const url = endpoint(this.profile.baseUrl, "chat/completions", this.profile.query);
+    const headers = { ...requestHeaders(this.profile, this.apiKey), Accept: "text/event-stream" };
+    const name = this.profile.name;
+    if (!this.sendUsageOption)
+      return postJson(this.fetchFunction, name, url, headers, this.body(request, false), request.signal);
+
+    let response: Response;
+    try {
+      response = await this.fetchFunction(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(this.body(request, true)),
+        signal: request.signal,
+      });
+    } catch (error) {
+      throw networkError(name, url, error);
     }
-    if (!response.ok) throw httpError(response.status, await response.text());
-    return response;
+    if (response.ok) return response;
+    const text = await response.text();
+    if ((response.status === 400 || response.status === 422) && /stream_options|include_usage/i.test(text)) {
+      this.sendUsageOption = false;
+      return postJson(this.fetchFunction, name, url, headers, this.body(request, false), request.signal);
+    }
+    throw httpError(name, response.status, text);
   }
 }
 
-function httpError(status: number, body: string): Error {
-  let message = body;
+function safeHost(url: string): string {
   try {
-    const parsed = JSON.parse(body) as { error?: { message?: unknown } | string; message?: unknown };
-    if (typeof parsed.error === "string") message = parsed.error;
-    else if (typeof parsed.error?.message === "string") message = parsed.error.message;
-    else if (typeof parsed.message === "string") message = parsed.message;
+    return new URL(url).hostname;
   } catch {
-    // Keep the raw body.
+    return "";
   }
-  const hint =
-    status === 401 || status === 403
-      ? " Check the API key with the Phew: Configure Model command."
-      : status === 404
-        ? " Check the base URL and the model name."
-        : status === 429
-          ? " The provider rate limit or quota is reached."
-          : "";
-  return new Error(`The model request failed with HTTP ${status}: ${redactSecrets(message).text.slice(0, 500)}${hint}`);
 }

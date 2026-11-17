@@ -134,7 +134,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         await session.restoreCheckpoint(message.checkpointId);
         return;
       case "configureModel":
-        await vscode.commands.executeCommand("phew.configureModel");
+        await vscode.commands.executeCommand("phew.switchModel");
         return;
       case "openSettings":
         await vscode.commands.executeCommand("phew.openSettings");

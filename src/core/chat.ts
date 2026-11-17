@@ -5,6 +5,8 @@ export interface ToolCall {
   readonly name: string;
   /** Arguments as a JSON string, exactly as the model produced them. */
   readonly arguments: string;
+  /** Opaque provider data that must be sent back with the call, for example a Gemini thought signature. */
+  readonly signature?: string;
 }
 
 export type ChatMessage =

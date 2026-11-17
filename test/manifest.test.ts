@@ -22,7 +22,7 @@ test("every contributed command is registered and every registered command is co
 });
 
 test("every setting is read in the code", () => {
-  const settings = readFileSync("src/host/settings.ts", "utf8");
+  const settings = readFileSync("src/host/settings.ts", "utf8") + readFileSync("src/host/models.ts", "utf8");
   for (const key of Object.keys(manifest.contributes.configuration.properties)) {
     expect(key).toMatch(/^phew\./);
     expect(settings, key).toContain(`"${key.slice("phew.".length)}"`);

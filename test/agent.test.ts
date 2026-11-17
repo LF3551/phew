@@ -159,3 +159,43 @@ test("trims old history at a user message", () => {
   expect(trimmed[0]).toEqual({ role: "user", content: "new" });
   expect(trimHistory(history, 10_000)).toHaveLength(5);
 });
+
+test("reminds the model to apply a fix when it only shows code", async () => {
+  const history: ChatMessage[] = [{ role: "user", content: "fix" }];
+  const result = await runAgent({
+    client: scripted([
+      { content: "```js\nreturn a + b;\n```", toolCalls: [] },
+      { content: "", toolCalls: [{ id: "e", name: "edit_file", arguments: "{}" }] },
+      { content: "Fixed.", toolCalls: [] },
+    ]),
+    systemPrompt: "s",
+    history,
+    tools: [],
+    executeTool: async () => ({ content: "ok", changed: true }),
+    requireChanges: true,
+    maxSteps: 10,
+    meter: meter(),
+    signal: new AbortController().signal,
+  });
+  expect(result).toMatchObject({ status: "done", filesChanged: true, steps: 3 });
+  expect(history[2]).toMatchObject({ role: "user", content: expect.stringContaining("did not change any file") });
+});
+
+test("stops reminding after the limit", async () => {
+  const result = await runAgent({
+    client: scripted([
+      { content: "a", toolCalls: [] },
+      { content: "b", toolCalls: [] },
+    ]),
+    systemPrompt: "s",
+    history: [],
+    tools: [],
+    executeTool: async () => ({ content: "" }),
+    requireChanges: true,
+    maxNudges: 1,
+    maxSteps: 10,
+    meter: meter(),
+    signal: new AbortController().signal,
+  });
+  expect(result).toMatchObject({ status: "done", filesChanged: false, steps: 2 });
+});

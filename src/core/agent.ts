@@ -32,6 +32,12 @@ export interface AgentOptions {
   /** Runs the check command, for example the tests, after the agent says that it is done. */
   readonly verify?: () => Promise<VerificationResult>;
   readonly maxVerifyAttempts?: number;
+  /**
+   * The task must change files, for example a fix. When the model stops without a change,
+   * the agent reminds it to use the edit tools, at most `maxNudges` times.
+   */
+  readonly requireChanges?: boolean;
+  readonly maxNudges?: number;
   readonly maxSteps: number;
   readonly meter: CostMeter;
   readonly signal: AbortSignal;
@@ -55,7 +61,9 @@ const maximumVerifyOutput = 12_000;
 export async function runAgent(options: AgentOptions): Promise<AgentResult> {
   const { client, history, events, meter, signal } = options;
   const maxVerifyAttempts = options.maxVerifyAttempts ?? 3;
+  const maxNudges = options.maxNudges ?? 2;
   let verifyAttempts = 0;
+  let nudges = 0;
   let filesChanged = false;
   let steps = 0;
 
@@ -91,6 +99,19 @@ export async function runAgent(options: AgentOptions): Promise<AgentResult> {
     events?.onAssistant?.(result.content, result.toolCalls);
 
     if (result.toolCalls.length === 0) {
+      if (options.requireChanges && !filesChanged && nudges < maxNudges) {
+        nudges++;
+        history.push({
+          role: "user",
+          content: [
+            "You did not change any file yet.",
+            "Do not only show code in the answer.",
+            "Read the file with read_file, apply the fix with edit_file or write_file, and then stop.",
+            "If no change is needed, explain why in one sentence.",
+          ].join(" "),
+        });
+        continue;
+      }
       if (!options.verify || !filesChanged) return finish("done");
       if (signal.aborted) return finish("aborted");
       const verification = await options.verify();

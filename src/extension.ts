@@ -6,8 +6,8 @@ import { DiffContentProvider, diffScheme } from "./host/changes";
 import { ChatViewProvider } from "./host/chatView";
 import { describeResult, runShellCommand } from "./host/commandRunner";
 import { McpManager } from "./host/mcpManager";
+import { ModelManager } from "./host/models";
 import { fileProblemsRequest, fixProblemCommand, PhewItCodeActionProvider, problemContext } from "./host/phewIt";
-import { clearApiKey, configureModel } from "./host/providerSetup";
 import { AgentSession, type TaskRequest } from "./host/session";
 import { readSettings, section } from "./host/settings";
 import { StatsStore } from "./host/statsStore";
@@ -27,15 +27,17 @@ export function activate(context: vscode.ExtensionContext): PhewTestApi | undefi
   const view = new ChatViewProvider(context.extensionUri, log);
   const diffs = new DiffContentProvider();
   const stats = new StatsStore(context.globalState);
+  const models = new ModelManager(context.secrets, log);
   mcp = new McpManager(log, String(context.extension.packageJSON.version));
 
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   status.command = "phew.openChat";
   const updateStatus = (busy: boolean) => {
     status.text = busy ? "$(sync~spin) Phew" : "$(sparkle) Phew";
+    const model = models.active();
     status.tooltip = busy
       ? "Phew is working. Click to open the chat."
-      : `Phew: ${stats.summary(readSettings().minutesPerBug)}`;
+      : `Phew · ${model ? model.name : "no model"} · ${stats.summary(readSettings().minutesPerBug)}`;
   };
   updateStatus(false);
   status.show();
@@ -47,6 +49,7 @@ export function activate(context: vscode.ExtensionContext): PhewTestApi | undefi
     diffs,
     mcp,
     stats,
+    models,
     onBusyChange: (busy) => {
       updateStatus(busy);
       void vscode.commands.executeCommand("setContext", "phew.busy", busy);
@@ -94,10 +97,10 @@ export function activate(context: vscode.ExtensionContext): PhewTestApi | undefi
       current.newChat();
     }),
     vscode.commands.registerCommand("phew.stop", () => current.stop()),
-    vscode.commands.registerCommand("phew.configureModel", async () => {
-      if (await configureModel(context.secrets)) current.postState();
-    }),
-    vscode.commands.registerCommand("phew.clearApiKey", () => clearApiKey(context.secrets)),
+    vscode.commands.registerCommand("phew.switchModel", () => models.switchModel()),
+    vscode.commands.registerCommand("phew.addModel", () => models.addModel()),
+    vscode.commands.registerCommand("phew.manageModels", () => models.manage()),
+    vscode.commands.registerCommand("phew.testModel", () => models.test()),
     vscode.commands.registerCommand("phew.openSettings", () =>
       vscode.commands.executeCommand("workbench.action.openSettings", `@ext:${context.extension.id}`),
     ),
