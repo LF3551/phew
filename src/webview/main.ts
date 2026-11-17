@@ -30,7 +30,6 @@ const sendButton = $<HTMLButtonElement>("send");
 const stopButton = $<HTMLButtonElement>("stop");
 const modelButton = $<HTMLButtonElement>("model");
 const modeSelect = $<HTMLSelectElement>("mode");
-const meter = $<HTMLElement>("meter");
 const chips = $<HTMLElement>("chips");
 const mentionsBox = $<HTMLElement>("mentions");
 const panel = $<HTMLElement>("panel");
@@ -218,36 +217,31 @@ function applyState(next: ViewState): void {
   modeSelect.title = next.modes.find((mode) => mode.id === next.mode)?.description ?? "Mode";
   modeSelect.disabled = next.busy;
 
-  modelButton.textContent = next.configured ? `${next.model} ▾` : "Connect a model ▾";
+  modelButton.textContent = next.configured ? next.model : "Connect a model";
   modelButton.title = next.configured ? `${next.model} (${next.provider}). Click to switch.` : "Add a model";
   $("setup").hidden = next.configured;
-  sendButton.textContent = next.busy ? "Queue" : "Send";
-  sendButton.title = next.busy ? "The message reaches the agent at its next step" : "Send";
+  sendButton.classList.toggle("queue", next.busy);
+  sendButton.title = next.busy ? "Queue: the message reaches the agent at its next step" : "Send";
   stopButton.hidden = !next.busy;
-  const send = next.sendWith === "ctrlEnter" ? "Ctrl+Enter to send" : "Enter to send";
+  const send = next.sendWith === "ctrlEnter" ? "Ctrl+Enter" : "Enter";
   prompt.placeholder = next.busy
-    ? "Phew is working. Write to steer it, or /btw for a side question."
-    : `Ask Phew or describe a change. @ to attach, ↑ for history, ${send}.`;
+    ? "Steer Phew, or /btw for a side question"
+    : `Ask Phew or describe a change · @ to attach · ${send} to send`;
   $<HTMLSelectElement>("approvalReview").value = next.approvals.review;
   $<HTMLSelectElement>("approvalCommands").value = next.approvals.commands;
   $<HTMLSelectElement>("approvalMcp").value = String(next.approvals.mcp);
-  $("approvalCustom").hidden = !next.approvals.custom;
-  $("approvals").hidden = !next.trusted;
+  $("saveApprovals").hidden = !next.approvals.custom;
+  $("approvalDot").hidden = !next.approvals.custom;
+  $("approvalsButton").hidden = !next.trusted;
+  $("restricted").hidden = next.trusted;
 
   const context = $("context");
-  context.hidden = next.context <= 0;
   const percent = Math.round(next.context * 100);
-  const fill = $("contextFill");
-  fill.style.width = `${percent}%`;
-  fill.dataset.level = percent >= 85 ? "high" : percent >= 60 ? "medium" : "low";
-  $("contextLabel").textContent = `${percent}% context`;
-  context.title = next.contextLabel;
-  $("compact").hidden = percent < 50 || next.busy;
-
-  const usage = [next.tokens !== "0" ? `${next.tokens} tokens` : "", next.cost].filter(Boolean).join(" · ");
-  meter.textContent = [next.trusted ? "" : "Restricted mode: Phew changes nothing.", usage, next.stats]
-    .filter(Boolean)
-    .join("  ·  ");
+  context.hidden = percent <= 0;
+  context.dataset.level = percent >= 85 ? "high" : percent >= 60 ? "medium" : "low";
+  context.style.setProperty("--fill", `${percent * 3.6}deg`);
+  $("contextLabel").textContent = `${percent}%`;
+  context.title = `${next.contextLabel}${percent >= 50 && !next.busy ? ". Click to compact the chat." : ""}${next.tokens !== "0" ? `\nThis chat: ${next.tokens} tokens${next.cost ? `, ${next.cost}` : ""}` : ""}`;
   const banner = $("reviewBanner");
   banner.hidden = next.reviewFiles === 0;
   $("reviewText").textContent =
@@ -918,7 +912,28 @@ document.addEventListener("drop", (event) => {
   }
 });
 
-$("mentionButton").addEventListener("click", () => {
+function closePopovers(except?: HTMLElement): void {
+  for (const popover of document.querySelectorAll<HTMLElement>(".popover"))
+    if (popover !== except) popover.hidden = true;
+}
+
+function togglePopover(id: string): void {
+  const popover = $(id);
+  closePopovers(popover);
+  popover.hidden = !popover.hidden;
+}
+
+document.addEventListener("click", (event) => {
+  const target = event.target as HTMLElement;
+  if (!target.closest(".popover, #attachButton, #approvalsButton")) closePopovers();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closePopovers();
+});
+$("attachButton").addEventListener("click", () => togglePopover("attachMenu"));
+$("approvalsButton").addEventListener("click", () => togglePopover("approvals"));
+$("attachContext").addEventListener("click", () => {
+  closePopovers();
   const position = prompt.selectionStart;
   const before = prompt.value.slice(0, position);
   const insert = before === "" || /\s$/.test(before) ? "@" : " @";
@@ -927,7 +942,10 @@ $("mentionButton").addEventListener("click", () => {
   prompt.focus();
   prompt.dispatchEvent(new Event("input"));
 });
-$("imageButton").addEventListener("click", () => imageInput.click());
+$("imageButton").addEventListener("click", () => {
+  closePopovers();
+  imageInput.click();
+});
 imageInput.addEventListener("change", () => {
   for (const file of imageInput.files ?? []) readImage(file);
   imageInput.value = "";
@@ -962,7 +980,10 @@ modelButton.addEventListener("click", () => vscode.postMessage({ type: "configur
 $("setup").addEventListener("click", () => vscode.postMessage({ type: "configureModel" }));
 $("guide").addEventListener("click", () => vscode.postMessage({ type: "openWalkthrough" }));
 $("reviewNext").addEventListener("click", () => vscode.postMessage({ type: "reviewNext" }));
-$("compact").addEventListener("click", () => vscode.postMessage({ type: "compact" }));
+$("context").addEventListener("click", () => {
+  if (Number.parseInt($("contextLabel").textContent ?? "0", 10) >= 50 && !state?.busy)
+    vscode.postMessage({ type: "compact" });
+});
 $("saveApprovals").addEventListener("click", () => vscode.postMessage({ type: "resetApprovals" }));
 $("planToggle").addEventListener("click", () => {
   saved.planOpen = !saved.planOpen;
@@ -970,7 +991,6 @@ $("planToggle").addEventListener("click", () => {
   $("planItems").hidden = !saved.planOpen;
   $("planToggle").setAttribute("aria-expanded", String(saved.planOpen));
 });
-meter.addEventListener("click", () => vscode.postMessage({ type: "showStats" }));
 modeSelect.addEventListener("change", () => vscode.postMessage({ type: "setMode", mode: modeSelect.value }));
 $<HTMLSelectElement>("approvalReview").addEventListener("change", (event) =>
   vscode.postMessage({

@@ -7,6 +7,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added in the latest update
 
+- A cleaner composer: one rounded input with a toolbar for the mode, attachments, auto-approve settings, the context, the model, and a round send button; line icons instead of emoji; approvals and attachments in small menus.
+
 - A visual model setup in **Phew: Open Settings → Models**: provider cards that show missing keys, keys found in the environment, and running local servers; one form for the key, the URL, the model list, and a connection test; and model cards with Use, Test, Change key, More, and Remove.
 
 - Message queue: messages written while the agent works reach it at its next step. `/btw` side questions, `/goal`, and `/compact`.

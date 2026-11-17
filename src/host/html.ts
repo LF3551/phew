@@ -12,6 +12,24 @@ export function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (character) => escapes[character] ?? character);
 }
 
+/** Small line icons, drawn for Phew. They use the current text color. */
+const icons: Record<string, string> = {
+  edit: '<path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="m14 6 4 4"/>',
+  split: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16"/>',
+  history: '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 8v4l3 2"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  paperclip: '<path d="m20 11-8.5 8.5a5 5 0 0 1-7-7L13 4a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L14 7"/>',
+  at: '<circle cx="12" cy="12" r="4"/><path d="M16 12v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-4 7.5"/>',
+  image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/>',
+  shield: '<path d="M12 3 5 6v6c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6l-7-3Z"/><path d="m9 12 2 2 4-4"/>',
+  send: '<path d="M12 19V5M6 11l6-6 6 6"/>',
+  stop: '<rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor" stroke="none"/>',
+};
+
+function icon(name: string): string {
+  return `<svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] ?? ""}</svg>`;
+}
+
 /** Builds the chat webview document with a strict Content Security Policy and no remote content. */
 export function renderChatHtml(options: ChatHtmlOptions): string {
   const csp = [
@@ -36,17 +54,12 @@ export function renderChatHtml(options: ChatHtmlOptions): string {
   <header class="toolbar">
     <button type="button" class="title" id="title" title="Chats and history"><span id="titleText">New chat</span><span class="badge" id="worktree" hidden></span><span class="running" id="running" hidden></span></button>
     <div class="icons">
-      <button type="button" class="icon-button" id="renameButton" title="Rename chat" aria-label="Rename chat">✎</button>
-      <button type="button" class="icon-button" id="popOut" title="Open a parallel chat in an editor tab" aria-label="Open a parallel chat in an editor tab">⧉</button>
-      <button type="button" class="icon-button" id="historyButton" title="Chats and history" aria-label="Chats and history">⟲</button>
-      <button type="button" class="icon-button" id="newChat" title="New chat" aria-label="New chat">＋</button>
+      <button type="button" class="icon-button" id="renameButton" title="Rename chat" aria-label="Rename chat">${icon("edit")}</button>
+      <button type="button" class="icon-button" id="popOut" title="Open a parallel chat in an editor tab" aria-label="Open a parallel chat in an editor tab">${icon("split")}</button>
+      <button type="button" class="icon-button" id="historyButton" title="Chats and history" aria-label="Chats and history">${icon("history")}</button>
+      <button type="button" class="icon-button" id="newChat" title="New chat" aria-label="New chat">${icon("plus")}</button>
     </div>
   </header>
-  <div class="bar">
-    <label class="visually-hidden" for="mode">Mode</label>
-    <select id="mode" title="Mode"></select>
-    <button type="button" class="model" id="model" title="Switch model"></button>
-  </div>
   <section class="panel" id="panel" hidden>
     <div class="panel-header">
       <input type="search" id="historySearch" placeholder="Search chats" aria-label="Search chats">
@@ -90,47 +103,55 @@ export function renderChatHtml(options: ChatHtmlOptions): string {
       <ul class="plan-items" id="planItems"></ul>
     </section>
     <ul class="queue" id="queue" hidden></ul>
-    <div class="approvals" id="approvals">
-      <label title="How you review file changes">Edits
-        <select id="approvalReview">
-          <option value="editor">Review in editor</option>
-          <option value="chat">Ask first</option>
-          <option value="none">Auto-apply</option>
-        </select>
-      </label>
-      <label title="When commands run without asking. Dangerous commands always ask.">Commands
-        <select id="approvalCommands">
-          <option value="ask">Always ask</option>
-          <option value="allowlist">Allowlist</option>
-          <option value="safe">Safe auto</option>
-        </select>
-      </label>
-      <label title="Run MCP tools without asking">MCP
-        <select id="approvalMcp">
-          <option value="false">Ask</option>
-          <option value="true">Auto</option>
-        </select>
-      </label>
-      <span class="custom" id="approvalCustom" hidden>this chat · <button type="button" class="link" id="saveApprovals">save as default</button></span>
-    </div>
-    <div class="context" id="context" hidden>
-      <div class="context-bar"><div class="context-fill" id="contextFill"></div></div>
-      <span class="context-label" id="contextLabel"></span>
-      <button type="button" class="link" id="compact" hidden>Compact</button>
-    </div>
-    <div class="meter" id="meter" title="Statistics"></div>
-    <div class="chips" id="chips"></div>
+    <p class="restricted" id="restricted" hidden>Restricted mode: Phew only answers questions in this workspace.</p>
     <form class="composer" id="composer">
       <div class="mentions" id="mentions" role="listbox" hidden></div>
-      <label class="visually-hidden" for="prompt">Message</label>
-      <textarea id="prompt" rows="3" placeholder="Ask Phew or describe a change. @ to attach, ↑ for history"></textarea>
-      <div class="actions">
-        <button type="button" class="icon-button" id="mentionButton" title="Attach context (@)" aria-label="Attach context">@</button>
-        <button type="button" class="icon-button" id="imageButton" title="Attach an image" aria-label="Attach an image">🖼</button>
-        <input type="file" id="imageInput" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
-        <span class="spacer"></span>
-        <button type="button" class="secondary" id="stop" hidden>Stop</button>
-        <button type="submit" class="primary" id="send">Send</button>
+      <div class="popover" id="attachMenu" hidden>
+        <button type="button" class="menu-item" id="attachContext">${icon("at")}<span class="menu-label">Files, problems, Git, terminal</span><kbd>@</kbd></button>
+        <button type="button" class="menu-item" id="imageButton">${icon("image")}<span class="menu-label">Image or screenshot</span><kbd>Paste</kbd></button>
+      </div>
+      <div class="popover approvals" id="approvals" hidden>
+        <div class="popover-title">Auto-approve in this chat</div>
+        <label>Edits
+          <select id="approvalReview">
+            <option value="editor">Apply, review in editor</option>
+            <option value="chat">Ask before each edit</option>
+            <option value="none">Apply without review</option>
+          </select>
+        </label>
+        <label>Commands
+          <select id="approvalCommands">
+            <option value="ask">Always ask</option>
+            <option value="allowlist">Run allowlisted</option>
+            <option value="safe">Run safe commands</option>
+          </select>
+        </label>
+        <label>MCP tools
+          <select id="approvalMcp">
+            <option value="false">Ask</option>
+            <option value="true">Run without asking</option>
+          </select>
+        </label>
+        <p class="popover-note">Dangerous commands always ask.</p>
+        <button type="button" class="link" id="saveApprovals" hidden>Save as default for new chats</button>
+        <span id="approvalCustom" hidden></span>
+      </div>
+      <div class="box">
+        <div class="chips" id="chips"></div>
+        <label class="visually-hidden" for="prompt">Message</label>
+        <textarea id="prompt" rows="2" placeholder="Ask Phew or describe a change"></textarea>
+        <div class="box-toolbar">
+          <label class="visually-hidden" for="mode">Mode</label>
+          <select class="pill" id="mode" title="Mode"></select>
+          <button type="button" class="icon-button" id="attachButton" title="Attach context" aria-label="Attach context">${icon("paperclip")}</button>
+          <button type="button" class="icon-button" id="approvalsButton" title="Auto-approve settings" aria-label="Auto-approve settings">${icon("shield")}<span class="dot" id="approvalDot" hidden></span></button>
+          <input type="file" id="imageInput" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
+          <span class="spacer"></span>
+          <button type="button" class="context-ring" id="context" hidden title="Context"><span id="contextLabel"></span></button>
+          <button type="button" class="pill model" id="model" title="Switch model"></button>
+          <button type="submit" class="send" id="send" title="Send" aria-label="Send">${icon("send")}</button>
+          <button type="button" class="send stop" id="stop" title="Stop" aria-label="Stop" hidden>${icon("stop")}</button>
+        </div>
       </div>
     </form>
   </footer>
