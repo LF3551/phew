@@ -342,6 +342,7 @@ export class ModelsSection {
         const badges = el("div", "badges");
         if (!provider.needsKey && provider.group !== "Local") badges.append(el("span", "badge ok", "No key"));
         if (provider.envFound) badges.append(el("span", "badge ok", `Key found: $${provider.keyEnv}`));
+        else if (provider.needsKey) badges.append(el("span", "badge muted", "🔑 API key"));
         if (provider.note) badges.append(el("span", `badge ${provider.available ? "ok" : "muted"}`, provider.note));
         card.append(
           el("strong", undefined, provider.label),
@@ -397,9 +398,18 @@ export class ModelsSection {
   private setupForm(provider: ProviderItem): HTMLElement {
     const form = el("div", "setup");
     form.append(el("h3", undefined, `Connect ${provider.label}`), el("p", "hint", provider.description));
+    if (provider.id === "copilot") {
+      form.append(
+        el(
+          "p",
+          "notice info",
+          "No API key is needed. Phew uses the models that your GitHub Copilot sign-in gives VS Code. To use your own key, choose OpenAI, Anthropic, Google Gemini, or another cloud provider below.",
+        ),
+      );
+    }
     const needsTypedKey = () => provider.needsKey && !(this.form.useEnv && provider.envFound);
     const load = button(
-      this.loading ? "Loading models…" : this.loaded ? "Reload models" : "Load models",
+      this.loading ? "Loading models…" : this.loaded ? "Refresh list" : "Load models",
       () => this.loadModels(),
       this.loaded ? "secondary" : "primary",
     );
