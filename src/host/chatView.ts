@@ -1,10 +1,11 @@
 import { randomBytes } from "node:crypto";
 import * as vscode from "vscode";
+import { safeColor } from "../core/appearance";
 import { type HostMessage, parseWebviewMessage, type WebviewMessage } from "../shared/protocol";
 import type { MentionProvider } from "./attachments";
 import { renderChatHtml } from "./html";
 import type { ChatViewHandle, SessionManager } from "./sessionManager";
-import { readSettings } from "./settings";
+import { readSettings, updateSetting } from "./settings";
 
 function setupWebview(webview: vscode.Webview, extensionUri: vscode.Uri): void {
   const dist = vscode.Uri.joinPath(extensionUri, "dist");
@@ -100,7 +101,7 @@ class ChatController implements ChatViewHandle {
         for (const resolve of this.readyWaiters.splice(0)) resolve();
         return;
       case "send":
-        if (session) await session.submit(message.text, message.attachments);
+        if (session) await session.submit(message.text, message.attachments, message.interrupt === true);
         else await sessions.run({ text: message.text, kind: "chat", attachments: message.attachments });
         return;
       case "stop":
@@ -127,6 +128,17 @@ class ChatController implements ChatViewHandle {
         if (!root) return;
         const items = await this.mentions.suggest(root, message.query, readSettings());
         this.post({ type: "mentions", query: message.query, items });
+        return;
+      }
+      case "setAppearance": {
+        const keys = {
+          style: "appearance.style",
+          accentColor: "appearance.accentColor",
+          fontSize: "chat.fontSize",
+          timestamps: "appearance.timestamps",
+        } as const;
+        const value = message.key === "accentColor" ? safeColor(message.value) : message.value;
+        await updateSetting(keys[message.key], value === "" ? undefined : value);
         return;
       }
       case "setApproval":

@@ -7,6 +7,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added in the latest update
 
+- Chat appearance: Bubbles, Classic, and Compact styles, accent and bubble colors, font, text size, line height, code size, times, message actions, and avatars, with quick settings behind the **Aa** button and an Appearance section in the settings.
+- Interrupt: `Esc` stops the agent, and `Ctrl+Enter` (`Cmd+Enter` on macOS) stops the current step and sends the new message at once.
+- Message actions as icons on hover.
+
 - GitHub Copilot with a GitHub token (`github_pat_…`): Phew finds the plan (Individual, Business, or Enterprise), lists the chat models, and can use the token of the Pi coding agent.
 - OpenAI Responses API client. Models that support only `/responses`, such as newer GPT models through GitHub Copilot, use it automatically.
 

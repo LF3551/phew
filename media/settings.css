@@ -458,3 +458,22 @@ input[type="url"] {
   border-radius: 3px;
   font: inherit;
 }
+
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.color-row input[type="color"] {
+  width: 36px;
+  height: 26px;
+  padding: 0;
+  background: none;
+  border: 1px solid var(--vscode-input-border, #8884);
+  border-radius: 4px;
+}
+
+.color-row input[type="text"] {
+  max-width: 160px;
+}

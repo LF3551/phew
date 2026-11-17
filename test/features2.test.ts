@@ -538,3 +538,30 @@ describe("MCP OAuth", () => {
     });
   });
 });
+
+describe("appearance", () => {
+  test("only safe colors and fonts reach the view", async () => {
+    const { safeColor, safeFontFamily } = await import("../src/core/appearance");
+    expect(safeColor("#22B8CF")).toBe("#22B8CF");
+    expect(safeColor("rgb(10, 20, 30)")).toBe("rgb(10, 20, 30)");
+    expect(safeColor("Teal")).toBe("teal");
+    expect(safeColor("red; background: url(x)")).toBe("");
+    expect(safeColor(5)).toBe("");
+    expect(safeFontFamily("Inter, 'Segoe UI', sans-serif")).toBe("Inter, 'Segoe UI', sans-serif");
+    expect(safeFontFamily("x; } body { display: none")).toBe("");
+  });
+
+  test("appearance and interrupt messages are validated", async () => {
+    const { parseWebviewMessage } = await import("../src/shared/protocol");
+    expect(parseWebviewMessage({ type: "setAppearance", key: "style", value: "compact" })).toBeDefined();
+    expect(parseWebviewMessage({ type: "setAppearance", key: "style", value: "neon" })).toBeUndefined();
+    expect(parseWebviewMessage({ type: "setAppearance", key: "fontSize", value: 99 })).toBeUndefined();
+    expect(parseWebviewMessage({ type: "setAppearance", key: "other", value: 1 })).toBeUndefined();
+    expect(parseWebviewMessage({ type: "send", text: "now", attachments: [], interrupt: true })).toEqual({
+      type: "send",
+      text: "now",
+      attachments: [],
+      interrupt: true,
+    });
+  });
+});

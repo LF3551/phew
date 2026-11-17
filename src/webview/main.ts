@@ -1,4 +1,6 @@
+import { accentPresets } from "../core/appearance";
 import type { Attachment } from "../core/attachments";
+import { icon } from "../shared/icons";
 import type {
   HistoryItem,
   HostMessage,
@@ -74,6 +76,23 @@ function button(label: string, className: string, onClick: () => void, title?: s
   const node = element("button", className, label);
   node.type = "button";
   if (title) node.title = title;
+  node.addEventListener("click", onClick);
+  return node;
+}
+
+/** Builds an icon from the static icon set. The SVG strings are constants, not user content. */
+function iconNode(name: string): Element {
+  const template = document.createElement("template");
+  template.innerHTML = icon(name);
+  return template.content.firstElementChild ?? document.createElement("span");
+}
+
+function iconButton(name: string, title: string, onClick: () => void): HTMLButtonElement {
+  const node = element("button", "action");
+  node.type = "button";
+  node.title = title;
+  node.setAttribute("aria-label", title);
+  node.append(iconNode(name));
   node.addEventListener("click", onClick);
   return node;
 }
@@ -189,7 +208,7 @@ function copyButton(text: () => string, label = "Copy", className = "copy"): HTM
 
 function applyState(next: ViewState): void {
   state = next;
-  document.body.style.setProperty("--phew-font-size", next.fontSize ? `${next.fontSize}px` : "var(--vscode-font-size)");
+  applyAppearance(next);
   $("titleText").textContent = next.title;
   const worktree = $("worktree");
   worktree.hidden = !next.worktree;
@@ -224,8 +243,9 @@ function applyState(next: ViewState): void {
   sendButton.title = next.busy ? "Queue: the message reaches the agent at its next step" : "Send";
   stopButton.hidden = !next.busy;
   const send = next.sendWith === "ctrlEnter" ? "Ctrl+Enter" : "Enter";
+  const modifier = navigator.platform.toLowerCase().includes("mac") ? "Cmd" : "Ctrl";
   prompt.placeholder = next.busy
-    ? "Steer Phew, or /btw for a side question"
+    ? `Enter to queue · ${modifier}+Enter to stop and send · Esc to stop`
     : `Ask Phew or describe a change · @ to attach · ${send} to send`;
   $<HTMLSelectElement>("approvalReview").value = next.approvals.review;
   $<HTMLSelectElement>("approvalCommands").value = next.approvals.commands;
@@ -248,39 +268,75 @@ function applyState(next: ViewState): void {
     `${next.reviewFiles} ${next.reviewFiles === 1 ? "file has" : "files have"} changes to keep or undo.`;
 }
 
+function applyAppearance(next: ViewState): void {
+  const look = next.appearance;
+  const body = document.body;
+  body.classList.remove(
+    "style-bubbles",
+    "style-classic",
+    "style-compact",
+    "times-hover",
+    "times-always",
+    "times-never",
+    "actions-hover",
+    "actions-always",
+  );
+  body.classList.add(`style-${look.style}`, `times-${look.timestamps}`, `actions-${look.messageActions}`);
+  body.classList.toggle("no-avatars", !look.avatars);
+  const set = (name: string, value: string | undefined) =>
+    value ? body.style.setProperty(name, value) : body.style.removeProperty(name);
+  set("--phew-font-size", next.fontSize ? `${next.fontSize}px` : undefined);
+  set("--phew-accent", look.accentColor || undefined);
+  set("--phew-user-bg", look.userBubbleColor || undefined);
+  set("--phew-font-family", look.fontFamily || undefined);
+  set("--phew-line-height", look.lineHeight ? String(look.lineHeight) : undefined);
+  set("--phew-code-size", look.codeFontSize ? `${look.codeFontSize}px` : undefined);
+  for (const option of document.querySelectorAll<HTMLButtonElement>("#styleChoice button")) {
+    option.classList.toggle("active", option.dataset.style === look.style);
+  }
+  for (const swatch of document.querySelectorAll<HTMLButtonElement>("#swatches button")) {
+    swatch.classList.toggle("active", (swatch.dataset.color ?? "") === look.accentColor);
+  }
+  $("fontValue").textContent = next.fontSize ? `${next.fontSize}px` : "Default";
+  $<HTMLSelectElement>("timestampChoice").value = look.timestamps;
+}
+
+function currentFontSize(): number {
+  return state?.fontSize ?? (Number.parseFloat(getComputedStyle(document.body).fontSize) || 13);
+}
+
 // Messages
 
 function addUser(message: Extract<HostMessage, { type: "user" }>): void {
-  const node = element("article", `message user${message.text.startsWith("/btw ") ? " btw" : ""}`);
+  const btw = message.text.startsWith("/btw ");
+  const node = element("article", `message user${btw ? " btw" : ""}`);
   const header = element("div", "message-header");
   header.append(element("span", "who", "You"), time(message.at));
-  node.append(header, element("div", "text", message.text));
+  const bubble = element("div", "bubble");
+  bubble.append(element("div", "text", message.text));
   if (message.attachments && message.attachments.length > 0) {
     const list = element("div", "chips static");
     for (const label of message.attachments) list.append(element("span", "chip", label));
-    node.append(list);
+    bubble.append(list);
   }
-  if (!message.text.startsWith("/btw ")) {
-    const actions = element("div", "message-actions");
+  node.append(header, bubble);
+  const actions = element("div", "message-actions");
+  if (!btw) {
     actions.append(
-      button(
-        "Restore checkpoint",
-        "link",
-        () => vscode.postMessage({ type: "restoreCheckpoint", checkpointId: message.checkpointId }),
-        "Undo all file changes made since this request",
+      iconButton("restore", "Restore checkpoint: undo the file changes made since this message", () =>
+        vscode.postMessage({ type: "restoreCheckpoint", checkpointId: message.checkpointId }),
       ),
-      button(
-        "Edit",
-        "link",
-        () => {
-          prompt.value = message.text;
-          prompt.focus();
-        },
-        "Copy this request to the input",
-      ),
+      iconButton("edit", "Edit and send again", () => {
+        prompt.value = message.text;
+        prompt.focus();
+      }),
     );
-    node.append(actions);
   }
+  actions.append(
+    iconButton("copy", "Copy", () => void navigator.clipboard.writeText(message.text)),
+    time(message.at),
+  );
+  node.append(actions);
   append(node);
 }
 
@@ -289,7 +345,7 @@ function assistantEntry(id: string, variant?: "btw") {
   if (!entry) {
     const node = element("article", `message assistant streaming${variant ? ` ${variant}` : ""}`);
     const header = element("div", "message-header");
-    header.append(element("span", "who", variant === "btw" ? "Phew · btw" : "Phew"));
+    header.append(element("span", "avatar"), element("span", "who", variant === "btw" ? "Phew · btw" : "Phew"));
     const body = element("div", "body");
     node.append(header, body);
     entry = { element: node, body, text: "" };
@@ -311,9 +367,10 @@ function renderAssistant(id: string, text: string, done: boolean, at?: number, v
     }
     entry.body.replaceChildren(markdown(text));
     const header = entry.element.querySelector(".message-header");
+    const done = entry;
     header?.append(
       time(at),
-      copyButton(() => entry.text, "Copy answer", "copy-answer"),
+      iconButton("copy", "Copy answer", () => void navigator.clipboard.writeText(done.text)),
     );
   } else entry.body.textContent = text;
   if (follow) transcript.scrollTop = transcript.scrollHeight;
@@ -806,11 +863,15 @@ function handle(message: HostMessage): void {
 
 // Input
 
-form.addEventListener("submit", (event) => {
-  event.preventDefault();
+function sendNow(interrupt: boolean): void {
   const text = prompt.value.trim();
   if (!text && attachments.length === 0) return;
-  vscode.postMessage({ type: "send", text, attachments: attachments.map((item) => item.attachment) });
+  vscode.postMessage({
+    type: "send",
+    text,
+    attachments: attachments.map((item) => item.attachment),
+    ...(interrupt ? { interrupt: true } : {}),
+  });
   if (text) {
     saved.promptHistory = [...saved.promptHistory.filter((item) => item !== text), text].slice(-100);
     vscode.setState(saved);
@@ -820,6 +881,11 @@ form.addEventListener("submit", (event) => {
   attachments = [];
   renderChips();
   showMentions([]);
+}
+
+form.addEventListener("submit", (event) => {
+  event.preventDefault();
+  sendNow(false);
 });
 
 prompt.addEventListener("keydown", (event) => {
@@ -861,8 +927,19 @@ prompt.addEventListener("keydown", (event) => {
     } else prompt.value = saved.promptHistory[historyPosition];
     return;
   }
+  if (event.key === "Escape" && state?.busy && prompt.value === "") {
+    event.preventDefault();
+    vscode.postMessage({ type: "stop" });
+    return;
+  }
   if (event.key !== "Enter" || event.isComposing) return;
   const modifier = event.ctrlKey || event.metaKey;
+  if (state?.busy && modifier) {
+    // Stop the current step and send this message at once.
+    event.preventDefault();
+    sendNow(true);
+    return;
+  }
   const sendOnEnter = state?.sendWith !== "ctrlEnter";
   if ((sendOnEnter && !event.shiftKey && !modifier) || (!sendOnEnter && modifier)) {
     event.preventDefault();
@@ -925,12 +1002,44 @@ function togglePopover(id: string): void {
 
 document.addEventListener("click", (event) => {
   const target = event.target as HTMLElement;
-  if (!target.closest(".popover, #attachButton, #approvalsButton")) closePopovers();
+  if (!target.closest(".popover, #attachButton, #approvalsButton, #appearanceButton")) closePopovers();
 });
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closePopovers();
 });
 $("attachButton").addEventListener("click", () => togglePopover("attachMenu"));
+$("appearanceButton").addEventListener("click", () => togglePopover("appearance"));
+const swatches = $("swatches");
+for (const preset of [{ name: "Theme", color: "" }, ...accentPresets]) {
+  const swatch = element("button", "swatch");
+  swatch.type = "button";
+  swatch.title = preset.name;
+  swatch.dataset.color = preset.color;
+  if (preset.color) swatch.style.background = preset.color;
+  else swatch.classList.add("theme");
+  swatch.addEventListener("click", () =>
+    vscode.postMessage({ type: "setAppearance", key: "accentColor", value: preset.color }),
+  );
+  swatches.append(swatch);
+}
+for (const option of document.querySelectorAll<HTMLButtonElement>("#styleChoice button")) {
+  option.addEventListener("click", () =>
+    vscode.postMessage({ type: "setAppearance", key: "style", value: option.dataset.style ?? "bubbles" }),
+  );
+}
+const changeFont = (delta: number) => {
+  const next = Math.min(24, Math.max(10, Math.round(currentFontSize()) + delta));
+  vscode.postMessage({ type: "setAppearance", key: "fontSize", value: next });
+};
+$("fontDown").addEventListener("click", () => changeFont(-1));
+$("fontUp").addEventListener("click", () => changeFont(1));
+$<HTMLSelectElement>("timestampChoice").addEventListener("change", (event) =>
+  vscode.postMessage({ type: "setAppearance", key: "timestamps", value: (event.target as HTMLSelectElement).value }),
+);
+$("moreAppearance").addEventListener("click", () => {
+  closePopovers();
+  vscode.postMessage({ type: "openSettings" });
+});
 $("approvalsButton").addEventListener("click", () => togglePopover("approvals"));
 $("attachContext").addEventListener("click", () => {
   closePopovers();

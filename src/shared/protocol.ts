@@ -1,3 +1,4 @@
+import type { Appearance } from "../core/appearance";
 import { type Attachment, attachmentLabel, maximumAttachments, parseAttachment } from "../core/attachments";
 import { isModeId, type Mode } from "../core/modes";
 
@@ -39,6 +40,7 @@ export interface ViewState {
   readonly contextLabel: string;
   readonly fontSize: number | null;
   readonly sendWith: "enter" | "ctrlEnter";
+  readonly appearance: Appearance;
   readonly showThinking: boolean;
   /** True when this view shows one fixed chat, for example in an editor tab. */
   readonly pinned: boolean;
@@ -149,7 +151,13 @@ export type HostMessage = (
 
 export type WebviewMessage =
   | { readonly type: "ready" }
-  | { readonly type: "send"; readonly text: string; readonly attachments: readonly Attachment[] }
+  | {
+      readonly type: "send";
+      readonly text: string;
+      readonly attachments: readonly Attachment[];
+      readonly interrupt?: boolean;
+    }
+  | { readonly type: "setAppearance"; readonly key: AppearanceKey; readonly value: string | number | boolean | null }
   | { readonly type: "stop" }
   | { readonly type: "setMode"; readonly mode: Mode }
   | { readonly type: "newChat" }
@@ -183,6 +191,8 @@ export type WebviewMessage =
   | { readonly type: "openInEditor"; readonly id?: string }
   | { readonly type: "resetApprovals" }
   | { readonly type: "compact" };
+
+export type AppearanceKey = "style" | "accentColor" | "fontSize" | "timestamps";
 
 export const maximumPromptLength = 100_000;
 const idPattern = /^[A-Za-z0-9_-]{1,64}$/;
@@ -246,7 +256,7 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
         attachments.push(attachment);
       }
       if ((text.length === 0 && attachments.length === 0) || text.length > maximumPromptLength) return undefined;
-      return { type: "send", text, attachments };
+      return { type: "send", text, attachments, ...(message.interrupt === true ? { interrupt: true } : {}) };
     }
     case "setMode":
       return isModeId(message.mode) ? { type: "setMode", mode: message.mode } : undefined;
@@ -284,6 +294,18 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
       return typeof message.query === "string" && message.query.length <= 200
         ? { type: "mentionQuery", query: message.query }
         : undefined;
+    case "setAppearance": {
+      const { key, value } = message;
+      if (key === "style" && ["bubbles", "classic", "compact"].includes(String(value)))
+        return { type: "setAppearance", key, value: value as string };
+      if (key === "timestamps" && ["hover", "always", "never"].includes(String(value)))
+        return { type: "setAppearance", key, value: value as string };
+      if (key === "accentColor" && (value === "" || (typeof value === "string" && value.length <= 40)))
+        return { type: "setAppearance", key, value: value as string };
+      if (key === "fontSize" && (value === null || (typeof value === "number" && value >= 8 && value <= 32)))
+        return { type: "setAppearance", key, value };
+      return undefined;
+    }
     case "setApproval": {
       if (message.key === "review" && ["chat", "editor", "none"].includes(String(message.value))) {
         return { type: "setApproval", key: "review", value: message.value as ReviewSetting };

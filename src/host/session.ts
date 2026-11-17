@@ -328,7 +328,7 @@ export class AgentSession {
    * Handles a message from the input. `/btw` asks a side question, `/goal` sets the goal, and `/compact`
    * compacts the history. While a task runs, other messages wait in the queue and reach the agent at its next step.
    */
-  async submit(text: string, attachments: readonly Attachment[] = []): Promise<void> {
+  async submit(text: string, attachments: readonly Attachment[] = [], interrupt = false): Promise<void> {
     const command = /^\/(btw|goal|compact)\b\s*([\s\S]*)$/i.exec(text.trim());
     if (command) {
       const [, name, rest] = command;
@@ -336,6 +336,12 @@ export class AgentSession {
       else if (name.toLowerCase() === "goal") this.setGoal(rest.trim());
       else await this.compactNow();
       return;
+    }
+    if (this.busy && interrupt) {
+      // Stop the current step and continue with the new message at once.
+      this.stop();
+      for (let waited = 0; this.busy && waited < 15_000; waited += 50)
+        await new Promise((resolve) => setTimeout(resolve, 50));
     }
     if (this.busy) {
       this.queue.push({ id: `q_${Date.now().toString(36)}_${++this.counter}`, text, attachments });

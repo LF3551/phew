@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { type Appearance, safeColor, safeFontFamily } from "../core/appearance";
 import type { AutoApproveMode, CommandPolicySettings } from "../core/commandPolicy";
 import type { CommitSettings, CommitStyle, GpgMode } from "../core/commit";
 import type { BudgetLimits } from "../core/cost";
@@ -33,6 +34,7 @@ export interface Settings {
   readonly maxRetries: number;
   readonly fontSize: number | null;
   readonly sendWith: "enter" | "ctrlEnter";
+  readonly appearance: Appearance;
   readonly notifyOnComplete: "unfocused" | "always" | "never";
   readonly sound: boolean;
   readonly skillsEnabled: boolean;
@@ -122,6 +124,23 @@ export function readSettings(scope?: vscode.Uri): Settings {
         ? Math.min(32, Math.max(8, config.get<number>("chat.fontSize") ?? 13))
         : null,
     sendWith: oneOf(config.get("chat.sendWith"), ["enter", "ctrlEnter"] as const, "enter"),
+    appearance: {
+      style: oneOf(config.get("appearance.style"), ["bubbles", "classic", "compact"] as const, "bubbles"),
+      accentColor: safeColor(config.get("appearance.accentColor")),
+      userBubbleColor: safeColor(config.get("appearance.userBubbleColor")),
+      fontFamily: safeFontFamily(config.get("appearance.fontFamily")),
+      lineHeight:
+        typeof config.get("appearance.lineHeight") === "number"
+          ? Math.min(2.4, Math.max(1, config.get<number>("appearance.lineHeight") ?? 1.5))
+          : null,
+      codeFontSize:
+        typeof config.get("appearance.codeFontSize") === "number"
+          ? Math.min(28, Math.max(8, config.get<number>("appearance.codeFontSize") ?? 12))
+          : null,
+      timestamps: oneOf(config.get("appearance.timestamps"), ["hover", "always", "never"] as const, "hover"),
+      messageActions: oneOf(config.get("appearance.messageActions"), ["hover", "always"] as const, "hover"),
+      avatars: config.get<boolean>("appearance.avatars") !== false,
+    },
     notifyOnComplete: oneOf(
       config.get("notifications.onComplete"),
       ["unfocused", "always", "never"] as const,

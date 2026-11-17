@@ -8,6 +8,7 @@ declare function acquireVsCodeApi(): VsCodeApi;
 
 interface Property {
   type?: string | string[];
+  format?: string;
   enum?: unknown[];
   enumDescriptions?: string[];
   markdownDescription?: string;
@@ -137,6 +138,26 @@ function control(key: string, property: Property, value: unknown): HTMLElement {
     });
     const wrap = el("div");
     wrap.append(area, error);
+    return wrap;
+  }
+  if (property.format === "color") {
+    const wrap = el("div", "color-row");
+    const picker = el("input");
+    picker.type = "color";
+    picker.value = typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value) ? value : "#22b8cf";
+    const text = el("input");
+    text.type = "text";
+    text.value = typeof value === "string" ? value : "";
+    text.placeholder = "Theme color";
+    picker.addEventListener("change", () => {
+      text.value = picker.value;
+      set(picker.value);
+    });
+    text.addEventListener("change", () => set(text.value.trim()));
+    const reset = el("button", "link", "Use theme color");
+    reset.type = "button";
+    reset.addEventListener("click", () => set(""));
+    wrap.append(picker, text, reset);
     return wrap;
   }
   const input = el("input");

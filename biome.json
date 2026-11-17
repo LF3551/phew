@@ -28,6 +28,18 @@
           }
         }
       }
+    },
+    {
+      "includes": [
+        "media/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noDescendingSpecificity": "off"
+          }
+        }
+      }
     }
   ]
 }

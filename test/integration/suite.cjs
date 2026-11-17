@@ -244,6 +244,14 @@ async function run() {
       "/btw does not change the conversation",
     );
 
+    // 4b. Stop and send: the new message stops the running step and runs at once.
+    const stopping = busy.run({ text: "Slow task three", kind: "chat" });
+    await delay(300);
+    await busy.submit("Slow task four", [], true);
+    await stopping;
+    assert.match(lastAssistant(busy), /SLOW-DONE Slow task four/, "the interrupting message ran");
+    assert.ok(!busy.busy);
+
     // 5. Two chats work at the same time, one in an editor tab.
     await vscode.commands.executeCommand("phew.openChatInEditor");
     const parallel = sessions.createDetached();

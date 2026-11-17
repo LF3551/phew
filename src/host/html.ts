@@ -6,28 +6,12 @@ export interface ChatHtmlOptions {
   readonly iconUri: string;
 }
 
+import { icon } from "../shared/icons";
+
 const escapes: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 
 export function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (character) => escapes[character] ?? character);
-}
-
-/** Small line icons, drawn for Phew. They use the current text color. */
-const icons: Record<string, string> = {
-  edit: '<path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="m14 6 4 4"/>',
-  split: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16"/>',
-  history: '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 8v4l3 2"/>',
-  plus: '<path d="M12 5v14M5 12h14"/>',
-  paperclip: '<path d="m20 11-8.5 8.5a5 5 0 0 1-7-7L13 4a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L14 7"/>',
-  at: '<circle cx="12" cy="12" r="4"/><path d="M16 12v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-4 7.5"/>',
-  image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/>',
-  shield: '<path d="M12 3 5 6v6c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6l-7-3Z"/><path d="m9 12 2 2 4-4"/>',
-  send: '<path d="M12 19V5M6 11l6-6 6 6"/>',
-  stop: '<rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor" stroke="none"/>',
-};
-
-function icon(name: string): string {
-  return `<svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] ?? ""}</svg>`;
 }
 
 /** Builds the chat webview document with a strict Content Security Policy and no remote content. */
@@ -54,12 +38,33 @@ export function renderChatHtml(options: ChatHtmlOptions): string {
   <header class="toolbar">
     <button type="button" class="title" id="title" title="Chats and history"><span id="titleText">New chat</span><span class="badge" id="worktree" hidden></span><span class="running" id="running" hidden></span></button>
     <div class="icons">
+      <button type="button" class="icon-button" id="appearanceButton" title="Appearance" aria-label="Appearance">${icon("type")}</button>
       <button type="button" class="icon-button" id="renameButton" title="Rename chat" aria-label="Rename chat">${icon("edit")}</button>
       <button type="button" class="icon-button" id="popOut" title="Open a parallel chat in an editor tab" aria-label="Open a parallel chat in an editor tab">${icon("split")}</button>
       <button type="button" class="icon-button" id="historyButton" title="Chats and history" aria-label="Chats and history">${icon("history")}</button>
       <button type="button" class="icon-button" id="newChat" title="New chat" aria-label="New chat">${icon("plus")}</button>
     </div>
   </header>
+  <section class="popover appearance" id="appearance" hidden>
+    <div class="popover-title">Appearance</div>
+    <div class="segmented" id="styleChoice">
+      <button type="button" data-style="bubbles">Bubbles</button>
+      <button type="button" data-style="classic">Classic</button>
+      <button type="button" data-style="compact">Compact</button>
+    </div>
+    <div class="row-label">Accent</div>
+    <div class="swatches" id="swatches"></div>
+    <div class="row-label">Text size</div>
+    <div class="stepper"><button type="button" id="fontDown" aria-label="Smaller">A−</button><span id="fontValue">Default</span><button type="button" id="fontUp" aria-label="Larger">A+</button></div>
+    <label class="row-label">Times
+      <select id="timestampChoice">
+        <option value="hover">On hover</option>
+        <option value="always">Always</option>
+        <option value="never">Never</option>
+      </select>
+    </label>
+    <button type="button" class="link" id="moreAppearance">More options in settings</button>
+  </section>
   <section class="panel" id="panel" hidden>
     <div class="panel-header">
       <input type="search" id="historySearch" placeholder="Search chats" aria-label="Search chats">

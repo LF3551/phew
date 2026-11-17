@@ -1088,3 +1088,277 @@ button.pill.model::after {
   color: var(--vscode-editorWarning-foreground);
   font-size: 0.85em;
 }
+
+/* Appearance: variables that the user can change */
+
+body {
+  --phew-accent: var(--vscode-button-background, #0e639c);
+  --phew-user-bg: color-mix(in srgb, var(--phew-accent) 22%, var(--vscode-input-background, #2b2b2b));
+  font-family: var(--phew-font-family, var(--vscode-font-family));
+  line-height: var(--phew-line-height, 1.5);
+}
+
+.message pre,
+body .message code {
+  font-size: var(--phew-code-size, var(--vscode-editor-font-size));
+}
+
+.send {
+  background: var(--phew-accent);
+}
+
+/* Message layout shared by all styles */
+
+.message.user,
+.message.assistant {
+  position: relative;
+  margin-bottom: 14px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 0;
+}
+
+.message .bubble {
+  overflow-wrap: anywhere;
+}
+
+.message .bubble .text {
+  white-space: pre-wrap;
+}
+
+.avatar {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  background: var(--phew-accent);
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 3px color-mix(in srgb, var(--phew-accent) 60%, #fff);
+}
+
+body.no-avatars .avatar {
+  display: none;
+}
+
+.message-actions {
+  display: flex;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  color: var(--vscode-descriptionForeground);
+  background: none;
+  border: none;
+  border-radius: 4px;
+}
+
+.action:hover {
+  color: var(--vscode-foreground);
+  background: var(--vscode-toolbar-hoverBackground, #8883);
+}
+
+.message-header .action {
+  margin-left: auto;
+}
+
+body.actions-hover .message-actions,
+body.actions-hover .message-header .action {
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+body.actions-hover .message:hover .message-actions,
+body.actions-hover .message:hover .message-header .action,
+body.actions-hover .message-actions:focus-within {
+  opacity: 1;
+}
+
+body.times-never .time {
+  display: none;
+}
+
+body.times-hover .time {
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+body.times-hover .message:hover .time,
+body.times-hover .tool:hover .time,
+body.times-hover .verify:hover .time {
+  opacity: 0.8;
+}
+
+/* Bubbles: your messages on the right, answers on the left */
+
+body.style-bubbles .message.user {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+body.style-bubbles .message.user .who {
+  display: none;
+}
+
+body.style-bubbles .message.user .bubble {
+  max-width: 88%;
+  padding: 8px 12px;
+  color: var(--vscode-foreground);
+  background: var(--phew-user-bg);
+  border-radius: 14px 14px 4px 14px;
+}
+
+body.style-bubbles .message.assistant .body {
+  padding-left: 20px;
+}
+
+/* Classic: blocks with an accent line */
+
+body.style-classic .message.user .bubble {
+  padding: 8px 10px;
+  background: var(--vscode-input-background);
+  border-radius: 6px;
+}
+
+body.style-classic .message.assistant {
+  padding-left: 10px;
+  border-left: 3px solid var(--phew-accent);
+}
+
+body.style-classic .avatar {
+  display: none;
+}
+
+/* Compact: dense, without headers */
+
+body.style-compact .message.user,
+body.style-compact .message.assistant {
+  margin-bottom: 6px;
+}
+
+body.style-compact .message .message-header .who,
+body.style-compact .avatar {
+  display: none;
+}
+
+body.style-compact .message.user .bubble {
+  padding: 4px 8px;
+  background: var(--phew-user-bg);
+  border-radius: 4px;
+}
+
+body.style-compact .message p {
+  margin: 0 0 4px;
+}
+
+/* The appearance popover */
+
+.popover.appearance {
+  top: 34px;
+  right: 6px;
+  bottom: auto;
+  left: auto;
+  width: 240px;
+}
+
+.segmented {
+  display: flex;
+  overflow: hidden;
+  border: 1px solid var(--vscode-panel-border, #8884);
+  border-radius: 6px;
+}
+
+.segmented button {
+  flex: 1;
+  padding: 4px 0;
+  color: var(--vscode-foreground);
+  background: none;
+  border: none;
+}
+
+.segmented button.active {
+  color: var(--vscode-button-foreground);
+  background: var(--phew-accent);
+}
+
+.row-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.85em;
+}
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.swatch {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+}
+
+.swatch.theme {
+  background: conic-gradient(#4c8dff, #8b5cf6, #e64980, #f08c2e, #2fb67c, #22b8cf, #4c8dff);
+}
+
+.swatch.active {
+  border-color: var(--vscode-foreground);
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.stepper button {
+  width: 34px;
+  padding: 2px 0;
+  color: var(--vscode-foreground);
+  background: var(--vscode-button-secondaryBackground);
+  border: none;
+  border-radius: 4px;
+}
+
+/* Headers without wasted space */
+
+body.style-bubbles .message.user .message-header {
+  display: none;
+}
+
+html body .message-actions .time {
+  display: none;
+  align-self: center;
+  margin-left: 4px;
+}
+
+html body.style-bubbles .message.user .message-actions .time {
+  display: inline;
+}
+
+html body.style-compact .message .message-header {
+  position: absolute;
+  top: 0;
+  right: 0;
+  margin: 0;
+}
+
+html body.style-compact .message .message-actions {
+  position: absolute;
+  right: 0;
+  bottom: -18px;
+}

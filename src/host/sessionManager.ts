@@ -155,6 +155,7 @@ export class SessionManager implements vscode.Disposable {
       contextLabel: context.label,
       fontSize: settings.fontSize,
       sendWith: settings.sendWith,
+      appearance: settings.appearance,
       showThinking: settings.showThinking,
       pinned: view?.pinnedId !== undefined,
     };
