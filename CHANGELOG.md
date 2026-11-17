@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-11-17
+
 The first public preview of Phew.
 
 ### Handoff
@@ -53,3 +55,6 @@ The first public preview of Phew.
 - Notifications and a soft "phew" sound when a chat finishes or needs input.
 - Phew Wrapped: a weekly or monthly card with bugs fixed, time saved, tasks, and the streak, which you can save as an image, and eight local achievements.
 - A getting started walkthrough and a settings page.
+
+[Unreleased]: https://github.com/LF3551/phew/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/LF3551/phew/releases/tag/v0.1.3
