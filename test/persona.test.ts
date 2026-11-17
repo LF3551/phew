@@ -8,7 +8,16 @@ import {
   wrapped,
 } from "../src/core/achievements";
 import { finalizeCommitMessage } from "../src/core/commit";
-import { defaultAssistant, initials, parseAssistant, personaPrompt } from "../src/core/persona";
+import {
+  defaultAssistant,
+  initials,
+  lookNames,
+  lookOf,
+  parseAssistant,
+  personaPrompt,
+  randomIdentity,
+  suggestedNames,
+} from "../src/core/persona";
 import { emptyStats } from "../src/core/stats";
 import { parseWebviewMessage } from "../src/shared/protocol";
 
@@ -31,6 +40,20 @@ describe("assistant persona", () => {
     expect(parseAssistant({ name: "", avatar: "<script>", persona: "evil" })).toEqual(defaultAssistant);
     expect(parseAssistant({ avatar: "MP" }).avatar).toBe("MP");
     expect(parseAssistant({ avatar: "ABC" }).avatar).toBe("");
+    expect(parseAssistant({ avatar: "look:cat" }).avatar).toBe("look:cat");
+    expect(parseAssistant({ avatar: "look:dragon" }).avatar).toBe("");
+  });
+
+  test("offers a random look with a name that suits it", () => {
+    for (const value of [0, 0.3, 0.99]) {
+      const pick = randomIdentity("look:cat", () => value);
+      const look = lookOf(pick.avatar);
+      expect(look).toBeDefined();
+      expect(look).not.toBe("cat");
+      expect(lookNames[look ?? "drop"]).toContain(pick.name);
+    }
+    expect(suggestedNames.has("Mochi")).toBe(true);
+    expect(suggestedNames.has("Max")).toBe(false);
   });
 
   test("builds the persona prompt", () => {
@@ -141,5 +164,20 @@ describe("persona messages", () => {
     };
     expect(finalizeCommitMessage("fix: x\n\nAssisted-by: Bot", settings, {})).toBe("fix: x");
     expect(finalizeCommitMessage("fix: x", { ...settings, assistedBy: true }, {})).toBe("fix: x\n\nAssisted-by: Phew");
+  });
+});
+
+describe("the Phew family", () => {
+  test("suggests a name for each look and a random identity", async () => {
+    const { lookNames, mascotLooks, randomIdentity, suggestedNames, personaFaces } = await import(
+      "../src/core/persona"
+    );
+    for (const look of mascotLooks) expect(lookNames[look].length).toBeGreaterThan(0);
+    expect(suggestedNames.has("Mochi")).toBe(true);
+    const pick = randomIdentity("look:cat", () => 0);
+    expect(pick.avatar).toBe("look:bot");
+    expect(pick.name).toBe("Byte");
+    expect(randomIdentity("", () => 0).avatar).toBe("look:cat");
+    expect(personaFaces.quiet).toBe("sleepy");
   });
 });

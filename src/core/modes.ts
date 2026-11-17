@@ -24,7 +24,7 @@ export const builtInModes: readonly ModeDefinition[] = [
   {
     id: "ask",
     name: "Ask",
-    description: "Answers questions. Reads files, changes nothing.",
+    description: "Answers questions about your code.",
     instructions: [
       "You are in Ask mode.",
       "Answer the question with the read-only tools.",
@@ -36,7 +36,7 @@ export const builtInModes: readonly ModeDefinition[] = [
   {
     id: "plan",
     name: "Plan",
-    description: "Explores the code and writes a plan. Changes nothing.",
+    description: "Explores the code and writes a plan.",
     instructions: [
       "You are in Plan mode.",
       "Explore the code with the read-only tools, then write a numbered implementation plan.",
@@ -77,7 +77,7 @@ export const builtInModes: readonly ModeDefinition[] = [
   {
     id: "review",
     name: "Review",
-    description: "Reviews changes for bugs, security, and style. Changes nothing.",
+    description: "Reviews changes for bugs, security, and style.",
     instructions: [
       "You are in Review mode.",
       "Review the current changes with git_diff and the read-only tools.",

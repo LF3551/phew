@@ -5,11 +5,11 @@ import type { ImagePart } from "../core/chat";
 import { truncateMiddle } from "../core/chat";
 import { resolveInside, toRelative } from "../core/paths";
 import { isSensitivePath, redactSecrets } from "../core/secrets";
-import type { MentionItem } from "../shared/protocol";
+import type { ContextOption, MentionItem } from "../shared/protocol";
 import { readWorkspaceText } from "./changes";
 import { git } from "./git";
 import type { Settings } from "./settings";
-import type { TerminalWatcher } from "./terminalWatcher";
+import type { FailedCommand, TerminalWatcher } from "./terminalWatcher";
 
 const maximumFileCharacters = 120_000;
 const maximumGitCharacters = 60_000;
@@ -128,8 +128,125 @@ export async function resolveAttachments(
 }
 
 /** Suggestions for the `@` menu: special context first, then matching files. */
+const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
+
+function problemCounts(root: string, only?: string): { errors: number; warnings: number } {
+  let errors = 0;
+  let warnings = 0;
+  for (const [uri, diagnostics] of vscode.languages.getDiagnostics()) {
+    const absolute = resolveInside(root, uri.fsPath);
+    if (!absolute) continue;
+    if (only && toRelative(root, absolute) !== only) continue;
+    for (const diagnostic of diagnostics) {
+      if (diagnostic.severity === vscode.DiagnosticSeverity.Error) errors++;
+      else if (diagnostic.severity === vscode.DiagnosticSeverity.Warning) warnings++;
+    }
+  }
+  return { errors, warnings };
+}
+
+function problemText(counts: { errors: number; warnings: number }): string {
+  return [
+    counts.errors ? plural(counts.errors, "error") : "",
+    counts.warnings ? plural(counts.warnings, "warning") : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
 export class MentionProvider {
   private cache: { root: string; files: string[]; time: number } | undefined;
+  /** The last terminal command. The extension sets it after the terminal watcher exists. */
+  lastExecution: () => FailedCommand | undefined = () => undefined;
+
+  /** One-click context for the attach menu: what is open, selected, broken, or changed right now. */
+  async contextOptions(root: vscode.Uri): Promise<ContextOption[]> {
+    const options: ContextOption[] = [];
+    const editor = vscode.window.activeTextEditor ?? vscode.window.visibleTextEditors[0];
+    const absolute =
+      editor?.document.uri.scheme === "file" ? resolveInside(root.fsPath, editor.document.uri.fsPath) : undefined;
+    const relative = absolute ? toRelative(root.fsPath, absolute) : undefined;
+    if (editor && relative) {
+      const name = path.basename(relative);
+      const folder = path.dirname(relative);
+      options.push({
+        id: "file",
+        label: "Current file",
+        detail: folder === "." ? name : `${name} · ${folder}`,
+        attachment: { kind: "file", path: relative },
+        chip: relative,
+      });
+      if (!editor.selection.isEmpty) {
+        const start = editor.selection.start.line + 1;
+        const end = editor.selection.end.line + 1;
+        const selection: Attachment = {
+          kind: "selection",
+          path: relative,
+          startLine: start,
+          endLine: end,
+          text: editor.document.getText(editor.selection).slice(0, 100_000),
+          language: editor.document.languageId,
+        };
+        options.push({
+          id: "selection",
+          label: "Selection",
+          detail: start === end ? `${name} · line ${start}` : `${name} · lines ${start}–${end}`,
+          attachment: selection,
+          chip: attachmentLabel(selection),
+        });
+      }
+      const inFile = problemCounts(root.fsPath, relative);
+      if (inFile.errors + inFile.warnings > 0)
+        options.push({
+          id: "fileProblems",
+          label: "Problems in this file",
+          detail: problemText(inFile),
+          attachment: { kind: "problems", path: relative },
+          chip: `Problems: ${name}`,
+          tone: inFile.errors ? "error" : "warning",
+        });
+    }
+    const all = problemCounts(root.fsPath);
+    if (all.errors + all.warnings > 0)
+      options.push({
+        id: "problems",
+        label: "All problems",
+        detail: problemText(all),
+        attachment: { kind: "problems" },
+        chip: "Problems",
+        tone: all.errors ? "error" : "warning",
+      });
+    const status = await git(root.fsPath, ["status", "--porcelain"], undefined, 3000).catch(() => undefined);
+    if (status?.code === 0) {
+      const changed = status.stdout.split("\n").filter((line) => line.trim()).length;
+      if (changed > 0)
+        options.push({
+          id: "git",
+          label: "Git changes",
+          detail: `${plural(changed, "file")} changed`,
+          attachment: { kind: "git" },
+          chip: "Git changes",
+        });
+    }
+    const last = this.lastExecution();
+    if (last?.output.trim()) {
+      const terminal: Attachment = {
+        kind: "terminal",
+        command: last.command,
+        output: truncateMiddle(last.output, 30_000),
+      };
+      const failed = last.exitCode !== undefined && last.exitCode !== 0;
+      options.push({
+        id: "terminal",
+        label: "Terminal output",
+        detail: `${last.command.slice(0, 60) || "last command"}${failed ? ` · exit ${last.exitCode}` : ""}`,
+        attachment: terminal,
+        chip: attachmentLabel(terminal),
+        tone: failed ? "error" : "ok",
+      });
+    }
+    return options;
+  }
 
   async suggest(root: vscode.Uri, query: string, settings: Settings): Promise<MentionItem[]> {
     const lower = query.toLowerCase();

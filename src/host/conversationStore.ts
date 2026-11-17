@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import type { ChatMessage } from "../core/chat";
+import { chatPreview } from "../core/chatList";
 import type { SerializedCheckpoint } from "../core/checkpoints";
 import type { Plan } from "../core/plan";
 import type { CommandSetting, HistoryItem, HostMessage, ReviewSetting } from "../shared/protocol";
@@ -8,6 +9,7 @@ export interface StoredConversation {
   readonly version: 1;
   readonly id: string;
   readonly title: string;
+  readonly titleSource?: "auto" | "user" | "generated";
   readonly createdAt: number;
   readonly updatedAt: number;
   readonly mode: string;
@@ -33,6 +35,11 @@ function withoutImages(history: readonly ChatMessage[]): ChatMessage[] {
   );
 }
 
+function previewOf(conversation: StoredConversation): { preview?: string } {
+  const preview = chatPreview(conversation.history, conversation.title);
+  return preview ? { preview } : {};
+}
+
 /** Saves conversations as JSON files in the extension storage of the workspace. */
 export class ConversationStore {
   private writing: Promise<void> = Promise.resolve();
@@ -43,7 +50,37 @@ export class ConversationStore {
   ) {}
 
   async list(): Promise<HistoryItem[]> {
+    await this.addMissingPreviews();
     return (await this.readIndex()).sort((a, b) => b.updatedAt - a.updatedAt);
+  }
+
+  /** Chats saved by older versions have no preview line. Adds it once, so the list can tell them apart. */
+  private addMissingPreviews(): Promise<void> {
+    this.writing = this.writing.then(async () => {
+      try {
+        await this.fillPreviews();
+      } catch {
+        // The list still works without previews.
+      }
+    });
+    return this.writing;
+  }
+
+  private async fillPreviews(): Promise<void> {
+    const index = await this.readIndex();
+    const missing = index.filter((item) => item.preview === undefined);
+    if (missing.length === 0) return;
+    const next: HistoryItem[] = [];
+    for (const item of index) {
+      if (item.preview !== undefined) {
+        next.push(item);
+        continue;
+      }
+      const conversation = await this.load(item.id);
+      // An empty string marks a chat without a preview, so it is not read again.
+      next.push({ ...item, preview: conversation ? (previewOf(conversation).preview ?? "") : "" });
+    }
+    await this.writeIndex(next);
   }
 
   async load(id: string): Promise<StoredConversation | undefined> {
@@ -70,6 +107,7 @@ export class ConversationStore {
         title: conversation.title,
         updatedAt: conversation.updatedAt,
         messages: conversation.history.filter((message) => message.role === "user").length,
+        ...previewOf(conversation),
         ...(conversation.worktree ? { worktree: conversation.worktree.branch } : {}),
       });
       index.sort((a, b) => b.updatedAt - a.updatedAt);

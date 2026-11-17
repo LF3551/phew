@@ -13,6 +13,8 @@ export interface Appearance {
   readonly timestamps: Visibility;
   readonly messageActions: "hover" | "always";
   readonly avatars: boolean;
+  /** How much the mascot moves: blinks and gaze, only blinks, or nothing. */
+  readonly mascot: "lively" | "calm" | "still";
 }
 
 export const defaultAppearance: Appearance = {
@@ -25,6 +27,7 @@ export const defaultAppearance: Appearance = {
   timestamps: "hover",
   messageActions: "hover",
   avatars: true,
+  mascot: "lively",
 };
 
 /** Accepts hex, rgb(a), hsl(a), and named colors. Everything else is rejected, so no other CSS reaches the view. */

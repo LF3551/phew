@@ -1,6 +1,22 @@
 import type { Achievement, Wrapped } from "../core/achievements";
-import { initials, type Persona, personaInfo, personas } from "../core/persona";
+import { gazeOffset, nextBlink } from "../core/mascotLife";
+import {
+  type AvatarLook,
+  initials,
+  lookNames,
+  lookOf,
+  mascotLooks,
+  type Persona,
+  personaFaces,
+  personaInfo,
+  personas,
+  randomIdentity,
+  suggestedNames,
+} from "../core/persona";
 import type { ViewState, WebviewMessage } from "../shared/protocol";
+import { copyWithFeedback } from "./copy";
+import { lookArt } from "./looks";
+import { mascotMotion } from "./mascotLife";
 
 /** The assistant: the living mascot, the introduction card, Phew Wrapped, achievements, and sounds. */
 
@@ -12,6 +28,9 @@ const svgNs = "http://www.w3.org/2000/svg";
 const reliefEyes = "M48 140q32 36 64 0M144 140q32 36 64 0";
 const focusEyes = "M54 150h52M150 150h52";
 const worryEyes = "M52 162q28-30 56-8M148 154q28-22 56 8";
+/** Open eyes: two short strokes with round caps, in the same line style as the other faces. */
+const openEyes = "M80 134v24M176 134v24";
+const sleepyEyes = "M58 156q22 8 44 0M154 156q22 8 44 0";
 const dropPath = "M198 30c-14 20-24 33-24 47a24 24 0 0 0 48 0c0-14-10-27-24-47z";
 
 function svg<K extends keyof SVGElementTagNameMap>(
@@ -23,25 +42,46 @@ function svg<K extends keyof SVGElementTagNameMap>(
   return node;
 }
 
-/** The Phew drop: relieved eyes and a drop of sweat. CSS animates it by `data-state`. */
-export function mascot(state: MascotState = "idle"): SVGSVGElement {
+/** The Phew drop: relieved eyes and a drop of sweat. CSS animates it by `data-state`. A look dresses it up. */
+export function mascot(state: MascotState = "idle", look?: AvatarLook): SVGSVGElement {
   const root = svg("svg", { viewBox: "0 0 256 256", class: "mascot", "data-state": state, "aria-hidden": "true" });
-  root.append(svg("rect", { class: "m-face", width: "256", height: "256", rx: "76" }));
+  const art = look ? lookArt[look] : undefined;
+  const shape = (tag: string, attributes: Record<string, string>) => svg(tag as "path", attributes) as SVGElement;
+  if (art) {
+    root.dataset.look = look;
+    root.style.setProperty("--m-face", art.face);
+    root.style.setProperty("--m-eye", art.eye);
+  }
+  const [bodyTag, bodyAttributes] = art?.body ?? ["rect", { width: "256", height: "256", rx: "76" }];
+  root.append(shape(bodyTag, { ...bodyAttributes, class: "m-face" }));
+  for (const [tag, attributes] of art?.back ?? []) root.append(shape(tag, attributes));
+  // The gaze group moves all eyes together, so every face can look around.
+  const gaze = svg("g", { class: "m-gaze" });
   for (const [kind, d] of [
     ["relief", reliefEyes],
     ["focus", focusEyes],
     ["worry", worryEyes],
+    ["open", openEyes],
+    ["sleepy", sleepyEyes],
   ] as const) {
-    root.append(svg("path", { class: `m-eyes m-${kind}`, d }));
+    gaze.append(svg("path", { class: `m-eyes m-${kind}`, d }));
   }
-  root.append(svg("path", { class: "m-drop", d: dropPath }));
+  if (art?.eyeScale) {
+    // The outer group scales, so the CSS transforms of the gaze still work.
+    const scale = svg("g", { transform: `translate(128 148) scale(${art.eyeScale}) translate(-128 -148)` });
+    scale.append(gaze);
+    root.append(scale);
+  } else root.append(gaze);
+  for (const [tag, attributes] of art?.front ?? []) root.append(shape(tag, attributes));
+  if (!art || art.drop) root.append(svg("path", { class: "m-drop", d: dropPath }));
   return root;
 }
 
-/** The avatar of the assistant: the mascot, or the emoji or letters that the user chose. */
+/** The avatar of the assistant: the mascot in its look, or the emoji or letters that the user chose. */
 export function avatar(assistant: AssistantView | undefined, className: string, state: MascotState = "idle"): Element {
-  if (!assistant?.avatar) {
-    const node = mascot(state);
+  const look = lookOf(assistant?.avatar ?? "");
+  if (!assistant?.avatar || look) {
+    const node = mascot(state, look);
     node.classList.add(className);
     return node;
   }
@@ -165,7 +205,15 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
-function openDialog(className: string, label: string): { dialog: HTMLElement; close: () => void } {
+let closeOpenDialog: (() => void) | undefined;
+
+/** Opens a modal dialog. `onClose` runs once, also when another dialog replaces this one. */
+function openDialog(
+  className: string,
+  label: string,
+  onClose?: () => void,
+): { dialog: HTMLElement; close: () => void } {
+  closeOpenDialog?.();
   const overlay = document.getElementById("overlay") as HTMLElement;
   const dialog = el("div", `dialog ${className}`);
   dialog.setAttribute("role", "dialog");
@@ -174,9 +222,12 @@ function openDialog(className: string, label: string): { dialog: HTMLElement; cl
   overlay.replaceChildren(dialog);
   overlay.hidden = false;
   const close = () => {
+    if (closeOpenDialog !== close) return;
+    closeOpenDialog = undefined;
     overlay.hidden = true;
     overlay.replaceChildren();
     document.removeEventListener("keydown", onKey);
+    onClose?.();
   };
   const onKey = (event: KeyboardEvent) => {
     if (event.key === "Escape") close();
@@ -185,10 +236,12 @@ function openDialog(className: string, label: string): { dialog: HTMLElement; cl
   overlay.onclick = (event) => {
     if (event.target === overlay) close();
   };
+  closeOpenDialog = close;
   return { dialog, close };
 }
 
-const avatarChoices = ["", "🤖", "🦊", "🐱", "🦉", "⚡", "🧠", "🚀"];
+/** The Phew drop first, then its family. Letters are added from the name. */
+const avatarChoices = ["", ...mascotLooks.map((look) => `look:${look}`)];
 const languages: readonly (readonly [string, string])[] = [
   ["match", "My language"],
   ["English", "English"],
@@ -200,36 +253,140 @@ const languages: readonly (readonly [string, string])[] = [
   ["Chinese", "中文"],
 ];
 
+const greetings: Record<Persona, string> = {
+  partner: "What shall we fix?",
+  mentor: "Let's fix it, and I'll show you why it works.",
+  quiet: "Ready.",
+  reviewer: "Show me the code. I'll check it properly.",
+  custom: "Ready when you are.",
+};
+
+function lookLabel(avatarValue: string): string {
+  const look = lookOf(avatarValue);
+  if (look) return lookArt[look].label;
+  if (avatarValue === "") return "Phew drop";
+  return /^[\p{L}\p{N}]+$/u.test(avatarValue) ? "Letters" : "Emoji";
+}
+
+/**
+ * A small life for the mascot in the preview: it blinks, follows the pointer, looks down while the user types,
+ * and greets a new look. The face shows the character. It respects the motion setting.
+ */
+function previewLife(
+  getNode: () => Element | undefined,
+  getFace: () => string,
+): { typed: () => void; hello: () => void; stop: () => void } {
+  let typingUntil = 0;
+  let helloUntil = 0;
+  let pointer: { x: number; y: number } | undefined;
+  let blinkTimer: ReturnType<typeof setTimeout> | undefined;
+  let frame = 0;
+  const render = () => {
+    frame = 0;
+    const node = getNode();
+    if (!(node instanceof SVGSVGElement)) return;
+    const motion = mascotMotion();
+    const now = Date.now();
+    node.dataset.face = now < helloUntil || (now < typingUntil && motion !== "still") ? "open" : getFace();
+    let look = "center";
+    if (motion === "lively" && now < typingUntil) look = "down";
+    else if (motion === "lively" && pointer) {
+      const box = node.getBoundingClientRect();
+      if (box.width > 0) {
+        const scale = Math.min(256 / box.width, 3);
+        const offset = gazeOffset(
+          (pointer.x - (box.left + box.width / 2)) * scale,
+          (pointer.y - (box.top + box.height / 2)) * scale,
+        );
+        node.style.setProperty("--gaze-x", `${offset.x}px`);
+        node.style.setProperty("--gaze-y", `${offset.y}px`);
+        look = "follow";
+      }
+    }
+    node.dataset.look = look;
+  };
+  const schedule = () => {
+    if (!frame) frame = requestAnimationFrame(render);
+  };
+  const onPointer = (event: PointerEvent) => {
+    pointer = { x: event.clientX, y: event.clientY };
+    schedule();
+  };
+  const blink = () => {
+    const next = nextBlink();
+    blinkTimer = setTimeout(() => {
+      const node = getNode();
+      if (mascotMotion() !== "still" && node?.getAttribute("data-face") === "open") {
+        node.classList.add("blink");
+        setTimeout(() => node.classList.remove("blink"), 130);
+      }
+      blink();
+    }, next.delay);
+  };
+  document.addEventListener("pointermove", onPointer, { passive: true });
+  blink();
+  schedule();
+  return {
+    typed: () => {
+      typingUntil = Date.now() + 1200;
+      schedule();
+      setTimeout(schedule, 1250);
+    },
+    hello: () => {
+      const node = getNode();
+      if (!node) return;
+      if (mascotMotion() === "still") return schedule();
+      helloUntil = Date.now() + 900;
+      node.classList.remove("hello");
+      void node.getBoundingClientRect();
+      node.classList.add("hello");
+      schedule();
+      setTimeout(schedule, 950);
+    },
+    stop: () => {
+      document.removeEventListener("pointermove", onPointer);
+      if (blinkTimer) clearTimeout(blinkTimer);
+      if (frame) cancelAnimationFrame(frame);
+    },
+  };
+}
+
 /** The card where the user names the assistant and picks a look and a character. */
 export function showAssistantCard(current: AssistantView | undefined, first: boolean, post: Post): void {
-  const { dialog, close } = openDialog("assistant-card", "Your assistant");
   const draft = {
     name: current?.name ?? "Phew",
     avatar: current?.avatar ?? "",
     persona: (current?.persona ?? "partner") as Persona,
-    customPersona: "",
+    customPersona: current?.customPersona ?? "",
     userName: current?.userName ?? "",
     language: current?.language ?? "match",
   };
+  const initial = JSON.stringify(draft);
+  // A suggested name follows the look until the user types a name of their own.
+  let autoName = draft.name === "Phew" || suggestedNames.has(draft.name);
+  let previewMascot: Element | undefined;
+  const life = previewLife(
+    () => previewMascot,
+    () => personaFaces[draft.persona],
+  );
+  const { dialog, close } = openDialog("assistant-card", "Your assistant", () => life.stop());
 
+  // Preview
   const preview = el("div", "assistant-preview");
-  const renderPreview = () => {
-    const name = draft.name.trim() || "Phew";
-    const bubble = el("div", "preview-text");
-    bubble.append(el("strong", undefined, name));
+  const previewSlot = el("div", "preview-slot");
+  const previewName = el("strong");
+  const previewLine = el("span");
+  const bubble = el("div", "preview-text");
+  bubble.append(previewName, previewLine);
+  preview.append(previewSlot, bubble);
+  const renderPreviewMascot = () => {
+    previewMascot = avatar({ ...draft } as AssistantView, "preview-avatar", "idle");
+    previewSlot.replaceChildren(previewMascot);
+  };
+  const renderPreviewText = () => {
+    previewName.textContent = draft.name.trim() || "Phew";
     const greeting = draft.userName.trim() ? `Hi, ${draft.userName.trim()}! ` : "Hi! ";
-    const lines: Record<Persona, string> = {
-      partner: "What shall we fix?",
-      mentor: "Let's fix it, and I'll show you why it works.",
-      quiet: "Ready.",
-      reviewer: "Show me the code. I'll check it properly.",
-      custom: "Ready when you are.",
-    };
-    bubble.append(el("span", undefined, greeting + lines[draft.persona]));
-    preview.replaceChildren(
-      avatar({ ...draft, name, persona: draft.persona } as AssistantView, "preview-avatar", "done"),
-      bubble,
-    );
+    previewLine.textContent = greeting + greetings[draft.persona];
   };
 
   dialog.append(
@@ -244,79 +401,118 @@ export function showAssistantCard(current: AssistantView | undefined, first: boo
     return wrap;
   };
 
+  // Name, with a dice for a random look and name
   const nameInput = el("input");
   nameInput.maxLength = 32;
   nameInput.placeholder = "Phew";
-  nameInput.value = draft.name === "Phew" ? "" : draft.name;
-  nameInput.addEventListener("input", () => {
-    draft.name = nameInput.value;
-    renderPreview();
-    renderAvatars();
-  });
-  dialog.append(field("Name", nameInput));
+  nameInput.value = draft.name;
+  const dice = el("button", "dice-button icon-button");
+  dice.type = "button";
+  dice.title = "Surprise me: a random look and name";
+  dice.setAttribute("aria-label", dice.title);
+  dice.innerHTML =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"/><circle cx="8.5" cy="8.5" r="1.4"/><circle cx="15.5" cy="15.5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="15.5" cy="8.5" r="1.4"/><circle cx="8.5" cy="15.5" r="1.4"/></svg>';
+  const nameRow = el("div", "name-row");
+  nameRow.append(nameInput, dice);
+  const nameField = el("div", "field");
+  const nameLabel = el("label", "field-label", "Name");
+  nameInput.id = "assistantNameInput";
+  nameLabel.htmlFor = nameInput.id;
+  nameField.append(nameLabel, nameRow);
+  dialog.append(nameField);
 
+  // Look
   const avatars = el("div", "avatar-choices");
+  avatars.setAttribute("role", "radiogroup");
+  avatars.setAttribute("aria-label", "Look");
+  const lookName = el("span", "field-hint");
   const renderAvatars = () => {
     const letters = initials(draft.name.trim() || "Phew");
-    const choices = [...new Set([...avatarChoices, letters])];
+    // An emoji from an older version stays available until the user picks something else.
+    const kept = current?.avatar && !lookOf(current.avatar) && current.avatar !== letters ? [current.avatar] : [];
+    const choices = [...new Set([...avatarChoices, letters, ...kept])];
     avatars.replaceChildren(
       ...choices.map((choice) => {
         const button = el("button", choice === draft.avatar ? "selected" : undefined);
         button.type = "button";
-        button.title = choice === "" ? "Phew drop" : choice;
+        button.title = lookLabel(choice);
+        button.setAttribute("role", "radio");
+        button.setAttribute("aria-checked", String(choice === draft.avatar));
+        button.setAttribute("aria-label", button.title);
         button.append(avatar({ ...draft, avatar: choice } as AssistantView, "choice-avatar"));
-        button.addEventListener("click", () => {
-          draft.avatar = choice;
-          renderAvatars();
-          renderPreview();
-        });
+        button.addEventListener("click", () => pickLook(choice));
         return button;
       }),
     );
+    lookName.textContent = lookLabel(draft.avatar);
   };
+  const lookLabelRow = el("span", "field-label");
+  lookLabelRow.append("Look", el("span", "field-dot", "·"), lookName);
   const avatarField = el("div", "field");
-  avatarField.append(el("span", "field-label", "Look"), avatars);
+  avatarField.append(lookLabelRow, avatars);
   dialog.append(avatarField);
 
+  // Character: four cards and a link for your own description
   const personaRow = el("div", "persona-choices");
+  personaRow.setAttribute("role", "radiogroup");
+  personaRow.setAttribute("aria-label", "Character");
+  const customLink = el("button", "custom-link");
+  customLink.type = "button";
   const custom = el("textarea");
   custom.rows = 2;
   custom.maxLength = 1000;
+  custom.value = draft.customPersona;
   custom.placeholder = "For example: a calm senior engineer who loves tests and short answers.";
+  custom.setAttribute("aria-label", "Your own character");
   custom.addEventListener("input", () => {
     draft.customPersona = custom.value;
+    updateSave();
   });
   const renderPersonas = () => {
     personaRow.replaceChildren(
-      ...personas.map((persona) => {
-        const button = el("button", persona === draft.persona ? "selected" : undefined);
-        button.type = "button";
-        button.append(
-          el("strong", undefined, personaInfo[persona].label),
-          el("span", undefined, personaInfo[persona].description),
-        );
-        button.addEventListener("click", () => {
-          draft.persona = persona;
-          renderPersonas();
-          renderPreview();
-        });
-        return button;
-      }),
+      ...personas
+        .filter((persona) => persona !== "custom")
+        .map((persona) => {
+          const button = el("button", persona === draft.persona ? "selected" : undefined);
+          button.type = "button";
+          button.setAttribute("role", "radio");
+          button.setAttribute("aria-checked", String(persona === draft.persona));
+          button.append(
+            el("strong", undefined, personaInfo[persona].label),
+            el("span", undefined, personaInfo[persona].description),
+          );
+          button.addEventListener("click", () => pickPersona(persona));
+          return button;
+        }),
     );
-    custom.hidden = draft.persona !== "custom";
+    const isCustom = draft.persona === "custom";
+    customLink.classList.toggle("selected", isCustom);
+    customLink.textContent = isCustom ? "✎ Your own character" : "✎ Describe your own…";
+    custom.hidden = !isCustom;
   };
+  customLink.addEventListener("click", () => {
+    pickPersona("custom");
+    custom.focus();
+  });
   const personaField = el("div", "field");
-  personaField.append(el("span", "field-label", "Character"), personaRow, custom);
+  personaField.append(el("span", "field-label", "Character"), personaRow, customLink, custom);
   dialog.append(personaField);
 
-  const row = el("div", "field-row");
+  // More: how to call the user and the language
+  const more = el("details", "more-settings");
+  const summary = el("summary");
+  const summaryHint = el("span", "field-hint");
+  summary.append("More", summaryHint);
   const userInput = el("input");
   userInput.maxLength = 40;
   userInput.placeholder = "Your name";
   userInput.value = draft.userName;
   userInput.addEventListener("input", () => {
     draft.userName = userInput.value;
-    renderPreview();
+    renderPreviewText();
+    renderSummary();
+    updateSave();
+    life.typed();
   });
   const languageSelect = el("select");
   const options = languages.some(([value]) => value === draft.language)
@@ -330,10 +526,23 @@ export function showAssistantCard(current: AssistantView | undefined, first: boo
   languageSelect.value = draft.language;
   languageSelect.addEventListener("change", () => {
     draft.language = languageSelect.value;
+    renderSummary();
+    updateSave();
   });
+  const renderSummary = () => {
+    const parts = [
+      draft.userName.trim() ? `calls you ${draft.userName.trim()}` : "",
+      draft.language !== "match" ? (options.find(([value]) => value === draft.language)?.[1] ?? draft.language) : "",
+    ].filter(Boolean);
+    summaryHint.textContent = parts.length ? parts.join(" · ") : "your name, language";
+  };
+  const row = el("div", "field-row");
   row.append(field("Call me", userInput), field("Answers in", languageSelect));
-  dialog.append(row);
+  more.append(summary, row);
+  more.open = draft.userName.trim() !== "" || draft.language !== "match";
+  dialog.append(more);
 
+  // Actions
   const actions = el("div", "dialog-actions");
   const later = el("button", "secondary", first ? "Not now" : "Cancel");
   later.type = "button";
@@ -343,17 +552,75 @@ export function showAssistantCard(current: AssistantView | undefined, first: boo
   });
   const save = el("button", "primary", "Save");
   save.type = "button";
-  save.addEventListener("click", () => {
+  const dirty = () => first || JSON.stringify(draft) !== initial;
+  const updateSave = () => {
+    save.disabled = !dirty();
+  };
+  const submit = () => {
+    if (!dirty()) return close();
     post({ type: "saveAssistant", ...draft, name: draft.name.trim() || "Phew" });
     close();
-  });
+  };
+  save.addEventListener("click", submit);
   actions.append(later, save);
   dialog.append(actions);
+  dialog.addEventListener("keydown", (event) => {
+    const target = event.target as HTMLElement;
+    if (event.key !== "Enter" || event.isComposing || target.tagName === "TEXTAREA") return;
+    if (target.tagName === "BUTTON" || target.tagName === "SUMMARY") return;
+    event.preventDefault();
+    submit();
+  });
+
+  // Behavior
+  const pickLook = (choice: string) => {
+    draft.avatar = choice;
+    if (autoName) {
+      draft.name = lookNames[lookOf(choice) ?? "drop"][0] ?? "Phew";
+      nameInput.value = draft.name;
+      renderPreviewText();
+    }
+    renderAvatars();
+    renderPreviewMascot();
+    life.hello();
+    updateSave();
+  };
+  const pickPersona = (persona: Persona) => {
+    draft.persona = persona;
+    renderPersonas();
+    renderPreviewText();
+    life.hello();
+    updateSave();
+  };
+  nameInput.addEventListener("input", () => {
+    // Chosen letters follow the name.
+    if (draft.avatar !== "" && draft.avatar === initials(draft.name.trim() || "Phew"))
+      draft.avatar = initials(nameInput.value.trim() || "Phew");
+    draft.name = nameInput.value;
+    autoName = draft.name.trim() === "" || suggestedNames.has(draft.name.trim());
+    renderPreviewText();
+    renderAvatars();
+    if (/^[\p{L}\p{N}]+$/u.test(draft.avatar)) renderPreviewMascot();
+    life.typed();
+    updateSave();
+  });
+  dice.addEventListener("click", () => {
+    const pick = randomIdentity(draft.avatar);
+    draft.name = pick.name;
+    nameInput.value = pick.name;
+    autoName = true;
+    renderPreviewText();
+    pickLook(pick.avatar);
+  });
 
   renderAvatars();
   renderPersonas();
-  renderPreview();
+  renderSummary();
+  renderPreviewMascot();
+  renderPreviewText();
+  updateSave();
   nameInput.focus();
+  nameInput.select();
 }
 
 // Phew Wrapped
@@ -483,10 +750,7 @@ export function showWrapped(
   const actions = el("div", "dialog-actions");
   const copy = el("button", "secondary", "Copy text");
   copy.type = "button";
-  copy.addEventListener("click", () => {
-    void navigator.clipboard.writeText(summaryText(data, name));
-    copy.textContent = "Copied";
-  });
+  copy.addEventListener("click", () => void copyWithFeedback(copy, summaryText(data, name), "Summary"));
   const save = el("button", "primary", "Save image");
   save.type = "button";
   save.addEventListener("click", () =>

@@ -1,9 +1,12 @@
+import * as fs from "node:fs";
 import * as os from "node:os";
+import * as path from "node:path";
 import * as vscode from "vscode";
 import { achievementList } from "../core/achievements";
 import { type AgentResult, runAgent, type VerificationResult } from "../core/agent";
 import type { Attachment } from "../core/attachments";
 import { type ChatMessage, type ModelClient, type ToolCall, trimHistory, truncateMiddle } from "../core/chat";
+import { buildTitleMessages, cleanTitle, firstExchange } from "../core/chatTitle";
 import { CheckpointStore } from "../core/checkpoints";
 import { decideCommand } from "../core/commandPolicy";
 import {
@@ -25,6 +28,7 @@ import { skillsPrompt } from "../core/skills";
 import { type FileChange, fileChange } from "../core/summary";
 import type { ModelProfile } from "../providers/profile";
 import type { CommandSetting, HostMessage, ReviewSetting } from "../shared/protocol";
+import { AgentTerminal } from "./agentTerminal";
 import { ApprovalBroker } from "./approvals";
 import { resolveAttachments } from "./attachments";
 import { ChangeManager, type DiffContentProvider } from "./changes";
@@ -82,7 +86,7 @@ export interface SessionDependencies {
   readonly onChange: (session: AgentSession) => void;
   readonly persist: (session: AgentSession) => Promise<void>;
   /** Tells the user that the session finished or needs input, for example with a notification and a sound. */
-  readonly notify: (session: AgentSession, event: "done" | "failed" | "input") => void;
+  readonly notify: (session: AgentSession, event: "done" | "failed" | "input", seconds?: number) => void;
 }
 
 export interface WorktreeInfo {
@@ -171,6 +175,20 @@ export class AgentSession {
   private controller: AbortController | undefined;
   private readonly side = new Set<AbortController>();
   private counter = 0;
+  /** The folder of the chat's shell, kept between commands and turns. */
+  private readonly shell: { cwd?: string; envFile?: string } = {
+    envFile: path.join(
+      os.tmpdir(),
+      `phew-env-${process.pid}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`,
+    ),
+  };
+  /** Tool calls of the running turn: the id in the chat by the id of the model call, and back. */
+  private readonly toolIdsByCall = new Map<string, string>();
+  private readonly callIdsByTool = new Map<string, string>();
+  private activeTools: ToolHost | undefined;
+  /** Live command output waits here briefly, so the chat gets a few messages per second, not one per chunk. */
+  private readonly outputBuffers = new Map<string, string>();
+  private outputTimer: ReturnType<typeof setTimeout> | undefined;
   private sessionTokens: number;
   private sessionCost: number;
   private lastInputTokens = 0;
@@ -179,6 +197,9 @@ export class AgentSession {
   private currentPlan: Plan;
   overrides: ApprovalOverrides;
   title: string;
+  /** Where the title came from. Only an automatic title is replaced by a generated one. */
+  private titleSource: "auto" | "user" | "generated" = "auto";
+  private naming = false;
   updatedAt: number;
 
   constructor(
@@ -205,6 +226,11 @@ export class AgentSession {
     this.history = restored ? [...restored.history] : [];
     this.modeId = restored?.mode ?? readSettings(root.uri).defaultMode;
     this.title = restored?.title ?? (worktree ? `Agent: ${worktree.branch}` : "New chat");
+    if (restored) {
+      // Older chats have no source. A title that still matches the first message was not renamed by the user.
+      const first = restored.history.find((message) => message.role === "user")?.content ?? "";
+      this.titleSource = restored.titleSource ?? (restored.title === titleFromText(first) ? "auto" : "user");
+    }
     this.createdAt = restored?.createdAt ?? Date.now();
     this.updatedAt = restored?.updatedAt ?? this.createdAt;
     this.sessionTokens = restored?.tokens ?? 0;
@@ -296,6 +322,7 @@ export class AgentSession {
 
   rename(title: string): void {
     this.title = title.trim().slice(0, 120) || this.title;
+    this.titleSource = "user";
     this.deps.onChange(this);
     void this.deps.persist(this);
   }
@@ -305,6 +332,7 @@ export class AgentSession {
       version: 1,
       id: this.id,
       title: this.title,
+      titleSource: this.titleSource,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
       mode: this.modeId,
@@ -394,7 +422,10 @@ export class AgentSession {
 
     const checkpointId = `cp_${Date.now().toString(36)}_${++this.counter}`;
     this.checkpoints.begin(checkpointId, request.display ?? request.text);
-    if (this.history.length === 0) this.title = request.title ?? titleFromText(request.display ?? request.text);
+    if (this.history.length === 0) {
+      this.title = request.title ?? titleFromText(request.display ?? request.text);
+      this.titleSource = request.title ? "user" : "auto";
+    }
     await this.pushUser(request.text, request.attachments ?? [], settings, checkpointId, request.display);
     this.journal({ t: "user", at: Date.now(), text: request.display ?? request.text });
 
@@ -423,7 +454,10 @@ export class AgentSession {
     await this.deps
       .persist(this)
       .catch((error: unknown) => this.deps.log.warn(`Could not save the chat: ${String(error)}`));
-    this.deps.notify(this, controller.signal.aborted ? "failed" : result?.status === "done" ? "done" : "failed");
+    // You stopped it yourself, so there is nothing to tell.
+    if (!controller.signal.aborted)
+      this.deps.notify(this, result?.status === "done" ? "done" : "failed", (Date.now() - startedAt) / 1000);
+    if (!controller.signal.aborted) void this.nameChat(profile);
 
     // Messages that arrived after the last step start the next task.
     const next = this.queue.shift();
@@ -471,6 +505,37 @@ export class AgentSession {
       this.side.delete(controller);
     }
     this.emit({ type: "assistantEnd", id: `${id}_a`, text, variant: "btw" });
+  }
+
+  /**
+   * Names the chat after its first answer, like "Fix login redirect loop", so the chat list is easy to scan.
+   * Runs once in the background and never replaces a name that the user chose.
+   */
+  private async nameChat(profile: ModelProfile): Promise<void> {
+    if (this.titleSource !== "auto" || this.naming || !readSettings(this.root.uri).autoTitle) return;
+    const exchange = firstExchange(this.history);
+    if (!exchange) return;
+    this.naming = true;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20_000);
+    try {
+      const client = await this.deps.models.client(profile);
+      const result = await client.complete(
+        { messages: buildTitleMessages(exchange.request, exchange.answer), tools: [], signal: controller.signal },
+        () => {},
+      );
+      const title = cleanTitle(result.content);
+      if (!title || this.titleSource !== "auto") return;
+      this.title = title;
+      this.titleSource = "generated";
+      this.deps.onChange(this);
+      await this.deps.persist(this);
+    } catch (error) {
+      this.deps.log.debug?.(`Could not name the chat: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      clearTimeout(timer);
+      this.naming = false;
+    }
   }
 
   async compactNow(): Promise<void> {
@@ -662,6 +727,21 @@ export class AgentSession {
 
   dispose(): void {
     this.stop();
+    this.terminal?.dispose();
+    if (this.shell.envFile) fs.rmSync(this.shell.envFile, { force: true });
+  }
+
+  private terminal: AgentTerminal | undefined;
+  private readonly commandWhere = new Map<string, "terminal" | "background">();
+
+  private agentTerminal(): AgentTerminal {
+    this.terminal ??= new AgentTerminal(() => this.title);
+    return this.terminal;
+  }
+
+  /** Shows the real terminal of the chat, where the agent's commands run. */
+  showTerminal(): void {
+    this.agentTerminal().show();
   }
 
   private profile(): ModelProfile | undefined {
@@ -707,6 +787,34 @@ export class AgentSession {
     this.deps.log.info(`[audit] checkpoint restored: ${files.join(", ")}`);
     this.emit({ type: "checkpointRestored", checkpointId, files });
     await this.deps.persist(this);
+  }
+
+  /** Keys typed in the terminal of a command in the chat. */
+  commandInput(toolId: string, data: string): void {
+    const callId = this.callIdsByTool.get(toolId);
+    if (callId) this.activeTools?.commandInput(callId, data);
+  }
+
+  /** Stops one running command from the terminal in the chat. */
+  stopCommand(toolId: string): void {
+    const callId = this.callIdsByTool.get(toolId);
+    if (callId) this.activeTools?.stopCommand(callId);
+  }
+
+  private bufferOutput(callId: string, text: string): void {
+    const id = this.toolIdsByCall.get(callId);
+    if (!id || !text) return;
+    this.outputBuffers.set(id, (this.outputBuffers.get(id) ?? "") + text);
+    this.outputTimer ??= setTimeout(() => this.flushOutput(), 80);
+  }
+
+  /** Live output goes to the views only; the final result of the tool is what the transcript keeps. */
+  private flushOutput(): void {
+    if (this.outputTimer) clearTimeout(this.outputTimer);
+    this.outputTimer = undefined;
+    for (const [id, text] of this.outputBuffers)
+      this.deps.emit(this, { type: "toolOutput", id, text: text.slice(-20_000) });
+    this.outputBuffers.clear();
   }
 
   private emit(message: HostMessage): void {
@@ -770,7 +878,19 @@ export class AgentSession {
         },
       },
       log: this.deps.log,
+      onCommandOutput: (callId, text) => this.bufferOutput(callId, text),
+      shell: this.shell,
+      terminal: vscode.workspace.isTrusted ? this.agentTerminal() : undefined,
+      onCommandStart: (callId, where) => {
+        const id = this.toolIdsByCall.get(callId);
+        if (!id) return;
+        this.commandWhere.set(id, where);
+        this.deps.emit(this, { type: "toolOutput", id, text: "", where });
+      },
     });
+    this.activeTools = tools;
+    this.toolIdsByCall.clear();
+    this.callIdsByTool.clear();
     const definitions = await tools.definitions();
     const memory = settings.memoryEnabled ? await this.deps.memory.read(this.root.uri) : [];
     const skills = settings.skillsEnabled
@@ -869,17 +989,36 @@ export class AgentSession {
         onToolStart: (call) => {
           const id = `t_${++this.counter}_${Date.now().toString(36)}`;
           toolIds.set(call.id, id);
-          this.emit({ type: "tool", id, name: call.name, summary: ToolHost.summarize(call), status: "running" });
+          this.toolIdsByCall.set(call.id, id);
+          this.callIdsByTool.set(id, call.id);
+          const command = ToolHost.commandOf(call);
+          const description = ToolHost.descriptionOf(call);
+          this.emit({
+            type: "tool",
+            id,
+            name: call.name,
+            summary: ToolHost.summarize(call),
+            status: "running",
+            ...(command ? { command } : {}),
+            ...(description ? { description } : {}),
+          });
         },
         onToolEnd: (call, toolResult) => {
+          this.flushOutput();
           this.journalTool(call, toolResult.content);
           this.emit({
             type: "tool",
             id: toolIds.get(call.id) ?? call.id,
             name: call.name,
             summary: ToolHost.summarize(call),
+            ...(ToolHost.commandOf(call) ? { command: ToolHost.commandOf(call) } : {}),
+            ...(ToolHost.descriptionOf(call) ? { description: ToolHost.descriptionOf(call) } : {}),
+            ...(this.commandWhere.has(toolIds.get(call.id) ?? "")
+              ? { where: this.commandWhere.get(toolIds.get(call.id) ?? "") }
+              : {}),
             status: toolResult.content.startsWith("Error:") ? "error" : "done",
-            detail: truncateMiddle(toolResult.content, 4000),
+            // Commands keep more of their output, so the terminal in the chat can show it.
+            detail: truncateMiddle(toolResult.content, call.name === "run_command" ? 30_000 : 4000),
           });
         },
         onUsage: (usage) => {

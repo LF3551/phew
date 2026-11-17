@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { activityBadge } from "./core/activity";
 import type { Attachment } from "./core/attachments";
 import { attachmentLabel } from "./core/attachments";
 import { truncateMiddle } from "./core/chat";
@@ -47,6 +48,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<PhewTe
   const memory = new MemoryStore();
   const mentions = new MentionProvider();
   let sessions: SessionManager | undefined;
+  let chatView: ChatViewProvider | undefined;
   const index = new CodeIndexManager(context.globalStorageUri, models, log, () => sessions?.postState());
 
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
@@ -79,12 +81,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<PhewTe
         if (answer === "Phew it!") void fixFailedCommand(failure);
       });
   });
+  mentions.lastExecution = () => terminal.lastExecution;
 
   const handoffs = new HandoffService(context.workspaceState, log, () => sessions?.postState());
   const manager = new SessionManager(
     { context, log, diffs, mcp, stats, models, reviews, index, memory, skills, terminal, handoffs },
     (running) => {
       updateStatus();
+      chatView?.showActivity(running > 0, activityBadge(manager.activity, readSettings().assistant.name));
       panels?.refreshTitles();
       void vscode.commands.executeCommand("setContext", "phew.busy", running > 0);
     },
@@ -92,6 +96,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<PhewTe
   sessions = manager;
   let panels: ChatPanels | undefined;
   const view = new ChatViewProvider(context.extensionUri, log, manager, mentions);
+  chatView = view;
+  view.onVisible = () => manager.markSeen();
   panels = new ChatPanels(context.extensionUri, log, manager, mentions);
   await manager.initialize();
   updateStatus();

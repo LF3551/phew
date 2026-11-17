@@ -6,7 +6,7 @@ export const personas: readonly Persona[] = ["partner", "mentor", "quiet", "revi
 export interface Assistant {
   /** Display name, for example "Max". */
   readonly name: string;
-  /** An emoji or up to two letters. Empty means the Phew mascot. */
+  /** A look of the mascot ("look:cat"), an emoji, or up to two letters. Empty means the Phew drop. */
   readonly avatar: string;
   readonly persona: Persona;
   readonly customPersona: string;
@@ -14,6 +14,49 @@ export interface Assistant {
   readonly userName: string;
   /** "match" answers in the language of the user. Otherwise a language name, for example "Russian". */
   readonly language: string;
+}
+
+/** The Phew family: looks of the living mascot. Each one keeps the face, the eyes and the life of the drop. */
+export const mascotLooks = ["cat", "bot", "ghost", "sprout", "nerd", "night", "angel", "ninja"] as const;
+export type AvatarLook = (typeof mascotLooks)[number];
+
+/** The look in an avatar value such as "look:cat", or undefined. */
+export function lookOf(avatar: string): AvatarLook | undefined {
+  const id = avatar.startsWith("look:") ? avatar.slice(5) : "";
+  return (mascotLooks as readonly string[]).includes(id) ? (id as AvatarLook) : undefined;
+}
+
+/** Names that suit a look. The first one is offered when the user picks the look and has not named the assistant. */
+export const lookNames: Readonly<Record<AvatarLook | "drop", readonly string[]>> = {
+  drop: ["Phew"],
+  cat: ["Mochi", "Miso", "Tofu"],
+  bot: ["Byte", "Bolt", "Robo"],
+  ghost: ["Casper", "Boo", "Echo"],
+  sprout: ["Sage", "Basil", "Fern"],
+  nerd: ["Ada", "Newton", "Linus"],
+  night: ["Luna", "Nyx", "Moth"],
+  angel: ["Seraph", "Halo", "Grace"],
+  ninja: ["Kage", "Shade", "Ronin"],
+};
+
+/** All suggested names, to know if the current name came from a suggestion. */
+export const suggestedNames: ReadonlySet<string> = new Set(Object.values(lookNames).flat());
+
+/** The face that shows a character in the preview. */
+export const personaFaces: Readonly<Record<Persona, "open" | "relief" | "focus" | "sleepy">> = {
+  partner: "relief",
+  mentor: "open",
+  quiet: "sleepy",
+  reviewer: "focus",
+  custom: "open",
+};
+
+/** A random look of the family with a name that suits it, different from the current one. */
+export function randomIdentity(current: string, random: () => number = Math.random): { avatar: string; name: string } {
+  const pool = mascotLooks.map((look) => `look:${look}`).filter((avatar) => avatar !== current);
+  const avatar = pool[Math.floor(random() * pool.length)] ?? "";
+  const names = lookNames[lookOf(avatar) ?? "drop"];
+  return { avatar, name: names[Math.floor(random() * names.length)] ?? "Phew" };
 }
 
 export const defaultAssistant: Assistant = {
@@ -63,13 +106,13 @@ const clean = (value: unknown, max: number) =>
 /** Validates an assistant from the settings or the onboarding form. */
 export function parseAssistant(value: Partial<Record<keyof Assistant, unknown>>): Assistant {
   const name = clean(value.name, 32).replace(/[<>`]/g, "") || defaultAssistant.name;
-  // An avatar is one emoji or up to two letters or digits.
+  // An avatar is a look of the mascot, one emoji, or up to two letters or digits.
   const avatarRaw = clean(value.avatar, 16);
-  const avatar = /^(\p{Extended_Pictographic}(\uFE0F|\u200D\p{Extended_Pictographic})*|[\p{L}\p{N}]{1,2})$/u.test(
-    avatarRaw,
-  )
+  const avatar = lookOf(avatarRaw)
     ? avatarRaw
-    : "";
+    : /^(\p{Extended_Pictographic}(\uFE0F|\u200D\p{Extended_Pictographic})*|[\p{L}\p{N}]{1,2})$/u.test(avatarRaw)
+      ? avatarRaw
+      : "";
   const persona = personas.includes(value.persona as Persona) ? (value.persona as Persona) : defaultAssistant.persona;
   return {
     name,

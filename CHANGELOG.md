@@ -5,6 +5,60 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- A real terminal for each command, in the chat and in the panel, like the Copilot agent. The chat shows the command in a terminal (xterm.js) with the colors of your VS Code terminal theme, and the terminal of the chat in the panel, **Phew: <chat>**, shows the same output; it opens with the first command. You can type an answer, press Ctrl+C to stop the command, or Ctrl+D to end its input in either one. Commands of a chat work like one shell: `cd` and exported variables carry over. Above each terminal the chat shows what the command does in plain words, the command, and the result, with **Stop**, **Show terminal**, and **Copy**; a quiet command asks whether it waits for an answer. It works with any shell. `phew.commands.terminal` opens the panel terminal by itself (default), only on request, or never.
+- A living mascot. The Phew drop blinks at irregular times and shows with its eyes what the agent does: it looks up while it thinks, reads along a line while it reads or searches, looks down at the terminal while a command runs, and squints while it edits.
+- While the agent waits for your answer, the mascot looks at the request and sweats a little. It also sweats when a task takes long.
+- On the welcome screen the eyes follow the pointer, look down at the input while you type, and doze off after a few idle minutes.
+- The Phew icon in the activity bar shows what happens when the side bar is closed: the progress of VS Code while a chat runs, and a number when a chat needs your answer or finished. The number goes away when you open the chat.
+- **Mascot** in **Appearance** and the `phew.appearance.mascot` setting: **Lively**, **Calm** (blinks only), or **Still**. The mascot stays still when the system asks for reduced motion, and it pauses when the view is hidden.
+- The Phew family: eight looks for your assistant instead of emoji: Cat, Bot, Ghost, Sprout, Nerd, Night owl, Angel, and Ninja. Each one is the same living mascot, so it blinks, looks around, and dozes off. An emoji that you chose before still works.
+- The send button wears the symbol of your assistant's look: a drop, a paw, a bolt, a ghost, a sprout, glasses, a star, a halo, or a shuriken. On hover it turns into the arrow, so the meaning stays clear, and each look sends in its own way.
+- A livelier assistant card: a large preview that blinks, follows the pointer and greets each new look, a face for each character, a dice for a random look and name, names that suit each look, a compact list of characters, and **More** for your name and language. Enter saves.
+- The assistant card is alive: the preview mascot is larger, blinks, follows the pointer, looks at the name while you type, and hops when you pick a look. Its face shows the character: relieved for Partner, attentive for Mentor, sleepy for Quiet, squinting for Strict reviewer.
+- A dice next to the name picks a random look with a name that suits it, for example Mochi the cat or Byte the bot. A look also suggests a name until you type your own.
+- The card is shorter: the name of the chosen look is shown next to **Look**, the four characters sit in a compact grid with **Describe your own…** under them, and **Call me** and **Answers in** moved under **More**. Enter saves, and **Save** is active only when something changed.
+
+### Changed
+
+- Fewer notifications. A finished task notifies only when it took at least 30 seconds (`phew.notifications.minSeconds`), a task that you stopped yourself never notifies, and each notification has **Notify Less**, which opens the notification settings. A request for your input still always notifies.
+- A new send button that follows the accent color in every state: a quiet outline while the input is empty, a solid accent when there is something to send, a soft accent with a queue icon while the agent works, and **Stop** with a turning ring and a red hover. The arrow flies up when you send, and the tooltip shows the key. The input in focus uses the accent color too.
+- The model menu opens right above the model button instead of at the top of the window. Each model shows a provider badge, its name without repeats, the model id, the provider, and the context size; **Auto** says that VS Code picks the model. It has a filter for long lists, numbers 1–9, and a note when the current mode always uses its own model. The model button shows the provider badge too.
+- A command that waits for your approval shows in full, wrapped instead of cut off. After you decide, the card folds into one line.
+- A clearer **Auto-approve** panel. Pick **Careful**, **Balanced**, or **Autopilot** in one click, or set Edits, Commands, and MCP tools with segments that say what each choice does. The panel shows the commands of your allowlist (and warns when it is empty), notes that read-only modes change nothing, and names what differs from your defaults before **Save as default**. The shield in the input shows the level: green for Careful, amber for Autopilot. A chat setting equal to the default no longer counts as a change.
+- Copying shows its result everywhere: the icon turns into a green check, icon buttons show a small **Copied** bubble, and screen readers announce it. When the chat cannot write to the clipboard, Phew copies through VS Code, and a failure shows a red cross.
+- A new attach menu. One click adds the current file, the selection, the problems of the file or of the workspace, the Git changes, or the last terminal output, and each row shows what exactly it adds, for example **3 errors** or **5 files changed**. A second click removes it. The numbers 1–9 work in the menu, and the chat shows a drop zone while you drag files over it.
+- A new mode switch under the input. Each mode has its own icon and color, the menu explains every mode and marks the read-only ones, and the input shows a thin line in the color of the mode. **Shift+Tab** in the input switches the mode, and the numbers 1–9 pick one in the menu. Custom modes get their own color.
+- A tidier **⋯** menu of the chat: the actions on this chat first, then new work, setup, your assistant, and help. Actions on an empty chat and **Continue from Handoff Note** hide when they have nothing to do. Switch Model moved to the model button under the input.
+- A clearer **Appearance** menu in three groups: the chat, the accent, and your assistant.
+  Every choice of three uses the same control, and the current choice has a calm outline instead of a loud fill.
+  The chat styles show small previews.
+  The accent shows the name of the current color, and **+** opens the system color picker for your own color.
+  The text size shows the size in pixels, and ↺ returns to the editor size.
+  The assistant row shows the living mascot, the name, and the character, with **Edit** and the mascot motion next to it.
+  **Reset** appears when something differs from the defaults.
+- The copy button and the time of an answer appear in a row under the answer, so they no longer cover its first line.
+- A redesigned chat list. Open chats and the history are one list, grouped by Today, Yesterday, Previous 7 days, and Earlier.
+- Each chat shows a line from the conversation, so chats with the same name are easy to tell apart. Chats saved by earlier versions get this line too.
+- An empty new chat no longer appears in the list.
+- Chats get a short name after the first answer, such as "Fix login redirect loop", in the language of the chat. Phew asks the chat model once per chat. A name that you set yourself never changes. Turn it off with `phew.chat.autoTitle`.
+- **Pin to top** keeps important chats in a **Pinned** group at the top of the list.
+- Right-click a chat for its menu. A middle click or Ctrl+Click (Cmd+Click) opens any chat in a new tab, also chats from the history.
+- The key hints at the bottom of the list hide after you used the keys a few times.
+- A dot marks the current chat, and a pulsing dot marks a chat that is running or needs your input.
+- Search matches every word in the title and the preview line, and highlights the matches.
+- Rename, open in a new tab, export, and delete move into a **⋯** menu on each chat. Deleting a chat shows **Undo** for a few seconds.
+- **New chat** is the main action. **Chat in a new tab** and **Agent on a separate branch** are in its menu, with a short description.
+- Use ↑ and ↓ to select a chat, Enter to open it, Ctrl+Enter or Cmd+Enter to open an open chat in a new tab, Shift+Delete to delete it, and Esc to close the list. A click outside also closes it.
+
+### Fixed
+
+- The send button no longer turns into the blue of the theme on hover.
+- Your messages follow the accent color. Before, they stayed gray, or kept an old fixed color: choosing an accent or **Reset** in **Appearance** now also clears `phew.appearance.userBubbleColor`.
+- The description of a Custom character no longer disappears when you save the assistant card again.
+- Opening the assistant card and saving it no longer erases the description of a Custom character.
+
 ## [0.1.4] - 2026-11-17
 
 ### Changed

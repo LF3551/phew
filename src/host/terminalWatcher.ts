@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { AgentTerminal } from "./agentTerminal";
 import { stripAnsi } from "./commandRunner";
 
 export interface FailedCommand {
@@ -20,8 +21,13 @@ export class TerminalWatcher implements vscode.Disposable {
 
   constructor(private readonly onFailure: (failure: FailedCommand) => void) {
     this.disposables.push(
-      vscode.window.onDidStartTerminalShellExecution((event) => void this.capture(event.execution)),
-      vscode.window.onDidEndTerminalShellExecution((event) => this.end(event)),
+      // The agent's own terminal is not watched: its commands are in the chat already.
+      vscode.window.onDidStartTerminalShellExecution((event) => {
+        if (!AgentTerminal.isAgentTerminal(event.terminal)) void this.capture(event.execution);
+      }),
+      vscode.window.onDidEndTerminalShellExecution((event) => {
+        if (!AgentTerminal.isAgentTerminal(event.terminal)) this.end(event);
+      }),
     );
   }
 

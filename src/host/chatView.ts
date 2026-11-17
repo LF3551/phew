@@ -1,12 +1,13 @@
 import { randomBytes } from "node:crypto";
 import { homedir } from "node:os";
 import * as vscode from "vscode";
+import type { ActivityBadge } from "../core/activity";
 import { safeColor } from "../core/appearance";
 import { type HostMessage, parseWebviewMessage, type ViewState, type WebviewMessage } from "../shared/protocol";
 import type { MentionProvider } from "./attachments";
 import { renderChatHtml } from "./html";
 import type { ChatViewHandle, SessionManager } from "./sessionManager";
-import { readSettings, updateSetting } from "./settings";
+import { clearSetting, readSettings, updateSetting } from "./settings";
 
 function setupWebview(webview: vscode.Webview, extensionUri: vscode.Uri): void {
   const dist = vscode.Uri.joinPath(extensionUri, "dist");
@@ -18,6 +19,7 @@ function setupWebview(webview: vscode.Webview, extensionUri: vscode.Uri): void {
     nonce: randomBytes(18).toString("base64url"),
     scriptUri: webview.asWebviewUri(vscode.Uri.joinPath(dist, "webview.js")).toString(),
     styleUri: webview.asWebviewUri(vscode.Uri.joinPath(media, "chat.css")).toString(),
+    terminalStyleUri: webview.asWebviewUri(vscode.Uri.joinPath(dist, "webview.css")).toString(),
     iconUri: webview.asWebviewUri(vscode.Uri.joinPath(resources, "icon.svg")).toString(),
   });
 }
@@ -128,6 +130,12 @@ class ChatController implements ChatViewHandle {
       case "restoreCheckpoint":
         await session?.restoreCheckpoint(message.checkpointId);
         return;
+      case "contextQuery": {
+        const root = session?.root.uri ?? vscode.workspace.workspaceFolders?.[0]?.uri;
+        const options = root ? await this.mentions.contextOptions(root).catch(() => []) : [];
+        this.post({ type: "contextOptions", options });
+        return;
+      }
       case "mentionQuery": {
         const root = session?.root.uri;
         if (!root) return;
@@ -141,11 +149,25 @@ class ChatController implements ChatViewHandle {
           accentColor: "appearance.accentColor",
           fontSize: "chat.fontSize",
           timestamps: "appearance.timestamps",
+          mascot: "appearance.mascot",
         } as const;
         const value = message.key === "accentColor" ? safeColor(message.value) : message.value;
-        await updateSetting(keys[message.key], value === "" ? undefined : value);
+        await updateSetting(keys[message.key], value === "" || value === null ? undefined : value);
+        // A fixed color of your messages would hide the new accent, so the messages follow the accent again.
+        if (message.key === "accentColor") await clearSetting("appearance.userBubbleColor");
         return;
       }
+      case "resetAppearance":
+        for (const key of [
+          "appearance.style",
+          "appearance.accentColor",
+          "chat.fontSize",
+          "appearance.timestamps",
+          "appearance.mascot",
+        ] as const)
+          await updateSetting(key, undefined);
+        await clearSetting("appearance.userBubbleColor");
+        return;
       case "setApproval":
         sessions.setApproval(session, message.key, message.value);
         return;
@@ -180,6 +202,10 @@ class ChatController implements ChatViewHandle {
         return;
       case "showWrapped":
         this.post(sessions.wrappedMessage(message.period));
+        return;
+      case "copyText":
+        // The webview could not write to the clipboard, for example without focus.
+        await vscode.env.clipboard.writeText(message.text);
         return;
       case "saveImage": {
         const folder = vscode.workspace.workspaceFolders?.[0]?.uri ?? vscode.Uri.file(homedir());
@@ -230,8 +256,12 @@ class ChatController implements ChatViewHandle {
       case "deleteConversation":
         await sessions.deleteConversation(message.id);
         return;
+      case "pinChat":
+        await sessions.pin(message.id, message.pinned);
+        return;
       case "exportChat":
-        await sessions.exportActive(session);
+        if (message.id) await sessions.exportChat(message.id);
+        else await sessions.exportActive(session);
         return;
       case "reviewNext":
         await vscode.commands.executeCommand("phew.review.next");
@@ -243,10 +273,35 @@ class ChatController implements ChatViewHandle {
         await vscode.commands.executeCommand("phew.openWalkthrough");
         return;
       case "configureModel":
-        await vscode.commands.executeCommand("phew.switchModel");
+        // The menu under the input switches models; this message only connects a new one.
+        await vscode.commands.executeCommand("phew.addModel");
         return;
       case "openSettings":
         await vscode.commands.executeCommand("phew.openSettings");
+        return;
+      case "useModel":
+        await this.sessions.useModel(message.id);
+        return;
+      case "manageModels":
+        await vscode.commands.executeCommand("phew.manageModels");
+        return;
+      case "commandInput":
+        session?.commandInput(message.id, message.data);
+        return;
+      case "showTerminal":
+        session?.showTerminal();
+        return;
+      case "stopCommand":
+        session?.stopCommand(message.id);
+        return;
+      case "setApprovalLevel":
+        sessions.setApprovalLevel(session, message.level);
+        return;
+      case "editAllowlist":
+        await vscode.commands.executeCommand("workbench.action.openSettings", "phew.commands.autoApprove");
+        return;
+      case "editModes":
+        await vscode.commands.executeCommand("workbench.action.openSettings", "phew.modes");
         return;
       case "showStats":
         await vscode.commands.executeCommand("phew.showStats");
@@ -261,6 +316,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   private view: vscode.WebviewView | undefined;
   private readonly controller: ChatController;
+  private badge: ActivityBadge | undefined;
+  private stopProgress: (() => void) | undefined;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -270,6 +327,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   ) {
     this.controller = new ChatController(sessions, mentions, log, undefined, () => this.view?.visible ?? false);
   }
+
+  /** Called when the user opens the side bar chat. */
+  onVisible: (() => void) | undefined;
 
   post(message: HostMessage): void {
     this.controller.post(message);
@@ -281,8 +341,34 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     await this.controller.waitUntilReady();
   }
 
+  /**
+   * Shows what happens on the Phew icon in the activity bar:
+   * the progress of VS Code while a chat runs, and a badge when a chat needs an answer or finished unseen.
+   */
+  showActivity(running: boolean, badge: ActivityBadge | undefined): void {
+    this.badge = badge;
+    if (this.view) this.view.badge = badge;
+    if (running && !this.stopProgress) {
+      void vscode.window.withProgress(
+        { location: { viewId: ChatViewProvider.viewId } },
+        () =>
+          new Promise<void>((resolve) => {
+            this.stopProgress = resolve;
+          }),
+      );
+    } else if (!running && this.stopProgress) {
+      this.stopProgress();
+      this.stopProgress = undefined;
+    }
+  }
+
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view;
+    view.badge = this.badge;
+    if (view.visible) this.onVisible?.();
+    view.onDidChangeVisibility(() => {
+      if (view.visible) this.onVisible?.();
+    });
     // The chat title lives in the view title, so the chat needs no second header.
     this.controller.onState = (state) => {
       if (this.view !== view) return;
@@ -313,7 +399,7 @@ export class ChatPanels implements vscode.Disposable {
 
   /** Opens a chat in an editor tab beside the current editor. Without an id, it opens a new chat. */
   async open(id?: string): Promise<void> {
-    const session = id ? this.sessions.session(id) : this.sessions.createDetached();
+    const session = id ? await this.sessions.restore(id) : this.sessions.createDetached();
     if (!session) {
       void vscode.window.showWarningMessage("Phew: open a folder first.");
       return;

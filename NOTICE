@@ -12,3 +12,9 @@ on Phew by Aleksei Aleinikov.
 
 "Phew" and the Phew logo are trademarks of Aleksei Aleinikov. The License does
 not grant permission to use them (Section 6). See TRADEMARKS.md.
+
+xterm.js (@xterm/xterm, @xterm/addon-fit)
+Copyright (c) 2017-2019, The xterm.js authors
+Copyright (c) 2014-2016, SourceLair Private Company
+Copyright (c) 2012-2013, Christopher Jeffrey
+Licensed under the MIT License. https://github.com/xtermjs/xterm.js

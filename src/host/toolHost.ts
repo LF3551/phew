@@ -1,3 +1,5 @@
+import * as os from "node:os";
+import * as path from "node:path";
 import * as vscode from "vscode";
 import type { ToolResult } from "../core/agent";
 import {
@@ -12,11 +14,13 @@ import { formatHits } from "../core/codeIndex";
 import { decideCommand } from "../core/commandPolicy";
 import { adjustAgentGitCommand, describeCommitIdentity } from "../core/commit";
 import { detectEol } from "../core/diff";
+import { LineEditor } from "../core/lineEditor";
 import type { ModeDefinition } from "../core/modes";
 import { type Plan, parsePlanUpdate, parseQuestion } from "../core/plan";
 import type { RootSet } from "../core/roots";
 import { isSensitivePath, redactSecrets } from "../core/secrets";
 import { toolGroup, toolsForMode } from "../core/tools";
+import { type AgentTerminal, toTerminal } from "./agentTerminal";
 import type { ApprovalBroker } from "./approvals";
 import type { ChangeManager } from "./changes";
 import { readWorkspaceText } from "./changes";
@@ -47,6 +51,14 @@ export interface ToolHostOptions {
   readonly mode: ModeDefinition;
   readonly settings: Settings;
   readonly broker: ApprovalBroker;
+  /** The terminal of the chat, which mirrors the commands while they run. */
+  readonly terminal?: AgentTerminal;
+  /** Where a command runs, for the chat: a real terminal or the background. */
+  readonly onCommandStart?: (callId: string, where: "terminal" | "background") => void;
+  /** The folder of the chat's shell. `cd` in one command carries over to the next, like in Claude Code. */
+  readonly shell?: { cwd?: string; envFile?: string };
+  /** Live output of a running command, by the id of the tool call. */
+  readonly onCommandOutput?: (callId: string, text: string) => void;
   readonly changes: ChangeManager;
   readonly mcp: McpManager;
   readonly index: CodeIndexManager;
@@ -89,6 +101,28 @@ export class ToolHost {
 
   get mcpToolNames(): string[] {
     return this.mcpDefinitions.map((definition) => definition.name);
+  }
+
+  /** The full command of a run_command call, for the terminal in the chat. */
+  static commandOf(call: ToolCall): string | undefined {
+    if (call.name !== "run_command") return undefined;
+    try {
+      const args = parseArguments(call);
+      return typeof args.command === "string" ? args.command.slice(0, 10_000) : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** The plain-words description of a run_command call, for the user. */
+  static descriptionOf(call: ToolCall): string | undefined {
+    if (call.name !== "run_command") return undefined;
+    try {
+      const value = parseArguments(call).description;
+      return typeof value === "string" && value.trim() ? value.trim().slice(0, 120) : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   /** Short human-readable summary of a tool call for the chat view. */
@@ -141,7 +175,7 @@ export class ToolHost {
         result = await this.writeFile(args, signal);
         break;
       case "run_command":
-        result = await this.runCommand(args, signal);
+        result = await this.runCommand(args, signal, call.id);
         break;
       case "remember":
         result = await this.remember(args);
@@ -358,10 +392,27 @@ export class ToolHost {
     });
   }
 
-  private async runCommand(args: Record<string, unknown>, signal: AbortSignal): Promise<ToolResult> {
+  private readonly runningCommands = new Map<string, AbortController>();
+  private readonly commandInputs = new Map<string, LineEditor>();
+
+  /** Keys typed in a terminal of the chat for a running command. */
+  commandInput(callId: string, data: string): void {
+    this.commandInputs.get(callId)?.feed(data);
+  }
+
+  /** Stops one running command. The agent goes on and sees that the command was cancelled. */
+  stopCommand(callId: string): boolean {
+    const controller = this.runningCommands.get(callId);
+    controller?.abort();
+    return controller !== undefined;
+  }
+
+  private async runCommand(args: Record<string, unknown>, signal: AbortSignal, callId = ""): Promise<ToolResult> {
     const requested = (stringArgument(args, "command") as string).trim();
     const folder = stringArgument(args, "cwd", false);
-    const cwd = folder ? this.options.roots.resolve(folder) : this.rootPath;
+    const shellCwd = this.options.shell?.cwd;
+    const remembered = shellCwd && this.options.roots.resolve(shellCwd) ? shellCwd : undefined;
+    const cwd = folder ? this.options.roots.resolve(folder) : (remembered ?? this.rootPath);
     if (!cwd) throw new Error(`The folder "${folder}" is outside the workspace.`);
     const { command, notes } = adjustAgentGitCommand(requested, this.options.settings.commit);
     const decision = decideCommand(command, this.options.settings.commands);
@@ -384,9 +435,71 @@ export class ToolHost {
       }
     }
     this.options.log.info(`[audit] command run: ${command}`);
-    const result = await runShellCommand(command, cwd, this.options.settings.commandTimeoutSeconds, signal);
+    const own = new AbortController();
+    const onAbort = () => own.abort();
+    signal.addEventListener("abort", onAbort, { once: true });
+    this.runningCommands.set(callId, own);
+    let result: Awaited<ReturnType<typeof runShellCommand>>;
+    try {
+      const timeout = this.options.settings.commandTimeoutSeconds;
+      // Like the Copilot agent: the terminal in the chat and the terminal in the panel show the same output,
+      // in color, and typing in either one goes to the command through one input line.
+      const mode = this.options.settings.commandsTerminal;
+      const terminal = mode !== "off" ? this.options.terminal : undefined;
+      const show = (text: string) => {
+        terminal?.output(text);
+        this.options.onCommandOutput?.(callId, text);
+      };
+      let input: { write(text: string): void; end(): void } | undefined;
+      const line = new LineEditor({
+        echo: show,
+        submit: (text) => input?.write(text),
+        interrupt: () => own.abort(),
+        endOfInput: () => input?.end(),
+      });
+      this.commandInputs.set(callId, line);
+      terminal?.start(
+        command,
+        // The full folder, with ~ for the home folder, like a shell prompt.
+        os.homedir() && cwd.startsWith(os.homedir()) ? `~${cwd.slice(os.homedir().length)}` : cwd,
+        (data) => line.feed(data),
+        mode === "open",
+      );
+      this.options.onCommandStart?.(callId, terminal ? "terminal" : "background");
+      const started = Date.now();
+      result = await runShellCommand(command, cwd, timeout, own.signal, undefined, {
+        envFile: this.options.shell?.envFile,
+        onRaw: (text) => show(toTerminal(text)),
+        onInput: (handle) => {
+          input = handle;
+        },
+      });
+      if (terminal) {
+        const seconds = ((Date.now() - started) / 1000).toFixed(1);
+        const label = result.cancelled ? "stopped" : result.timedOut ? "timed out" : `exit ${result.exitCode ?? "?"}`;
+        terminal.finish(`${label} · ${seconds} s`, result.exitCode === 0 && !result.cancelled && !result.timedOut);
+      }
+    } finally {
+      this.runningCommands.delete(callId);
+      this.commandInputs.delete(callId);
+      signal.removeEventListener("abort", onAbort);
+    }
+    // The next command starts where this one ended, inside the workspace only.
+    let cwdNote = "";
+    if (this.options.shell && result.cwd && !folder && path.resolve(result.cwd) !== path.resolve(cwd)) {
+      if (this.options.roots.resolve(result.cwd)) {
+        this.options.shell.cwd = result.cwd;
+        cwdNote = `\nThe shell is now in ${this.options.roots.display(result.cwd)}.`;
+      } else cwdNote = `\nThe shell stays in ${this.options.roots.display(cwd)}: Phew keeps it inside the workspace.`;
+    }
+    if (result.cancelled && !signal.aborted) {
+      const prefix = notes.length > 0 ? `${notes.join(" ")}\n` : "";
+      return {
+        content: `${prefix}${describeResult(command, result)}\nThe user stopped this command. Do not run it again unless the user asks.`,
+      };
+    }
     const prefix = notes.length > 0 ? `${notes.join(" ")}\n` : "";
-    return { content: prefix + describeResult(command, result) };
+    return { content: prefix + describeResult(command, result) + cwdNote };
   }
 
   private async askUser(args: Record<string, unknown>, signal: AbortSignal): Promise<ToolResult> {

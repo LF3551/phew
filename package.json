@@ -137,7 +137,7 @@
       },
       {
         "command": "phew.renameChat",
-        "title": "Rename Chat",
+        "title": "Rename Chat…",
         "category": "Phew",
         "icon": "$(edit)"
       },
@@ -148,7 +148,7 @@
       },
       {
         "command": "phew.manageMcp",
-        "title": "Manage MCP Servers",
+        "title": "Manage MCP Servers…",
         "category": "Phew",
         "icon": "$(server)"
       },
@@ -187,7 +187,7 @@
       },
       {
         "command": "phew.switchModel",
-        "title": "Switch Model",
+        "title": "Switch Model…",
         "category": "Phew",
         "icon": "$(sparkle)"
       },
@@ -297,7 +297,7 @@
       },
       {
         "command": "phew.newWorktreeAgent",
-        "title": "New Agent in Worktree",
+        "title": "New Agent in Worktree…",
         "category": "Phew",
         "icon": "$(git-branch)",
         "enablement": "isWorkspaceTrusted"
@@ -351,13 +351,13 @@
       },
       {
         "command": "phew.editAssistant",
-        "title": "Customize Your Assistant",
+        "title": "Customize Assistant…",
         "category": "Phew",
         "icon": "$(account)"
       },
       {
         "command": "phew.showWrapped",
-        "title": "Phew Wrapped: Your Week and Achievements",
+        "title": "Phew Wrapped",
         "category": "Phew",
         "icon": "$(star)"
       },
@@ -413,79 +413,74 @@
           "group": "navigation@4"
         },
         {
-          "command": "phew.switchModel",
+          "command": "phew.showAppearance",
           "when": "view == phew.chatView",
-          "group": "1_model@1"
+          "group": "navigation@3"
         },
         {
-          "command": "phew.manageModels",
-          "when": "view == phew.chatView",
-          "group": "1_model@2"
+          "command": "phew.renameChat",
+          "when": "view == phew.chatView && !phew.chatEmpty",
+          "group": "1_chat@1"
+        },
+        {
+          "command": "phew.exportChat",
+          "when": "view == phew.chatView && !phew.chatEmpty",
+          "group": "1_chat@2"
+        },
+        {
+          "command": "phew.writeHandoff",
+          "when": "view == phew.chatView && !phew.chatEmpty",
+          "group": "1_chat@3"
         },
         {
           "command": "phew.newWorktreeAgent",
           "when": "view == phew.chatView",
-          "group": "2_agent@1"
+          "group": "2_start@1"
         },
         {
-          "command": "phew.exportChat",
-          "when": "view == phew.chatView",
-          "group": "2_agent@2"
+          "command": "phew.continueFromHandoff",
+          "when": "view == phew.chatView && phew.hasHandoff",
+          "group": "2_start@2"
         },
         {
-          "command": "phew.openMemory",
+          "command": "phew.manageModels",
           "when": "view == phew.chatView",
-          "group": "2_agent@3"
-        },
-        {
-          "command": "phew.showWrapped",
-          "when": "view == phew.chatView",
-          "group": "3_more@0"
-        },
-        {
-          "command": "phew.showStats",
-          "when": "view == phew.chatView",
-          "group": "3_more@1"
-        },
-        {
-          "command": "phew.openWalkthrough",
-          "when": "view == phew.chatView",
-          "group": "3_more@2"
-        },
-        {
-          "command": "phew.showLog",
-          "when": "view == phew.chatView",
-          "group": "3_more@3"
+          "group": "3_setup@1"
         },
         {
           "command": "phew.manageMcp",
           "when": "view == phew.chatView",
-          "group": "2_agent@4"
+          "group": "3_setup@2"
         },
         {
-          "command": "phew.renameChat",
+          "command": "phew.openMemory",
           "when": "view == phew.chatView",
-          "group": "2_agent@0"
+          "group": "3_setup@3"
         },
         {
           "command": "phew.editAssistant",
           "when": "view == phew.chatView",
-          "group": "3_more@0"
+          "group": "4_you@1"
         },
         {
-          "command": "phew.continueFromHandoff",
+          "command": "phew.showWrapped",
           "when": "view == phew.chatView",
-          "group": "2_agent@5"
+          "group": "4_you@2"
         },
         {
-          "command": "phew.writeHandoff",
+          "command": "phew.showStats",
           "when": "view == phew.chatView",
-          "group": "2_agent@6"
+          "group": "4_you@3"
         },
         {
-          "command": "phew.showAppearance",
+          "command": "phew.openWalkthrough",
           "when": "view == phew.chatView",
-          "group": "navigation@3"
+          "group": "5_help@1"
+        },
+        {
+          "command": "phew.showLog",
+          "when": "view == phew.chatView",
+          "group": "5_help@2"
         }
       ],
       "editor/context": [
@@ -793,6 +788,11 @@
             "default": true,
             "markdownDescription": "Open the last chat of the workspace after a restart."
           },
+          "phew.chat.autoTitle": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "Name each chat after its first answer, for example **Fix login redirect loop**. Phew asks the chat model for a few words once per chat. A name that you set yourself never changes."
+          },
           "phew.chat.historyLimit": {
             "type": "number",
             "default": 200,
@@ -851,6 +851,13 @@
             "default": "unfocused",
             "markdownDescription": "Notify when a chat finishes or needs your input."
           },
+          "phew.notifications.minSeconds": {
+            "type": "number",
+            "default": 30,
+            "minimum": 0,
+            "maximum": 3600,
+            "markdownDescription": "Notify about a finished task only when it took at least this many seconds. Quick answers do not need a notification. A request for your input always notifies."
+          },
           "phew.notifications.sound": {
             "type": "string",
             "enum": [
@@ -898,7 +905,7 @@
             "default": "",
             "maxLength": 16,
             "order": 1,
-            "markdownDescription": "One emoji or up to two letters. Leave empty for the living Phew drop."
+            "markdownDescription": "A look of the Phew family (`look:cat`, `look:bot`, `look:ghost`, `look:sprout`, `look:nerd`, `look:night`, `look:angel`, `look:ninja`), one emoji, or up to two letters. Leave empty for the living Phew drop."
           },
           "phew.assistant.persona": {
             "type": "string",
@@ -1041,6 +1048,21 @@
             "type": "boolean",
             "default": false,
             "markdownDescription": "Show the avatar and the name of your assistant above each answer. Off by default for a calmer chat."
+          },
+          "phew.appearance.mascot": {
+            "type": "string",
+            "enum": [
+              "lively",
+              "calm",
+              "still"
+            ],
+            "enumDescriptions": [
+              "The mascot blinks, shows what the agent does with its eyes, follows the pointer on the welcome screen, and dozes off after a few idle minutes.",
+              "The mascot blinks and changes its face, but its eyes stay in place.",
+              "The mascot does not move. Only its face changes."
+            ],
+            "default": "lively",
+            "markdownDescription": "How much the Phew mascot moves. The mascot always stays still when your system asks for reduced motion."
           }
         }
       },
@@ -1092,6 +1114,21 @@
             },
             "default": [],
             "markdownDescription": "Command prefixes that never run."
+          },
+          "phew.commands.terminal": {
+            "type": "string",
+            "enum": [
+              "open",
+              "background",
+              "off"
+            ],
+            "enumDescriptions": [
+              "Show the agent's commands live in a terminal of the chat, and open it with the first command. Ctrl+C stops a command; typing answers it.",
+              "Keep the terminal of the chat, but open it only when you click Show terminal.",
+              "No terminal; the chat shows the output."
+            ],
+            "default": "open",
+            "markdownDescription": "The terminal of the chat, which mirrors the agent's commands while they run. The chat always shows the output too."
           },
           "phew.commands.timeoutSeconds": {
             "type": "number",
@@ -1656,7 +1693,8 @@
     "package": "npm run check && node scripts/build.mjs --production && vsce package --out phew.vsix",
     "vscode:prepublish": "node scripts/build.mjs --production",
     "test:integration": "node scripts/build.mjs && node test/integration/run.mjs",
-    "check:providers": "node scripts/check-providers.mjs"
+    "check:providers": "node scripts/check-providers.mjs",
+    "images": "node scripts/build.mjs && node scripts/readme-images.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.8",
@@ -1665,6 +1703,8 @@
     "@types/vscode": "1.100.0",
     "@vscode/test-electron": "3.1.0",
     "@vscode/vsce": "4.1.1",
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/xterm": "6.0.0",
     "esbuild": "0.28.2",
     "jsdom": "31.0.1",
     "typescript": "^7.0.2",

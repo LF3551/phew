@@ -83,6 +83,15 @@ async function script(data) {
         })
       : { content: "planned" };
   }
+  if (task.startsWith("Shell persists")) {
+    if (step === 0)
+      return call("run_command", {
+        command: "mkdir -p sub && cd sub && export PHEW_X=42",
+        description: "Make a folder and go there",
+      });
+    if (step === 1) return call("run_command", { command: 'pwd; echo "x=$PHEW_X"', description: "Show the folder" });
+    return { content: `RESULT ${lastToolResult(messages)}` };
+  }
   if (task.startsWith("Slow")) {
     await delay(1500);
     const last = messages[messages.length - 1];
@@ -188,6 +197,7 @@ async function run() {
   const file = path.join(mainFolder, "math.js");
   const sessions = api.sessions;
   try {
+    console.log("[it] step 1");
     // 1. Fix, check, review in the editor, history, commit message, checkpoint.
     await api.run({ text: "Make node check.js pass.", kind: "fix", mode: "code" });
     assert.equal(fs.readFileSync(file, "utf8"), "exports.add = (a, b) => a + b;\n", "the agent fixed the file");
@@ -220,6 +230,7 @@ async function run() {
     assert.equal(fs.readFileSync(file, "utf8"), "exports.add = (a, b) => a - b;\n", "the checkpoint restored the file");
     assert.equal((await sessions.listHistory()).length, 1);
 
+    console.log("[it] step 2");
     // 2. A question with buttons.
     sessions.newSession();
     const asking = sessions.active;
@@ -232,6 +243,7 @@ async function run() {
     await asked;
     assert.equal(lastAssistant(asking), "RESULT The user answered: blue");
 
+    console.log("[it] step 3");
     // 3. Skills, MCP over HTTP, several folders, and the plan.
     await asking.run({ text: "Use the skill", kind: "chat" });
     assert.match(lastAssistant(asking), /HELLO-FROM-SKILL/);
@@ -245,6 +257,42 @@ async function run() {
     assert.equal(sessions.active.plan.goal, "Ship it");
     assert.equal(sessions.active.plan.items.length, 2);
 
+    console.log("[it] step 3b");
+    // 3b. Commands run in the real terminal of the chat: `cd` and `export` stay for the next command.
+    sessions.newSession();
+    const shell = sessions.active;
+    const shellRun = shell.run({ text: "Shell persists", kind: "chat", mode: "code" });
+    let shellDone = false;
+    shellRun.then(() => {
+      shellDone = true;
+    });
+    for (let index = 0; index < 600 && !shellDone; index++) {
+      const pending = shell.transcript
+        .all()
+        .filter((item) => item.type === "approval" && item.kind === "command")
+        .map((item) => item.id)
+        .filter((id) => !shell.transcript.all().some((item) => item.type === "approvalResolved" && item.id === id));
+      for (const id of pending) shell.broker.answer(id, true);
+      await delay(50);
+    }
+    await shellRun;
+    const shellResult = lastAssistant(shell);
+    const tools = shell.transcript
+      .all()
+      .filter((item) => item.type === "tool" && item.name === "run_command" && item.status !== "running");
+    console.log(`[shell] where=${tools.map((item) => item.where).join(",")} result=${JSON.stringify(shellResult)}`);
+    assert.match(shellResult, /\/sub\b/, "the next command starts in the folder of cd");
+    assert.ok(
+      tools.every((item) => item.where === "terminal"),
+      "the commands ran in the terminal of the chat",
+    );
+    assert.match(shellResult, /x=42/, "an exported variable stays in the terminal");
+    assert.ok(
+      vscode.window.terminals.some((terminal) => terminal.name.startsWith("Phew:")),
+      "the chat has its own terminal",
+    );
+
+    console.log("[it] step 4");
     // 4. A queued message reaches the running agent, and /btw answers on the side.
     sessions.newSession();
     const busy = sessions.active;
@@ -264,6 +312,7 @@ async function run() {
       "/btw does not change the conversation",
     );
 
+    console.log("[it] step 4b");
     // 4b. Stop and send: the new message stops the running step and runs at once.
     const stopping = busy.run({ text: "Slow task three", kind: "chat" });
     await delay(300);
@@ -272,6 +321,7 @@ async function run() {
     assert.match(lastAssistant(busy), /SLOW-DONE Slow task four/, "the interrupting message ran");
     assert.ok(!busy.busy);
 
+    console.log("[it] step 5");
     // 5. Two chats work at the same time, one in an editor tab.
     await vscode.commands.executeCommand("phew.openChatInEditor");
     const parallel = sessions.createDetached();
@@ -287,6 +337,7 @@ async function run() {
     assert.match(lastAssistant(other), /SLOW-DONE Slow task B/);
     assert.ok(elapsed < 2900, `the two chats ran in parallel (${elapsed} ms)`);
 
+    console.log("[it] step 6");
     // 6. Rename, per-chat approvals, and the context meter.
     other.rename("Renamed chat");
     assert.equal(other.title, "Renamed chat");
@@ -295,6 +346,7 @@ async function run() {
     assert.equal(sessions.state().approvals.custom, true);
     assert.ok(other.contextState().share > 0, "the context meter has a value");
 
+    console.log("[it] step 7");
     // 7. Phew it! on errors.
     const diagnostics = vscode.languages.createDiagnosticCollection("phew-test");
     const document = await vscode.workspace.openTextDocument(file);
@@ -312,6 +364,7 @@ async function run() {
     diagnostics.dispose();
     void secondFolder;
 
+    console.log("[it] step 8");
     // 8. Handoff notes: journal, note, freshness, /continue, and the AGENTS.md pointer.
     fs.writeFileSync(file, "exports.add = (a, b) => a - b;\n");
     sessions.newSession();

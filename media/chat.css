@@ -251,6 +251,252 @@ summary:focus-visible {
   opacity: 0.75;
 }
 
+/* A command waits for approval: the whole command wraps, nothing is cut off. */
+.approval.command pre.command {
+  max-height: 220px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.command-prompt {
+  color: var(--phew-accent);
+  user-select: none;
+}
+
+/* After the decision the card folds into one line; the terminal below shows the rest. */
+.approval.command.resolved {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 3px 10px;
+  border-style: dashed;
+}
+
+.approval.command.resolved h3,
+.approval.command.resolved .reason {
+  display: none;
+}
+
+.approval.command.resolved pre.command {
+  flex: 1;
+  min-width: 0;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: normal;
+  background: none;
+  color: var(--vscode-descriptionForeground);
+}
+
+.approval.command.resolved .actions {
+  flex: none;
+}
+
+/* A command in the chat, like the Bash tool of Claude Code. */
+.tool.command-tool > summary {
+  display: none;
+}
+
+.tool.command-tool {
+  margin: 2px 0 10px;
+}
+
+.approval.command.leaving {
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.term {
+  --term-tone: var(--phew-accent);
+  padding-left: 2px;
+}
+
+.term[data-status="ok"] {
+  --term-tone: var(--phew-success);
+}
+
+.term[data-status="error"] {
+  --term-tone: var(--phew-error);
+}
+
+.term[data-status="muted"] {
+  --term-tone: var(--vscode-descriptionForeground);
+}
+
+.term-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 22px;
+}
+
+.term-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  background: var(--term-tone);
+  border-radius: 50%;
+}
+
+.term[data-status="running"] .term-dot {
+  animation: phew-term-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes phew-term-pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.term-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.term-status {
+  flex: none;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.85em;
+  font-variant-numeric: tabular-nums;
+}
+
+.term-status[data-tone="error"] {
+  color: var(--phew-error);
+}
+
+.term-actions {
+  display: inline-flex;
+  flex: none;
+  gap: 1px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.term:hover .term-actions,
+.term:focus-within .term-actions,
+.term[data-status="running"] .term-actions,
+.term-actions:has([data-copy-state]) {
+  opacity: 1;
+}
+
+.term-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  color: var(--vscode-descriptionForeground);
+  background: none;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.term-action .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.term-action:hover {
+  color: var(--vscode-foreground);
+  background: var(--vscode-toolbar-hoverBackground, #8883);
+}
+
+.term-command {
+  display: block;
+  margin: 2px 0 0 15px;
+  color: var(--vscode-descriptionForeground);
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.88em;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.term-command[hidden] {
+  display: none;
+}
+
+/* The terminal inside the chat (xterm.js), with the colors of the VS Code terminal. */
+.term-screen {
+  margin: 4px 0 0 15px;
+  padding: 6px 4px 6px 10px;
+  overflow: hidden;
+  background: var(--vscode-terminal-background, var(--vscode-editor-background));
+  border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border, #8884));
+  border-left: 2px solid var(--term-tone);
+  border-radius: 4px;
+}
+
+.term-screen[hidden] {
+  display: none;
+}
+
+.term-screen:focus-within {
+  border-color: var(--vscode-focusBorder);
+  border-left-color: var(--term-tone);
+}
+
+.term-screen .xterm {
+  padding: 0;
+}
+
+.term-screen .xterm .scrollbar {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.term-screen:hover .xterm .scrollbar {
+  opacity: 1;
+}
+
+.term-screen pre.term-text {
+  max-height: 300px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  color: var(--vscode-terminal-foreground, var(--vscode-foreground));
+  font-family: var(--vscode-editor-font-family);
+  font-size: var(--vscode-editor-font-size);
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: none;
+}
+
+.term-hint {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin: 4px 0 0 15px;
+  padding: 4px 8px;
+  color: var(--phew-warning);
+  font-size: 0.82em;
+  background: color-mix(in srgb, var(--phew-warning) 10%, transparent);
+  border-radius: 4px;
+}
+
+.term-hint[hidden] {
+  display: none;
+}
+
+/* A command in the real terminal of the chat: a small terminal mark before the status. */
+.term[data-where="terminal"] .term-status::before {
+  margin-right: 4px;
+  content: ">_";
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.9em;
+  opacity: 0.7;
+}
+
 .hunks {
   overflow-y: auto;
   max-height: 360px;
@@ -432,86 +678,463 @@ select {
   font-size: 0.85em;
 }
 
-/* Sessions and history panel */
+/* Chats panel */
 
 .panel {
   position: absolute;
   z-index: 5;
-  top: 34px;
-  right: 6px;
-  left: 6px;
-  overflow-y: auto;
-  max-height: 70vh;
-  padding: 8px;
-  background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+  top: 38px;
+  right: 8px;
+  left: 8px;
+  display: flex;
+  flex-direction: column;
+  max-height: min(72vh, 560px);
+  overflow: hidden;
+  background: var(--vscode-quickInput-background, var(--vscode-editorWidget-background));
   border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border, #8884));
-  border-radius: 6px;
-  box-shadow: 0 4px 16px var(--vscode-widget-shadow, #0006);
+  border-radius: 10px;
+  box-shadow:
+    0 1px 2px var(--vscode-widget-shadow, #0004),
+    0 12px 32px var(--vscode-widget-shadow, #0006);
+  animation: panel-in 120ms ease-out;
 }
 
-.panel-header {
-  display: flex;
-  gap: 6px;
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
 }
 
-.panel-header input {
-  flex: 1;
-  padding: 3px 6px;
-  color: var(--vscode-input-foreground);
-  background: var(--vscode-input-background);
-  border: 1px solid var(--vscode-input-border, transparent);
-  border-radius: 3px;
+body.in-sidebar .panel {
+  top: 6px;
 }
 
-.panel-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 8px 0;
-}
-
-.panel h4 {
-  margin: 8px 0 4px;
-  color: var(--vscode-descriptionForeground);
-  font-size: 0.85em;
-  text-transform: uppercase;
-}
-
-.list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.list .item {
+.panel-search {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 2px 4px;
-  border-radius: 4px;
+  gap: 8px;
+  padding: 10px 12px;
+  color: var(--vscode-descriptionForeground);
+  border-bottom: 1px solid var(--vscode-widget-border, var(--vscode-panel-border, #8883));
 }
 
-.list .item:hover,
-.list .item.active {
+.panel-search .icon {
+  flex: none;
+}
+
+.panel-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  color: var(--vscode-input-foreground, var(--vscode-foreground));
+  background: none;
+  border: none;
+  outline: none;
+  font: inherit;
+  font-size: 1.05em;
+}
+
+.panel-search input::placeholder {
+  color: var(--vscode-input-placeholderForeground, var(--vscode-descriptionForeground));
+}
+
+.panel-search input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.chat-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 6px 6px;
+  overscroll-behavior: contain;
+}
+
+.chat-group {
+  padding: 10px 8px 4px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.82em;
+  font-weight: 600;
+}
+
+.chat-group:first-child {
+  padding-top: 6px;
+}
+
+.chat-row {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  border-radius: 6px;
+}
+
+.chat-row.selected {
   background: var(--vscode-list-hoverBackground);
 }
 
-.item-title {
-  overflow: hidden;
+.chat-row.current .chat-title {
+  font-weight: 600;
+}
+
+.chat-open {
+  display: flex;
   flex: 1;
-  padding: 3px 0;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding: 6px 8px;
   color: inherit;
   background: none;
   border: none;
+  border-radius: 6px;
   text-align: left;
+}
+
+.chat-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.chat-status {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.chat-status.pinned {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  margin: 0 -2px 0 -3px;
+  color: var(--vscode-descriptionForeground);
+  border-radius: 0;
+}
+
+.chat-status.pinned .icon {
+  width: 12px;
+  height: 12px;
+}
+
+.chat-status.pinned.current,
+.chat-status.pinned.running {
+  color: var(--phew-accent, var(--phew-drop));
+  background: none;
+  box-shadow: none;
+}
+
+.chat-status.pinned.waiting {
+  color: var(--vscode-editorWarning-foreground, #cca700);
+  background: none;
+}
+
+.chat-status.pinned.open {
+  box-shadow: none;
+}
+
+.chat-status.current {
+  background: var(--phew-accent, var(--phew-drop));
+}
+
+.chat-status.open {
+  box-shadow: inset 0 0 0 1.5px var(--vscode-descriptionForeground);
+}
+
+.chat-status.running {
+  background: var(--phew-drop);
+  animation: chat-pulse 1.2s ease-in-out infinite;
+}
+
+.chat-status.waiting {
+  background: var(--vscode-editorWarning-foreground, #cca700);
+}
+
+@keyframes chat-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.chat-title {
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
-.when,
-.empty {
+.chat-detail {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding-left: 15px;
+}
+
+.chat-preview {
+  overflow: hidden;
+  min-width: 0;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.88em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.chat-row mark {
+  color: inherit;
+  background: var(--vscode-editor-findMatchHighlightBackground, #ea5c0055);
+  border-radius: 2px;
+}
+
+.chat-tag {
+  flex: none;
+  max-width: 50%;
+  overflow: hidden;
+  padding: 0 6px;
+  color: var(--vscode-descriptionForeground);
+  border: 1px solid var(--vscode-widget-border, #8885);
+  border-radius: 8px;
+  font-size: 0.78em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.chat-time {
+  flex: none;
+  min-width: 26px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.82em;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.chat-time.live {
+  color: var(--phew-drop);
+}
+
+.chat-time.warn {
+  color: var(--vscode-editorWarning-foreground, #cca700);
+}
+
+.chat-more {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 22px;
+  padding: 0;
+  color: var(--vscode-icon-foreground, var(--vscode-foreground));
+  background: none;
+  border: none;
+  border-radius: 5px;
+  opacity: 0;
+}
+
+.chat-row.selected .chat-more {
+  opacity: 0.8;
+}
+
+.chat-more[aria-expanded="true"] {
+  background: var(--vscode-toolbar-hoverBackground, #8883);
+  opacity: 1;
+}
+
+.chat-more:hover {
+  background: var(--vscode-toolbar-hoverBackground, #8883);
+  opacity: 1;
+}
+
+.chat-row.selected .chat-time,
+.chat-row:has(.chat-more[aria-expanded="true"]) .chat-time {
+  visibility: hidden;
+}
+
+.chat-empty {
+  padding: 24px 12px;
+  color: var(--vscode-descriptionForeground);
+  text-align: center;
+}
+
+.chat-empty p {
+  margin: 0 0 8px;
+}
+
+.panel-footer {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--vscode-widget-border, var(--vscode-panel-border, #8883));
+}
+
+/* The list is for finding chats, so starting one is a quiet secondary action. */
+.split-button {
+  display: inline-flex;
+  overflow: hidden;
+  color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+  background: var(--vscode-button-secondaryBackground, #8882);
+  border-radius: 6px;
+}
+
+.split-button button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: inherit;
+  background: none;
+  border: none;
+}
+
+.split-button button:hover {
+  background: var(--vscode-button-secondaryHoverBackground, #8883);
+}
+
+.split-main {
+  padding: 4px 10px 4px 8px;
+}
+
+.split-button .split-more {
+  padding: 4px 6px;
+  border-left: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+}
+
+.split-more .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.panel-keys {
+  display: flex;
+  gap: 10px;
+  overflow: hidden;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.78em;
+  white-space: nowrap;
+}
+
+.panel-keys kbd {
+  margin-right: 2px;
+  font-family: inherit;
+  font-size: 0.95em;
+}
+
+@media (max-width: 340px) {
+  .panel-keys {
+    display: none;
+  }
+}
+
+.chat-menu {
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  min-width: 190px;
+  padding: 4px;
+  background: var(--vscode-menu-background, var(--vscode-editorWidget-background));
+  border: 1px solid var(--vscode-menu-border, var(--vscode-widget-border, #8884));
+  border-radius: 8px;
+  box-shadow: 0 8px 24px var(--vscode-widget-shadow, #0006);
+}
+
+.row-menu {
+  position: fixed;
+}
+
+.start-menu {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 10px;
+  max-width: calc(100% - 20px);
+}
+
+.chat-menu .menu-item {
+  color: var(--vscode-menu-foreground, var(--vscode-foreground));
+}
+
+.chat-menu .menu-item:hover:not(:disabled),
+.chat-menu .menu-item:focus-visible {
+  color: var(--vscode-menu-selectionForeground, inherit);
+  background: var(--vscode-menu-selectionBackground, var(--vscode-list-hoverBackground));
+  outline: none;
+}
+
+.chat-menu .menu-item .icon {
+  flex: none;
+  opacity: 0.85;
+}
+
+.chat-menu .menu-label small {
+  display: block;
+  margin-top: 1px;
   color: var(--vscode-descriptionForeground);
   font-size: 0.85em;
+  white-space: normal;
+}
+
+.chat-menu .menu-item.danger {
+  margin-top: 4px;
+  color: var(--vscode-errorForeground);
+  box-shadow: 0 -1px 0 var(--vscode-menu-separatorBackground, #8883);
+  border-radius: 0 0 4px 4px;
+}
+
+.undo-toast {
+  position: absolute;
+  z-index: 9;
+  bottom: 12px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100% - 24px);
+  padding: 6px 6px 6px 12px;
+  color: var(--vscode-notifications-foreground, var(--vscode-foreground));
+  background: var(--vscode-notifications-background, var(--vscode-editorWidget-background));
+  border: 1px solid var(--vscode-notifications-border, var(--vscode-widget-border, #8884));
+  border-radius: 8px;
+  box-shadow: 0 8px 24px var(--vscode-widget-shadow, #0006);
+  transform: translateX(-50%);
+}
+
+.undo-toast span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.undo-toast button {
+  flex: none;
+  padding: 3px 10px;
+  color: var(--vscode-textLink-foreground);
+  background: none;
+  border: none;
+  border-radius: 5px;
+  font-weight: 600;
+}
+
+.undo-toast button:hover {
+  background: var(--vscode-toolbar-hoverBackground, #8883);
+}
+
+.icon-button.pressed {
+  background: var(--vscode-toolbar-activeBackground, var(--vscode-toolbar-hoverBackground, #8883));
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel,
+  .chat-status.running {
+    animation: none;
+  }
 }
 
 .remove {
@@ -535,20 +1158,108 @@ select {
 
 .code .copy {
   position: absolute;
-  top: 4px;
-  right: 4px;
-  padding: 1px 6px;
-  color: var(--vscode-button-secondaryForeground);
-  background: var(--vscode-button-secondaryBackground);
-  border: none;
-  border-radius: 3px;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px 0 6px;
+  color: var(--vscode-foreground);
+  font: inherit;
   font-size: 0.8em;
+  background: color-mix(in srgb, var(--vscode-editor-background, #1e1e1e) 70%, var(--vscode-foreground) 8%);
+  border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border, #8884));
+  border-radius: 6px;
+  cursor: pointer;
   opacity: 0;
+  transition:
+    opacity 0.12s,
+    color 0.12s,
+    border-color 0.12s;
+}
+
+.code .copy .icon {
+  width: 13px;
+  height: 13px;
+}
+
+.code .copy:hover {
+  border-color: var(--vscode-focusBorder);
 }
 
 .code:hover .copy,
-.code .copy:focus-visible {
+.code .copy:focus-visible,
+.code .copy[data-copy-state] {
   opacity: 1;
+}
+
+/* Copy feedback, the same everywhere: a green check and a short pop. */
+/* Two attribute selectors win over :hover rules of the buttons. */
+button[data-copy-state="copied"][data-copy-state] {
+  color: var(--vscode-testing-iconPassed, #3fb950);
+}
+
+.code .copy[data-copy-state="copied"] {
+  border-color: color-mix(in srgb, var(--vscode-testing-iconPassed, #3fb950) 60%, transparent);
+}
+
+button[data-copy-state="failed"][data-copy-state] {
+  color: var(--vscode-errorForeground, #f85149);
+}
+
+.copy-pop .icon {
+  animation: phew-copy-pop 0.32s ease-out;
+}
+
+@keyframes phew-copy-pop {
+  0% {
+    transform: scale(0.6);
+  }
+  60% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* A small bubble over the button that says what happened. */
+.copy-bubble {
+  position: fixed;
+  z-index: 30;
+  padding: 3px 8px;
+  color: var(--vscode-editorHoverWidget-foreground, var(--vscode-foreground));
+  font-size: 0.8em;
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--vscode-editorHoverWidget-background, var(--vscode-editorWidget-background, #252526));
+  border: 1px solid color-mix(in srgb, var(--vscode-testing-iconPassed, #3fb950) 55%, transparent);
+  border-radius: 6px;
+  box-shadow: 0 4px 14px var(--vscode-widget-shadow, #0006);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, calc(-100% - 2px));
+  transition:
+    opacity 0.14s,
+    transform 0.14s;
+}
+
+.copy-bubble.visible {
+  opacity: 1;
+  transform: translate(-50%, calc(-100% - 6px));
+}
+
+.copy-bubble.below {
+  transform: translate(-50%, 2px);
+}
+
+.copy-bubble.below.visible {
+  transform: translate(-50%, 6px);
+}
+
+.copy-bubble.failed {
+  border-color: color-mix(in srgb, var(--vscode-errorForeground, #f85149) 60%, transparent);
 }
 
 .review-banner {
@@ -957,6 +1668,802 @@ select.pill {
   cursor: pointer;
 }
 
+/* The mode switch: the icon and color of the mode, and a lock for modes that change nothing. */
+.mode-pill {
+  display: inline-flex;
+  flex: none;
+  gap: 5px;
+  align-items: center;
+  max-width: none;
+  color: var(--mode-color, var(--vscode-descriptionForeground));
+  background: color-mix(in srgb, var(--mode-color, transparent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--mode-color, transparent) 28%, transparent);
+  cursor: pointer;
+}
+
+.mode-pill:hover {
+  color: var(--mode-color);
+  background: color-mix(in srgb, var(--mode-color, transparent) 20%, transparent);
+}
+
+.mode-pill .icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+.mode-pill .mode-name {
+  color: var(--vscode-foreground);
+  font-weight: 600;
+}
+
+.mode-pill .mode-lock {
+  width: 11px;
+  height: 11px;
+  opacity: 0.75;
+}
+
+.mode-pill::after {
+  content: "⌄";
+  margin: -4px 0 0 1px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.mode-pill.busy {
+  opacity: 0.7;
+}
+
+.mode-pill.switched {
+  animation: phew-mode-switch 0.32s ease-out;
+}
+
+@keyframes phew-mode-switch {
+  0% {
+    transform: scale(0.9);
+  }
+  60% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* The input shows the mode with a thin line in its color, except in the default Code mode. */
+.composer:not([data-mode="code"]) .box {
+  border-color: color-mix(
+    in srgb,
+    var(--mode-color) 45%,
+    var(--vscode-input-border, var(--vscode-panel-border, #8884))
+  );
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--mode-color) 75%, transparent);
+  transition:
+    border-color 160ms,
+    box-shadow 160ms;
+}
+
+.composer:not([data-mode="code"]) .box:focus-within {
+  border-color: var(--mode-color);
+}
+
+.popover.mode-menu {
+  gap: 2px;
+  width: min(340px, calc(100vw - 24px));
+  padding: 6px;
+}
+
+.mode-menu .popover-title {
+  padding: 2px 6px 4px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.8em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.mode-item {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  padding: 6px;
+  color: var(--vscode-foreground);
+  text-align: left;
+  font: inherit;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.mode-item:hover:not(:disabled),
+.mode-item:focus-visible {
+  background: var(--vscode-list-hoverBackground);
+  outline: none;
+}
+
+.mode-item:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--vscode-focusBorder);
+}
+
+.mode-item[aria-checked="true"] {
+  background: color-mix(in srgb, var(--mode-color) 14%, transparent);
+}
+
+.mode-item:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.mode-glyph {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: var(--mode-color);
+  background: color-mix(in srgb, var(--mode-color) 16%, transparent);
+  border-radius: 8px;
+}
+
+.mode-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.mode-title {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-weight: 600;
+}
+
+.mode-tag {
+  padding: 0 5px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.75em;
+  font-weight: 500;
+  border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border, #8884));
+  border-radius: 6px;
+}
+
+.mode-description {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.85em;
+}
+
+.mode-end {
+  display: inline-flex;
+  flex: none;
+  justify-content: center;
+  width: 18px;
+  color: var(--mode-color);
+}
+
+.mode-end kbd {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.8em;
+  opacity: 0.8;
+}
+
+.mode-busy {
+  padding: 2px 6px 4px;
+}
+
+.mode-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 4px;
+  padding: 6px 6px 2px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.8em;
+  border-top: 1px solid var(--vscode-widget-border, var(--vscode-panel-border, #8884));
+}
+
+/* The attach menu: one click adds the open file, the selection, problems, Git changes, or the terminal. */
+.popover.attach-menu {
+  gap: 2px;
+  width: min(340px, calc(100vw - 24px));
+  padding: 6px;
+}
+
+.attach-menu .popover-title {
+  padding: 2px 6px 4px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.8em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.attach-item {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  padding: 5px 6px;
+  color: var(--vscode-foreground);
+  text-align: left;
+  font: inherit;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.attach-item:hover,
+.attach-item:focus-visible {
+  background: var(--vscode-list-hoverBackground);
+  outline: none;
+}
+
+.attach-item:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--vscode-focusBorder);
+}
+
+.attach-item[aria-checked="true"] {
+  background: color-mix(in srgb, var(--phew-accent) 14%, transparent);
+}
+
+.attach-glyph {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  color: var(--phew-accent);
+  background: color-mix(in srgb, var(--phew-accent) 14%, transparent);
+  border-radius: 7px;
+}
+
+.attach-item[data-tone="error"] .attach-glyph {
+  color: var(--vscode-errorForeground, #f85149);
+  background: color-mix(in srgb, var(--vscode-errorForeground, #f85149) 14%, transparent);
+}
+
+.attach-item[data-tone="warning"] .attach-glyph {
+  color: var(--vscode-editorWarning-foreground, #d29922);
+  background: color-mix(in srgb, var(--vscode-editorWarning-foreground, #d29922) 14%, transparent);
+}
+
+.attach-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.attach-label {
+  font-weight: 600;
+}
+
+.attach-detail {
+  overflow: hidden;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.85em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.attach-item[data-tone="error"] .attach-detail {
+  color: var(--vscode-errorForeground, #f85149);
+}
+
+.attach-end {
+  display: inline-flex;
+  flex: none;
+  justify-content: center;
+  min-width: 18px;
+  color: var(--phew-accent);
+}
+
+.attach-end kbd {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.8em;
+  opacity: 0.85;
+}
+
+.attach-separator {
+  height: 1px;
+  margin: 4px 2px;
+  background: var(--vscode-widget-border, var(--vscode-panel-border, #8884));
+}
+
+.attach-empty {
+  padding: 2px 6px 4px;
+}
+
+.attach-tip {
+  margin: 4px 6px 2px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.8em;
+  opacity: 0.85;
+}
+
+/* Placeholder rows while the host collects the context. */
+.attach-loading {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 6px;
+}
+
+.attach-loading span {
+  height: 26px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--vscode-foreground) 6%, transparent),
+    color-mix(in srgb, var(--vscode-foreground) 12%, transparent),
+    color-mix(in srgb, var(--vscode-foreground) 6%, transparent)
+  );
+  background-size: 200% 100%;
+  border-radius: 6px;
+  animation: phew-shimmer 1.1s linear infinite;
+}
+
+@keyframes phew-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+/* While files are dragged over the chat */
+.drop-zone {
+  position: fixed;
+  z-index: 20;
+  inset: 6px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  color: var(--phew-accent);
+  font-weight: 600;
+  background: color-mix(
+    in srgb,
+    var(--phew-accent) 10%,
+    color-mix(in srgb, var(--vscode-sideBar-background, #1e1e1e) 80%, transparent)
+  );
+  border: 2px dashed color-mix(in srgb, var(--phew-accent) 70%, transparent);
+  border-radius: 12px;
+  pointer-events: none;
+}
+
+.drop-zone span {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+body.dragging-files .drop-zone {
+  display: flex;
+}
+
+/* Auto-approve: the shield shows the level, the panel explains each choice. */
+#approvalsButton[data-level="autopilot"] {
+  color: var(--phew-warning);
+  opacity: 1;
+}
+
+#approvalsButton[data-level="careful"] {
+  color: var(--phew-success);
+}
+
+.popover.approvals {
+  gap: 10px;
+  width: min(380px, calc(100vw - 24px));
+  padding: 10px;
+}
+
+.approvals-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.approvals-scope {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.8em;
+}
+
+.approvals-readonly,
+.approvals-custom {
+  margin: 0;
+  padding: 6px 8px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.85em;
+  background: color-mix(in srgb, var(--vscode-foreground) 6%, transparent);
+  border-radius: 6px;
+}
+
+.approval-levels {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.approval-level {
+  --level-color: var(--phew-accent);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+  padding: 8px;
+  color: var(--vscode-foreground);
+  text-align: left;
+  font: inherit;
+  background: transparent;
+  border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border, #8884));
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.approval-level.level-careful {
+  --level-color: var(--phew-success);
+}
+
+.approval-level.level-autopilot {
+  --level-color: var(--phew-warning);
+}
+
+.approval-level:hover {
+  border-color: color-mix(in srgb, var(--level-color) 60%, transparent);
+}
+
+.approval-level:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+
+.approval-level.active {
+  background: color-mix(in srgb, var(--level-color) 14%, transparent);
+  border-color: var(--level-color);
+}
+
+.approval-level-icon {
+  display: inline-flex;
+  margin-bottom: 2px;
+  color: var(--level-color);
+}
+
+.approval-level span:last-child {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.78em;
+  line-height: 1.3;
+}
+
+.approval-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.approval-rows.muted {
+  opacity: 0.55;
+}
+
+.approval-row-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.approval-row-label {
+  font-size: 0.9em;
+  font-weight: 600;
+}
+
+.approval-detail {
+  margin-top: 3px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.82em;
+  line-height: 1.35;
+}
+
+.segments {
+  display: inline-flex;
+  flex: none;
+  padding: 2px;
+  background: color-mix(in srgb, var(--vscode-foreground) 7%, transparent);
+  border-radius: 7px;
+}
+
+.segments button {
+  padding: 2px 9px;
+  color: var(--vscode-descriptionForeground);
+  font: inherit;
+  font-size: 0.85em;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.segments button:hover {
+  color: var(--vscode-foreground);
+}
+
+.segments button.active {
+  color: var(--vscode-foreground);
+  background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+  border-color: color-mix(in srgb, var(--phew-accent) 55%, transparent);
+  box-shadow: 0 1px 2px #0003;
+}
+
+.segments button:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+}
+
+.allowlist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  margin-top: 5px;
+}
+
+.allowlist-chip {
+  padding: 0 5px;
+  font-size: 0.95em;
+  background: color-mix(in srgb, var(--vscode-foreground) 9%, transparent);
+  border-radius: 4px;
+}
+
+.allowlist-empty {
+  color: var(--phew-warning);
+}
+
+.approval-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-top: 8px;
+  border-top: 1px solid var(--vscode-widget-border, var(--vscode-panel-border, #8884));
+}
+
+.approval-notes p {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  margin: 0;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.8em;
+  line-height: 1.35;
+}
+
+.approval-notes .icon {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  margin-top: 1px;
+}
+
+.approval-footer {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px;
+  background: color-mix(in srgb, var(--phew-accent) 8%, transparent);
+  border-radius: 6px;
+}
+
+.approval-differences {
+  display: flex;
+  flex-direction: column;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.8em;
+}
+
+.approval-footer .secondary {
+  flex: none;
+}
+
+/* The model menu opens above the model button, on the right. */
+.popover.model-menu {
+  right: 0;
+  left: auto;
+  gap: 2px;
+  width: min(360px, calc(100vw - 24px));
+  max-height: min(420px, 70vh);
+  padding: 6px;
+  overflow-y: auto;
+}
+
+.model-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 2px 6px 4px;
+}
+
+.model-menu .popover-title {
+  flex: none;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.8em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.model-search {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 7px;
+  color: var(--vscode-input-foreground);
+  font: inherit;
+  font-size: 0.9em;
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 5px;
+}
+
+.model-search:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+}
+
+.model-note,
+.model-mode-note {
+  margin: 0;
+  padding: 4px 6px;
+  font-size: 0.82em;
+}
+
+.model-mode-note {
+  margin: 4px 0 0;
+  color: var(--vscode-descriptionForeground);
+  background: color-mix(in srgb, var(--vscode-foreground) 6%, transparent);
+  border-radius: 6px;
+}
+
+.model-item {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  padding: 6px;
+  color: var(--vscode-foreground);
+  text-align: left;
+  font: inherit;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.model-item:hover,
+.model-item:focus-visible,
+.model-link:hover,
+.model-link:focus-visible {
+  background: var(--vscode-list-hoverBackground);
+  outline: none;
+}
+
+.model-item:focus-visible,
+.model-link:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--vscode-focusBorder);
+}
+
+.model-item[aria-checked="true"] {
+  background: color-mix(in srgb, var(--phew-accent) 14%, transparent);
+}
+
+.provider-badge {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 3px;
+  box-sizing: border-box;
+  color: var(--provider-color);
+  font-size: 0.72em;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  background: color-mix(in srgb, var(--provider-color) 16%, transparent);
+  border-radius: 7px;
+}
+
+.model-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.model-name {
+  overflow: hidden;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.model-detail {
+  overflow: hidden;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.85em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.model-end {
+  display: inline-flex;
+  flex: none;
+  justify-content: center;
+  min-width: 18px;
+  color: var(--phew-accent);
+}
+
+.model-end kbd {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.8em;
+  opacity: 0.85;
+}
+
+.model-footer {
+  display: flex;
+  flex-direction: column;
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--vscode-widget-border, var(--vscode-panel-border, #8884));
+}
+
+.model-link {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 5px 6px;
+  color: var(--vscode-foreground);
+  text-align: left;
+  font: inherit;
+  font-size: 0.9em;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.model-link .icon {
+  width: 14px;
+  height: 14px;
+  color: var(--vscode-descriptionForeground);
+}
+
+/* The model button: the provider badge and a short name. */
+button.pill.model {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  max-width: 200px;
+  padding-left: 4px;
+}
+
+button.pill.model .provider-badge {
+  min-width: 18px;
+  height: 18px;
+  font-size: 0.62em;
+  border-radius: 5px;
+}
+
+button.pill.model .model-label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+button.pill.model.mode-locked .model-label {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
 button.pill.model::after {
   content: " ⌄";
 }
@@ -973,20 +2480,6 @@ button.pill.model::after {
   background: var(--vscode-button-background);
   border: none;
   border-radius: 50%;
-}
-
-.send:hover {
-  background: var(--vscode-button-hoverBackground);
-}
-
-.send.queue {
-  background: var(--vscode-button-secondaryBackground);
-  color: var(--vscode-button-secondaryForeground);
-}
-
-.send.stop {
-  color: var(--vscode-foreground);
-  background: var(--vscode-button-secondaryBackground);
 }
 
 .context-ring {
@@ -1174,6 +2667,8 @@ body.actions-hover .message-header .action {
   transition: opacity 0.12s;
 }
 
+body.actions-hover .message-actions:has([data-copy-state]),
+body.actions-hover .message-header .action[data-copy-state],
 body.actions-hover .message:hover .message-actions,
 body.actions-hover .message:hover .message-header .action,
 body.actions-hover .message-actions:focus-within {
@@ -1265,27 +2760,161 @@ body.style-compact .message p {
   right: 6px;
   bottom: auto;
   left: auto;
-  width: 240px;
+  gap: 0;
+  width: 280px;
+  max-width: calc(100vw - 12px);
+  padding: 0;
+  border-radius: 10px;
+}
+
+/* Appearance: three groups (chat, accent, assistant) with one kind of control for each kind of choice. */
+
+.look-head,
+.look-group,
+.look-foot {
+  padding: 10px 12px;
+}
+
+.look-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 2px;
+}
+
+.look-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.look-group + .look-group,
+.look-foot {
+  border-top: 1px solid var(--vscode-widget-border, var(--vscode-panel-border, #8883));
+}
+
+.look-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.look-label {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.88em;
+}
+
+.look-value {
+  margin-left: 4px;
+  color: var(--vscode-foreground);
+}
+
+.look-foot {
+  display: flex;
+  justify-content: space-between;
+}
+
+.look-foot .link,
+.look-head .link {
+  color: var(--vscode-descriptionForeground);
+}
+
+.look-foot .link:hover,
+.look-head .link:hover {
+  color: var(--vscode-textLink-foreground);
+}
+
+.look-styles button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px 6px;
+  font-size: 0.88em;
+}
+
+.look-styles svg {
+  width: 28px;
+  height: 18px;
+  fill: currentColor;
+  opacity: 0.55;
+}
+
+.look-styles button.active svg {
+  opacity: 1;
+}
+
+.segmented.small button {
+  padding: 3px 9px;
+  font-size: 0.88em;
+}
+
+.assistant-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.appearance-avatar {
+  display: inline-flex;
+  flex: none;
+}
+
+.appearance-mascot {
+  width: 36px;
+  height: 36px;
+}
+
+.appearance-mascot.avatar-chip {
+  font-size: 18px;
+}
+
+.assistant-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.assistant-text span {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.88em;
+}
+
+.small-button {
+  padding: 3px 10px;
+  font-size: 0.88em;
 }
 
 .segmented {
   display: flex;
-  overflow: hidden;
-  border: 1px solid var(--vscode-panel-border, #8884);
-  border-radius: 6px;
+  gap: 2px;
+  padding: 2px;
+  background: color-mix(in srgb, var(--vscode-foreground) 6%, transparent);
+  border-radius: 7px;
 }
 
 .segmented button {
   flex: 1;
   padding: 4px 10px;
-  color: var(--vscode-foreground);
+  color: var(--vscode-descriptionForeground);
   background: none;
-  border: none;
+  border: 1px solid transparent;
+  border-radius: 5px;
 }
 
+.segmented button:hover {
+  color: var(--vscode-foreground);
+}
+
+/* The choice is calm: a raised tile with the accent outline, not a loud fill. */
 .segmented button.active {
-  color: var(--vscode-button-foreground);
-  background: var(--phew-accent);
+  color: var(--vscode-foreground);
+  background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+  border-color: color-mix(in srgb, var(--phew-accent) 70%, transparent);
+  box-shadow: 0 1px 2px var(--vscode-widget-shadow, #0003);
 }
 
 .row-label {
@@ -1299,39 +2928,102 @@ body.style-compact .message p {
 .swatches {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
 }
 
 .swatch {
+  position: relative;
   width: 22px;
   height: 22px;
   padding: 0;
-  border: 2px solid transparent;
+  background: var(--swatch, transparent);
+  border: none;
   border-radius: 50%;
+  box-shadow: inset 0 0 0 1px #0002;
+  cursor: pointer;
 }
 
+/* The theme color: half of the swatch shows the accent of the current theme. */
 .swatch.theme {
-  background: conic-gradient(#4c8dff, #8b5cf6, #e64980, #f08c2e, #2fb67c, #22b8cf, #4c8dff);
+  background: linear-gradient(
+    135deg,
+    var(--vscode-button-background, #0e639c) 50%,
+    var(--vscode-editor-background, #1e1e1e) 50%
+  );
+  box-shadow: inset 0 0 0 1px var(--vscode-widget-border, #8886);
+}
+
+.swatch.custom {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px var(--vscode-widget-border, #8886);
+}
+
+.swatch.custom::before {
+  content: "+";
+  color: var(--vscode-descriptionForeground);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.swatch.custom.filled::before {
+  content: none;
+}
+
+.swatch.custom input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .swatch.active {
-  border-color: var(--vscode-foreground);
+  box-shadow:
+    0 0 0 2px var(--vscode-editorWidget-background, #252526),
+    0 0 0 4px var(--vscode-foreground);
+}
+
+.swatch:focus-within,
+.swatch:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 4px;
 }
 
 .stepper {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 6px;
+  gap: 2px;
+  padding: 2px;
+  background: color-mix(in srgb, var(--vscode-foreground) 6%, transparent);
+  border-radius: 7px;
 }
 
 .stepper button {
-  width: 34px;
-  padding: 2px 0;
+  min-width: 30px;
+  padding: 2px 6px;
   color: var(--vscode-foreground);
-  background: var(--vscode-button-secondaryBackground);
+  background: none;
   border: none;
-  border-radius: 4px;
+  border-radius: 5px;
+}
+
+.stepper button:hover {
+  background: var(--vscode-toolbar-hoverBackground, #8883);
+}
+
+.stepper #fontValue {
+  min-width: 22px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.stepper .stepper-reset {
+  min-width: 24px;
+  color: var(--vscode-descriptionForeground);
 }
 
 /* Headers without wasted space */
@@ -1371,13 +3063,13 @@ html body.style-compact .message .message-actions {
 }
 
 .mascot .m-face {
-  fill: #f0ede8;
+  fill: var(--m-face, #f0ede8);
 }
 
 .mascot .m-eyes {
   display: none;
   fill: none;
-  stroke: #30343b;
+  stroke: var(--m-eye, #30343b);
   stroke-width: 26;
   stroke-linecap: round;
 }
@@ -1388,19 +3080,119 @@ html body.style-compact .message .message-actions {
   transform-origin: center;
 }
 
-.mascot[data-state="idle"] .m-relief,
-.mascot[data-state="done"] .m-relief,
-.mascot[data-state="working"] .m-focus,
-.mascot[data-state="failed"] .m-worry {
+/* Static mascots (cards and avatars) show their face by the state. */
+.mascot:not([data-face])[data-state="idle"] .m-relief,
+.mascot:not([data-face])[data-state="done"] .m-relief,
+.mascot:not([data-face])[data-state="working"] .m-focus,
+.mascot:not([data-face])[data-state="failed"] .m-worry {
   display: inline;
 }
 
-.mascot[data-state="working"] .m-drop {
+.mascot:not([data-face])[data-state="working"] .m-drop {
   animation: phew-sweat 1.4s ease-in infinite;
 }
 
-.mascot[data-state="working"] {
+.mascot:not([data-face])[data-state="working"] {
   animation: phew-think 2.8s ease-in-out infinite;
+}
+
+/*
+ * Live mascots: the face and the gaze come from the behavior in mascotLife.ts.
+ * Moves use a few hard steps, like a handheld game, so the eyes read as a character and not as a spinner.
+ */
+.mascot[data-face="open"] .m-open,
+.mascot[data-face="relief"] .m-relief,
+.mascot[data-face="focus"] .m-focus,
+.mascot[data-face="worry"] .m-worry,
+.mascot[data-face="sleepy"] .m-sleepy {
+  display: inline;
+}
+
+.mascot .m-gaze {
+  transition: transform 180ms steps(3, jump-end);
+}
+
+.mascot .m-open {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.mascot.blink .m-open {
+  transform: scaleY(0.18);
+}
+
+.mascot[data-look="up"] .m-gaze {
+  transform: translate(6px, -16px);
+}
+
+.mascot[data-look="down"] .m-gaze {
+  transform: translate(0, 14px);
+}
+
+.mascot[data-look="follow"] .m-gaze {
+  transform: translate(var(--gaze-x, 0), var(--gaze-y, 0));
+  transition-duration: 120ms;
+}
+
+.mascot[data-look="scan"] .m-gaze {
+  animation: phew-scan 2.4s infinite;
+  transition: none;
+}
+
+.mascot.sweat .m-drop {
+  animation: phew-sweat 2.4s ease-in infinite;
+}
+
+.mascot[data-face="sleepy"] {
+  animation: phew-doze 6s ease-in-out infinite;
+}
+
+.mascot[data-face="sleepy"] .m-drop {
+  opacity: 0.55;
+}
+
+.mascot[data-state="done"] .m-gaze,
+.mascot[data-state="failed"] .m-gaze {
+  transform: none;
+}
+
+/* Reading: the eyes jump along a line in four steps and return, like eyes over text. */
+@keyframes phew-scan {
+  0%,
+  20% {
+    transform: translate(-12px, 6px);
+  }
+  21%,
+  40% {
+    transform: translate(-4px, 6px);
+  }
+  41%,
+  60% {
+    transform: translate(4px, 6px);
+  }
+  61%,
+  85% {
+    transform: translate(12px, 6px);
+  }
+  86%,
+  100% {
+    transform: translate(-12px, 10px);
+  }
+}
+
+@keyframes phew-doze {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.97, 0.95) translateY(2%);
+  }
+}
+
+body.mascot-paused .mascot,
+body.mascot-paused .mascot * {
+  animation-play-state: paused;
 }
 
 .mascot[data-state="done"].again,
@@ -1507,6 +3299,14 @@ html body.style-compact .message .message-actions {
 @media (prefers-reduced-motion: reduce) {
   .mascot,
   .mascot .m-drop,
+  .mascot .m-gaze,
+  .preview-avatar,
+  .mode-pill,
+  .attach-loading span,
+  .copy-pop .icon,
+  .copy-bubble,
+  .term-dot,
+  .dice-button svg,
   .avatar-chip {
     /* biome-ignore lint/complexity/noImportantStyles: reduced motion must win over every animation. */
     animation: none !important;
@@ -1518,11 +3318,13 @@ html body.style-compact .message .message-actions {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  color: #fff;
-  font-weight: 700;
+  color: #30343b;
+  font-weight: 800;
   line-height: 1;
-  background: var(--phew-accent);
+  letter-spacing: -0.02em;
+  background: #f0ede8;
   border-radius: 30%;
+  box-shadow: inset 0 -0.12em 0 color-mix(in srgb, var(--phew-accent) 70%, transparent);
 }
 
 .avatar-chip.emoji {
@@ -1653,21 +3455,97 @@ html body.style-compact .message .message-actions {
 
 .assistant-preview {
   display: flex;
-  gap: 10px;
+  gap: 14px;
   align-items: center;
-  padding: 10px;
+  padding: 12px 14px;
   background: color-mix(in srgb, var(--phew-accent) 10%, transparent);
   border-radius: 10px;
 }
 
+.preview-slot {
+  display: inline-flex;
+  flex: none;
+}
+
 .preview-avatar {
   flex: none;
-  width: 36px;
-  height: 36px;
+  width: 60px;
+  height: 60px;
 }
 
 .preview-avatar.avatar-chip {
-  font-size: 18px;
+  font-size: 26px;
+}
+
+.preview-avatar.emoji {
+  font-size: 32px;
+}
+
+/* A new look or character says hello with a small hop. */
+.preview-avatar.hello {
+  animation: phew-relief 0.7s ease-out;
+}
+
+.dialog .field-hint {
+  font-weight: 400;
+  color: var(--vscode-descriptionForeground);
+  opacity: 0.85;
+}
+
+.dialog .field-dot {
+  margin: 0 6px;
+  opacity: 0.6;
+}
+
+.name-row {
+  display: flex;
+  gap: 6px;
+}
+
+.name-row input {
+  flex: 1;
+}
+
+.dice-button {
+  flex: none;
+  width: 32px;
+  padding: 0;
+  color: var(--vscode-foreground);
+  background: transparent;
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.dice-button svg {
+  width: 18px;
+  height: 18px;
+  vertical-align: middle;
+  fill: currentcolor;
+}
+
+.dice-button svg rect {
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 1.6;
+}
+
+.dice-button:hover {
+  color: var(--phew-accent);
+  border-color: var(--phew-accent);
+}
+
+.dice-button:hover svg {
+  animation: phew-roll 0.5s ease-out;
+}
+
+@keyframes phew-roll {
+  from {
+    transform: rotate(0);
+  }
+  to {
+    transform: rotate(180deg);
+  }
 }
 
 .preview-text {
@@ -1689,6 +3567,11 @@ html body.style-compact .message .message-actions {
   border: 2px solid transparent;
   border-radius: 10px;
   cursor: pointer;
+  transition: transform 120ms ease-out;
+}
+
+.avatar-choices button:hover {
+  transform: translateY(-2px);
 }
 
 .avatar-choices button.selected {
@@ -1706,7 +3589,7 @@ html body.style-compact .message .message-actions {
 
 .persona-choices {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
 }
 
@@ -1714,7 +3597,7 @@ html body.style-compact .message .message-actions {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 8px;
+  padding: 7px 9px;
   color: inherit;
   text-align: left;
   font: inherit;
@@ -1732,6 +3615,49 @@ html body.style-compact .message .message-actions {
 .persona-choices button.selected {
   background: color-mix(in srgb, var(--phew-accent) 14%, transparent);
   border-color: var(--phew-accent);
+}
+
+.custom-link {
+  align-self: flex-start;
+  padding: 2px 0;
+  color: var(--vscode-textLink-foreground, var(--phew-accent));
+  font: inherit;
+  font-size: 0.9em;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.custom-link:hover {
+  text-decoration: underline;
+}
+
+.custom-link.selected {
+  color: var(--vscode-foreground);
+  font-weight: 600;
+}
+
+.more-settings {
+  margin-top: 12px;
+}
+
+.more-settings summary {
+  font-size: 0.85em;
+  font-weight: 600;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+}
+
+.more-settings summary .field-hint {
+  margin-left: 6px;
+}
+
+.more-settings[open] summary .field-hint {
+  display: none;
+}
+
+.more-settings .field-row .field {
+  margin-top: 8px;
 }
 
 .dialog-actions {
@@ -1911,7 +3837,12 @@ body {
   --phew-warning: #d9a441;
   --phew-error: #e5676b;
   --phew-accent: var(--phew-drop);
-  --phew-user-bg: color-mix(in srgb, var(--vscode-foreground) 8%, transparent);
+  /* Your messages take a soft tint of the accent, so a new accent recolors them too. */
+  --phew-user-bg: color-mix(
+    in srgb,
+    var(--phew-accent) 20%,
+    color-mix(in srgb, var(--vscode-foreground) 6%, var(--vscode-sideBar-background, #1e1e1e))
+  );
   --phew-reading: 46rem;
 }
 
@@ -1934,9 +3865,245 @@ body.vscode-high-contrast-light .message.user .bubble {
   border: 1px solid var(--vscode-contrastBorder, currentColor);
 }
 
+/*
+ * The send button follows the accent in every state:
+ * empty input is a quiet outline, ready to send is a solid accent, a queued message is a soft accent,
+ * and Stop is neutral with a red hover. A sent message flies up.
+ */
 html body .send {
+  position: relative;
+  width: 28px;
+  height: 28px;
   color: var(--phew-on-accent);
   background: var(--phew-accent);
+  box-shadow: 0 1px 2px #0004;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    box-shadow 0.15s,
+    transform 0.12s;
+}
+
+html body .send .icon {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2.3;
+}
+
+html body .send:hover {
+  background: color-mix(in srgb, var(--phew-accent) 86%, #fff);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--phew-accent) 25%, transparent),
+    0 1px 2px #0004;
+}
+
+html body .send:active {
+  transform: scale(0.92);
+}
+
+html body .send:focus-visible {
+  outline: 2px solid var(--vscode-focusBorder);
+  outline-offset: 2px;
+}
+
+/* Nothing to send yet */
+html body .send.empty {
+  color: color-mix(in srgb, var(--phew-accent) 75%, var(--vscode-foreground));
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--phew-accent) 45%, transparent);
+  cursor: default;
+}
+
+html body .send.empty:hover {
+  background: color-mix(in srgb, var(--phew-accent) 10%, transparent);
+}
+
+html body .send.empty:active {
+  transform: none;
+}
+
+/* While the agent works, the message goes to the queue. */
+html body .send.queue {
+  color: var(--phew-accent);
+  background: color-mix(in srgb, var(--phew-accent) 18%, transparent);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--phew-accent) 55%, transparent);
+}
+
+html body .send.queue:hover {
+  background: color-mix(in srgb, var(--phew-accent) 28%, transparent);
+}
+
+html body .send.stop {
+  color: var(--vscode-foreground);
+  background: color-mix(in srgb, var(--vscode-foreground) 12%, transparent);
+  box-shadow: none;
+}
+
+html body .send.stop:hover {
+  color: #fff;
+  background: var(--phew-error);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--phew-error) 25%, transparent);
+}
+
+/* A running task: a soft ring turns around Stop. */
+html body .send.stop::after {
+  position: absolute;
+  inset: -3px;
+  content: "";
+  border: 2px solid transparent;
+  border-top-color: var(--phew-accent);
+  border-radius: 50%;
+  animation: phew-spin 1s linear infinite;
+}
+
+@keyframes phew-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+html body .send.launch .icon {
+  animation: phew-launch 0.35s ease-in;
+}
+
+@keyframes phew-launch {
+  0% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  45% {
+    transform: translateY(-14px);
+    opacity: 0;
+  }
+  46% {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* The symbol of the assistant's look; the arrow takes its place on hover and focus. */
+html body .send .send-glyph,
+html body .send .send-arrow {
+  position: absolute;
+  inset: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    opacity 0.16s,
+    transform 0.16s;
+}
+
+html body .send .send-arrow {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+html body .send:hover .send-glyph,
+html body .send:focus-visible .send-glyph {
+  opacity: 0;
+  transform: scale(0.6) rotate(-20deg);
+}
+
+html body .send:hover .send-arrow,
+html body .send:focus-visible .send-arrow {
+  opacity: 1;
+  transform: none;
+}
+
+/* Each look sends in its own way. */
+html body .send.launch .send-glyph .icon,
+html body .send.launch .send-arrow .icon {
+  animation: phew-launch 0.35s ease-in;
+}
+
+html body .send.launch[data-look="ninja"] .send-glyph .icon,
+html body .send.launch[data-look="night"] .send-glyph .icon {
+  animation: phew-spin-out 0.45s ease-in;
+}
+
+html body .send.launch[data-look="cat"] .send-glyph .icon {
+  animation: phew-stamp 0.4s ease-out;
+}
+
+html body .send.launch[data-look="sprout"] .send-glyph .icon,
+html body .send.launch[data-look="ghost"] .send-glyph .icon {
+  animation: phew-float-up 0.5s ease-out;
+}
+
+@keyframes phew-spin-out {
+  0% {
+    transform: rotate(0) scale(1);
+    opacity: 1;
+  }
+  60% {
+    transform: rotate(300deg) scale(0.4) translateY(-10px);
+    opacity: 0;
+  }
+  61% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  100% {
+    transform: rotate(360deg) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes phew-stamp {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(0.7) translateY(2px);
+  }
+  70% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes phew-float-up {
+  0% {
+    transform: translateY(0) rotate(0);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(-12px) rotate(-12deg);
+    opacity: 0;
+  }
+  51% {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* The input in focus uses the accent too, not the blue of the theme. */
+html body .box:focus-within {
+  border-color: color-mix(in srgb, var(--phew-accent) 75%, var(--vscode-input-border, #8884));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--phew-accent) 14%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html body .send,
+  html body .send .icon,
+  html body .send .send-glyph,
+  html body .send .send-arrow,
+  html body .send::after {
+    animation: none;
+    transition: none;
+  }
 }
 
 /* One header: in the side bar, the chat title is in the title of the view. */
@@ -1964,11 +4131,22 @@ body.in-sidebar .popover.appearance {
 
 /* Answers: full width, no avatar or name unless you turn them on. */
 
+/* Without the name, the copy button and the time sit in a quiet row under the answer, so they never cover the text. */
+html body.no-avatars .message.assistant:not(.btw) {
+  display: flex;
+  flex-direction: column;
+}
+
 html body.no-avatars .message.assistant:not(.btw) > .message-header {
-  position: absolute;
-  top: -6px;
-  right: 0;
-  margin: 0;
+  order: 1;
+  flex-direction: row-reverse;
+  justify-content: flex-end;
+  gap: 6px;
+  margin: -6px 0 0 -4px;
+}
+
+html body.no-avatars .message.assistant:not(.btw) > .message-header .action {
+  margin-left: 0;
 }
 
 html body.no-avatars .message.assistant:not(.btw) > .message-header .who {

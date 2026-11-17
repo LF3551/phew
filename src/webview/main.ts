@@ -1,5 +1,7 @@
-import { accentPresets } from "../core/appearance";
+import { accentPresets, defaultAppearance } from "../core/appearance";
 import type { Attachment } from "../core/attachments";
+import { chatGroup, chatGroupLabels, chatTime, highlightParts, matchesChat } from "../core/chatList";
+import { lookOf, personaInfo } from "../core/persona";
 import { summaryHeadline, summaryTotals } from "../core/summary";
 import { icon } from "../shared/icons";
 import type {
@@ -13,7 +15,21 @@ import type {
   ViewState,
   WebviewMessage,
 } from "../shared/protocol";
+import { createApprovalsPanel } from "./approvalsPanel";
+import { createAttachMenu } from "./attachMenu";
+import { copyWithFeedback, setCopyFallback } from "./copy";
 import { renderMarkdown } from "./markdown";
+import {
+  actForTool,
+  mascotSeesTyping,
+  renderMascots,
+  setMascotAct,
+  setMascotMood,
+  setMascotMotion,
+  startMascotLife,
+} from "./mascotLife";
+import { createModelMenu, modelTitle, providerBadge } from "./modelMenu";
+import { createModeMenu } from "./modeMenu";
 import {
   avatar,
   type MascotState,
@@ -24,6 +40,7 @@ import {
   showAssistantCard,
   showWrapped,
 } from "./persona";
+import { appendCommandOutput, renderCommandTerminal, setCommandWhere } from "./terminalBlock";
 import { groupSummary, toolLabel } from "./toolLabels";
 
 interface VsCodeApi {
@@ -44,7 +61,6 @@ const prompt = $<HTMLTextAreaElement>("prompt");
 const sendButton = $<HTMLButtonElement>("send");
 const stopButton = $<HTMLButtonElement>("stop");
 const modelButton = $<HTMLButtonElement>("model");
-const modeSelect = $<HTMLSelectElement>("mode");
 const chips = $<HTMLElement>("chips");
 const mentionsBox = $<HTMLElement>("mentions");
 const panel = $<HTMLElement>("panel");
@@ -67,10 +83,13 @@ let history: HistoryItem[] = [];
 interface Saved {
   promptHistory: string[];
   planOpen: boolean;
+  /** How often the user opened a chat with the keyboard. The key hints hide once they are learned. */
+  chatKeysUsed: number;
 }
 const saved: Saved = {
   promptHistory: [],
   planOpen: true,
+  chatKeysUsed: 0,
   ...((vscode.getState() as Partial<Saved> | undefined) ?? {}),
 };
 let historyPosition = -1;
@@ -108,6 +127,12 @@ function iconButton(name: string, title: string, onClick: () => void): HTMLButto
   node.setAttribute("aria-label", title);
   node.append(iconNode(name));
   node.addEventListener("click", onClick);
+  return node;
+}
+
+function copyIconButton(title: string, text: () => string, what: string): HTMLButtonElement {
+  const node = iconButton("copy", title, () => void copyWithFeedback(node, text(), what));
+  node.classList.add("copy-action");
   return node;
 }
 
@@ -214,15 +239,14 @@ function markdown(text: string): DocumentFragment {
   return fragment;
 }
 
-function copyButton(text: () => string, label = "Copy", className = "copy"): HTMLButtonElement {
-  const copy = button(label, className, () => {
-    void navigator.clipboard.writeText(text()).then(() => {
-      copy.textContent = "Copied";
-      setTimeout(() => {
-        copy.textContent = label;
-      }, 1200);
-    });
-  });
+/** The Copy button of a code block: an icon and a label, so the result is easy to see. */
+function copyButton(text: () => string): HTMLButtonElement {
+  const copy = element("button", "copy");
+  copy.type = "button";
+  copy.title = "Copy code";
+  copy.setAttribute("aria-label", "Copy code");
+  copy.append(iconNode("copy"), element("span", "copy-label", "Copy"));
+  copy.addEventListener("click", () => void copyWithFeedback(copy, text(), "Code"));
   return copy;
 }
 
@@ -236,6 +260,7 @@ let introduced = false;
 function moveMascot(next: MascotState, settleAfter?: number): void {
   mascotState = next;
   setMascotState(next);
+  setMascotMood(next);
   if (mascotTimer) clearTimeout(mascotTimer);
   mascotTimer = undefined;
   if (settleAfter)
@@ -257,6 +282,9 @@ function applyAssistant(next: ViewState): void {
     $("headerAvatar").replaceChildren(live("header-mascot"));
     $("welcomeAvatar").replaceChildren(live("welcome-mascot"));
     $("statusMascot").replaceChildren(live("status-mascot-icon"));
+    $("appearanceAvatar").replaceChildren(live("appearance-mascot"));
+    $("assistantName").textContent = next.assistant.name;
+    $("assistantPersona").textContent = personaInfo[next.assistant.persona]?.label ?? "";
     $("welcomeName").textContent = next.assistant.name;
     $("welcomeTagline").textContent = next.assistant.userName
       ? `Hi, ${next.assistant.userName}! Bug fixed. Phew.`
@@ -266,6 +294,7 @@ function applyAssistant(next: ViewState): void {
     for (const node of document.querySelectorAll(".message.assistant:not(.btw) > .message-header > .who"))
       node.textContent = next.assistant.name;
   }
+  renderMascots();
   if (next.busy && mascotState !== "working") moveMascot("working");
   if (!next.busy && mascotState === "working") moveMascot("idle");
   if (next.onboarding && !introduced && next.configured) {
@@ -311,6 +340,10 @@ function renderResume(next: ViewState): void {
   card.replaceChildren(text, actions);
 }
 
+function currentModeName(next: ViewState): string {
+  return next.modes.find((mode) => mode.id === next.mode)?.name ?? "This";
+}
+
 function applyState(next: ViewState): void {
   state = next;
   if (latestCard) renderCardActions(latestCard);
@@ -333,42 +366,32 @@ function applyState(next: ViewState): void {
   $("historyButton").hidden = !next.pinned;
   $("newChat").hidden = !next.pinned;
 
-  if (
-    modeSelect.options.length !== next.modes.length ||
-    [...modeSelect.options].some((option, index) => option.value !== next.modes[index]?.id)
-  ) {
-    modeSelect.replaceChildren(
-      ...next.modes.map((mode) => {
-        const option = element("option", undefined, mode.name);
-        option.value = mode.id;
-        option.title = mode.description;
-        return option;
-      }),
-    );
-  }
-  modeSelect.value = next.mode;
-  modeSelect.title = next.modes.find((mode) => mode.id === next.mode)?.description ?? "Mode";
-  modeSelect.disabled = next.busy;
+  modeMenu.update(next.modes, next.mode, next.busy);
 
-  modelButton.textContent = next.configured ? next.modelId || next.model : "Connect a model";
+  const activeModel =
+    next.models.find((model) => model.name === next.modeModel) ?? next.models.find((model) => model.active);
+  if (activeModel) {
+    const { title } = modelTitle(activeModel);
+    const short =
+      activeModel.provider === "vscode" && /^auto$/i.test(activeModel.model) ? "Auto" : next.modelId || title;
+    modelButton.replaceChildren(providerBadge(activeModel.provider), element("span", "model-label", short));
+  } else modelButton.textContent = next.configured ? next.modelId || next.model : "Connect a model";
+  modelButton.classList.toggle("mode-locked", next.modeModel !== undefined);
   modelButton.title = next.configured
-    ? `${next.modelId || next.model} · ${next.model} (${next.provider}). Click to switch.`
-    : "Add a model";
+    ? `${next.model} (${next.provider})${next.modeModel ? ` · set by the ${currentModeName(next)} mode` : ""}. Click to switch.`
+    : "Connect a model";
+  modelMenu.update(next.models, next.busy, next.modeModel, currentModeName(next));
   $("setup").hidden = next.configured;
-  sendButton.classList.toggle("queue", next.busy);
-  sendButton.title = next.busy ? "Queue: the message reaches the agent at its next step" : "Send";
   stopButton.hidden = !next.busy;
   const send = next.sendWith === "ctrlEnter" ? "Ctrl+Enter" : "Enter";
+  updateSendButton();
   const modifier = navigator.platform.toLowerCase().includes("mac") ? "Cmd" : "Ctrl";
   prompt.placeholder = next.busy ? "Add to the queue…" : `Ask ${next.assistant.name}…`;
   prompt.title = next.busy
     ? `Enter: add to the queue. ${modifier}+Enter: stop and send now. Esc: stop.`
     : `${send}: send. @: attach files, problems, Git changes, or the terminal. /: commands.`;
-  $<HTMLSelectElement>("approvalReview").value = next.approvals.review;
-  $<HTMLSelectElement>("approvalCommands").value = next.approvals.commands;
-  $<HTMLSelectElement>("approvalMcp").value = String(next.approvals.mcp);
-  $("saveApprovals").hidden = !next.approvals.custom;
-  $("approvalDot").hidden = !next.approvals.custom;
+  const currentMode = next.modes.find((mode) => mode.id === next.mode);
+  approvalsPanel.update(next.approvals, currentMode && !currentMode.changes ? currentMode.name : undefined);
   $("approvalsButton").hidden = !next.trusted;
   $("restricted").hidden = next.trusted;
 
@@ -413,6 +436,7 @@ function applyAppearance(next: ViewState): void {
   );
   body.classList.add(`style-${look.style}`, `times-${look.timestamps}`, `actions-${look.messageActions}`);
   body.classList.toggle("no-avatars", !look.avatars);
+  setMascotMotion(look.mascot);
   const set = (name: string, value: string | undefined) =>
     value ? body.style.setProperty(name, value) : body.style.removeProperty(name);
   set("--phew-font-size", next.fontSize ? `${next.fontSize}px` : undefined);
@@ -422,14 +446,34 @@ function applyAppearance(next: ViewState): void {
   set("--phew-font-family", look.fontFamily || undefined);
   set("--phew-line-height", look.lineHeight ? String(look.lineHeight) : undefined);
   set("--phew-code-size", look.codeFontSize ? `${look.codeFontSize}px` : undefined);
-  for (const option of document.querySelectorAll<HTMLButtonElement>("#styleChoice button")) {
-    option.classList.toggle("active", option.dataset.style === look.style);
-  }
-  for (const swatch of document.querySelectorAll<HTMLButtonElement>("#swatches button")) {
-    swatch.classList.toggle("active", (swatch.dataset.color ?? "") === look.accentColor);
-  }
-  $("fontValue").textContent = next.fontSize ? `${next.fontSize}px` : "Default";
-  $<HTMLSelectElement>("timestampChoice").value = look.timestamps;
+  const choose = (selector: string, active: (button: HTMLButtonElement) => boolean) => {
+    for (const button of document.querySelectorAll<HTMLButtonElement>(selector)) {
+      const on = active(button);
+      button.classList.toggle("active", on);
+      button.setAttribute("aria-checked", String(on));
+    }
+  };
+  choose("#styleChoice button", (button) => button.dataset.style === look.style);
+  choose("#timestampChoice button", (button) => button.dataset.value === look.timestamps);
+  choose("#mascotChoice button", (button) => button.dataset.value === look.mascot);
+  const accent = look.accentColor.toLowerCase();
+  const preset = accentPresets.find((item) => item.color.toLowerCase() === accent);
+  const custom = accent !== "" && !preset;
+  choose("#swatches .swatch", (button) =>
+    button.classList.contains("custom") ? custom : (button.dataset.color ?? "") === accent && !custom,
+  );
+  const customSwatch = $("customSwatch");
+  customSwatch.style.background = custom ? look.accentColor : "";
+  customSwatch.classList.toggle("filled", custom);
+  $("accentName").textContent = custom ? look.accentColor : (preset?.name ?? "Theme");
+  $("fontValue").textContent = String(Math.round(currentFontSize()));
+  $("fontReset").hidden = !next.fontSize;
+  $("resetAppearance").hidden =
+    look.style === defaultAppearance.style &&
+    !look.accentColor &&
+    !next.fontSize &&
+    look.timestamps === defaultAppearance.timestamps &&
+    look.mascot === defaultAppearance.mascot;
 }
 
 function currentFontSize(): number {
@@ -464,7 +508,7 @@ function addUser(message: Extract<HostMessage, { type: "user" }>): void {
     );
   }
   actions.append(
-    iconButton("copy", "Copy", () => void navigator.clipboard.writeText(message.text)),
+    copyIconButton("Copy message", () => message.text, "Message"),
     time(message.at),
   );
   node.append(actions);
@@ -506,11 +550,12 @@ function renderAssistant(id: string, text: string, done: boolean, at?: number, v
     const done = entry;
     header?.append(
       time(at),
-      iconButton("copy", "Copy answer", () => void navigator.clipboard.writeText(done.text)),
+      copyIconButton("Copy answer", () => done.text, "Answer"),
     );
   } else {
     entry.body.textContent = text;
     setActivity("Writing…");
+    setMascotAct("write");
   }
   follow(atEnd);
 }
@@ -530,7 +575,10 @@ function renderThought(id: string, delta: string, done: boolean, full?: string):
   const atEnd = nearBottom();
   entry.text = full ?? entry.text + delta;
   entry.body.textContent = entry.text;
-  if (!done) setActivity("Thinking…");
+  if (!done) {
+    setActivity("Thinking…");
+    setMascotAct("think");
+  }
   if (done) {
     const seconds = Math.max(1, Math.round((Date.now() - entry.started) / 1000));
     const summary = entry.element.querySelector("summary");
@@ -577,9 +625,10 @@ function updateTool(message: Extract<HostMessage, { type: "tool" }>): void {
   if (!node) {
     node = element("details", "tool");
     tools.set(message.id, node);
-    const group = toolGroup();
     const atEnd = nearBottom();
-    group.querySelector(".group-body")?.append(node);
+    // A command stands on its own in the chat, like in Claude Code; other tools share a quiet group line.
+    if (message.name === "run_command") append(node);
+    else toolGroup().querySelector(".group-body")?.append(node);
     follow(atEnd);
   }
   node.dataset.status = message.status;
@@ -590,11 +639,31 @@ function updateTool(message: Extract<HostMessage, { type: "tool" }>): void {
   const icon = running ? "⋯" : message.status === "error" ? "✕" : "✓";
   summary.append(element("span", "icon", icon), element("span", "label", label), time(message.at));
   summary.title = message.summary;
-  node.replaceChildren(summary);
-  if (message.detail) node.append(element("pre", "detail", message.detail));
+  if (message.name === "run_command") {
+    // A command shows what it does, the command, and its output, live while it runs.
+    node.classList.add("command-tool");
+    const view = renderCommandTerminal(
+      message.id,
+      {
+        command: message.command ?? message.summary.replace(/^run_command\s*/, ""),
+        description: message.description,
+        where: message.where,
+        status: message.status,
+        detail: message.detail,
+        at: message.at,
+      },
+      (payload) => vscode.postMessage(payload),
+    );
+    node.replaceChildren(summary, view);
+    node.open = true;
+  } else {
+    node.replaceChildren(summary);
+    if (message.detail) node.append(element("pre", "detail", message.detail));
+  }
   const group = node.closest(".tool-group");
   if (group) refreshGroup(group);
-  setActivity(running ? `${label}…` : "Thinking…");
+  setActivity(running ? `${message.description ?? label}…` : "Thinking…");
+  setMascotAct(running ? actForTool(message.name) : "think");
 }
 
 // The summary card: what changed, whether the check passes, and Keep or Undo in one place.
@@ -740,6 +809,7 @@ function renderStatus(): void {
 }
 
 function addApproval(message: Extract<HostMessage, { type: "approval" }>): void {
+  setMascotAct("wait");
   const card = element("section", `approval ${message.kind}`);
   card.append(element("h3", undefined, message.kind === "question" ? `❓ ${message.title}` : message.title));
   if (message.reason) card.append(element("p", "reason", message.reason));
@@ -810,7 +880,11 @@ function addApproval(message: Extract<HostMessage, { type: "approval" }>): void 
       list.append(row);
     }
     card.append(list);
-  } else card.append(element("pre", "command", message.detail));
+  } else {
+    const command = element("pre", "command");
+    command.append(element("span", "command-prompt", "$ "), message.detail);
+    card.append(command);
+  }
 
   if (message.kind === "edit")
     actions.append(button("Open diff", "secondary", () => vscode.postMessage({ type: "openDiff", id: message.id })));
@@ -834,9 +908,16 @@ function addApproval(message: Extract<HostMessage, { type: "approval" }>): void 
 }
 
 function resolveApproval(id: string, decision: string): void {
+  setMascotAct("think");
   const card = approvals.get(id);
   if (!card) return;
   approvals.delete(id);
+  // A command shows its decision in the terminal below, so its card goes away instead of folding.
+  if (card.classList.contains("command") && !card.classList.contains("question")) {
+    card.classList.add("leaving");
+    setTimeout(() => card.remove(), 220);
+    return;
+  }
   card.classList.add("resolved");
   for (const control of card.querySelectorAll<HTMLButtonElement | HTMLInputElement | HTMLTextAreaElement>(
     "button, input, textarea",
@@ -933,6 +1014,8 @@ function renderChips(): void {
       return chip;
     }),
   );
+  attachMenu.refresh();
+  updateSendButton();
 }
 
 function addAttachment(attachment: Attachment, label: string): void {
@@ -940,6 +1023,12 @@ function addAttachment(attachment: Attachment, label: string): void {
   const key = JSON.stringify(attachment);
   if (attachments.some((item) => JSON.stringify(item.attachment) === key)) return;
   attachments.push({ attachment, label });
+  renderChips();
+}
+
+function removeAttachment(attachment: Attachment): void {
+  const key = JSON.stringify(attachment);
+  attachments = attachments.filter((item) => JSON.stringify(item.attachment) !== key);
   renderChips();
 }
 
@@ -1029,54 +1118,295 @@ function chooseMention(index: number): void {
 
 // Sessions panel
 
+interface ChatRow {
+  readonly id: string;
+  readonly title: string;
+  readonly preview?: string;
+  readonly updatedAt: number;
+  readonly open: boolean;
+  readonly active: boolean;
+  readonly running: boolean;
+  readonly needsApproval: boolean;
+  readonly worktree?: string;
+  readonly pinned: boolean;
+}
+
+const chatList = $("chatList");
+const rowMenu = $("rowMenu");
+const startMenu = $("startMenu");
+const pendingDeletes = new Map<string, ReturnType<typeof setTimeout>>();
+let visibleRows: ChatRow[] = [];
+let selectedRow = 0;
+let undoTimer: ReturnType<typeof setTimeout> | undefined;
+
+function chatRows(): ChatRow[] {
+  const open: ChatRow[] = sessions.map((session) => ({
+    id: session.id,
+    title: session.title,
+    preview: session.preview,
+    updatedAt: session.updatedAt,
+    open: true,
+    active: session.active,
+    running: session.running,
+    needsApproval: session.needsApproval,
+    worktree: session.worktree,
+    pinned: session.pinned === true,
+  }));
+  open.sort((a, b) => Number(b.active) - Number(a.active) || b.updatedAt - a.updatedAt);
+  const saved: ChatRow[] = history.map((item) => ({
+    id: item.id,
+    title: item.title,
+    preview: item.preview,
+    updatedAt: item.updatedAt,
+    open: false,
+    active: false,
+    running: false,
+    needsApproval: false,
+    worktree: item.worktree,
+    pinned: item.pinned === true,
+  }));
+  const rows = [...open, ...saved].filter((row) => !pendingDeletes.has(row.id));
+  return [...rows.filter((row) => row.pinned), ...rows.filter((row) => !row.pinned)];
+}
+
+function highlighted(className: string, text: string, query: string): HTMLElement {
+  const node = element("span", className);
+  for (const part of highlightParts(text, query))
+    node.append(part.match ? element("mark", undefined, part.text) : part.text);
+  return node;
+}
+
 function renderPanel(): void {
-  const query = $<HTMLInputElement>("historySearch").value.toLowerCase();
-  $("openList").replaceChildren(
-    ...sessions.map((session) => {
-      const row = element("li", `item${session.active ? " active" : ""}`);
-      const label = element("button", "item-title", session.title);
-      label.type = "button";
-      label.addEventListener("click", () => {
-        vscode.postMessage({ type: "switchSession", id: session.id });
-        panel.hidden = true;
-      });
-      row.append(label);
-      if (session.worktree) row.append(element("span", "badge", `⑂ ${session.worktree}`));
-      if (session.needsApproval) row.append(element("span", "badge warn", "needs input"));
-      else if (session.running) row.append(element("span", "badge", "running"));
-      row.append(
-        button("✎", "remove", () => vscode.postMessage({ type: "renameChat", id: session.id }), "Rename"),
-        button(
-          "⧉",
-          "remove",
-          () => vscode.postMessage({ type: "openInEditor", id: session.id }),
-          "Open in an editor tab",
-        ),
+  const query = $<HTMLInputElement>("historySearch").value.trim();
+  const rows = chatRows().filter((row) => matchesChat(query, row.title, row.preview));
+  const now = Date.now();
+  visibleRows = [];
+  const children: HTMLElement[] = [];
+  let group = "";
+  for (const row of rows) {
+    const label = row.pinned ? "Pinned" : row.open ? "Open" : chatGroupLabels[chatGroup(row.updatedAt, now)];
+    if (label !== group) {
+      group = label;
+      children.push(element("div", "chat-group", label));
+    }
+    children.push(chatRowNode(row, visibleRows.length, query, now));
+    visibleRows.push(row);
+  }
+  if (rows.length === 0) {
+    const empty = element("div", "chat-empty");
+    if (query) {
+      empty.append(element("p", undefined, `No chats match “${query}”.`));
+      empty.append(
+        button("Start a new chat with this", "link", () => {
+          vscode.postMessage({ type: "newChat" });
+          togglePanel(false);
+          prompt.value = query;
+          prompt.focus();
+        }),
       );
-      return row;
+    } else {
+      empty.append(element("p", undefined, "Your chats will appear here."));
+    }
+    children.push(empty);
+  }
+  chatList.replaceChildren(...children);
+  $("panelKeys").hidden = saved.chatKeysUsed >= 3;
+  selectRow(Math.min(selectedRow, Math.max(0, visibleRows.length - 1)), false);
+}
+
+function chatRowNode(row: ChatRow, index: number, query: string, now: number): HTMLElement {
+  const node = element("div", `chat-row${row.active ? " current" : ""}${row.open ? " open" : ""}`);
+  node.id = `chat-${index}`;
+  node.setAttribute("role", "option");
+  node.dataset.index = String(index);
+  const main = element("button", "chat-open");
+  main.type = "button";
+  main.tabIndex = -1;
+  main.title = `${row.title}\n${new Date(row.updatedAt).toLocaleString()}`;
+  const line = element("span", "chat-line");
+  const status = element("span", "chat-status");
+  if (row.pinned) {
+    status.classList.add("pinned");
+    status.append(iconNode("pin"));
+  }
+  if (row.needsApproval) status.classList.add("waiting");
+  else if (row.running) status.classList.add("running");
+  else if (row.active) status.classList.add("current");
+  else if (row.open) status.classList.add("open");
+  status.setAttribute(
+    "aria-label",
+    row.needsApproval
+      ? "Needs your input"
+      : row.running
+        ? "Running"
+        : row.active
+          ? "Current chat"
+          : row.open
+            ? "Open"
+            : "",
+  );
+  line.append(status, highlighted("chat-title", row.title, query));
+  if (row.needsApproval) line.append(element("span", "chat-time warn", "Needs input"));
+  else if (row.running) line.append(element("span", "chat-time live", "Running"));
+  else line.append(element("span", "chat-time", chatTime(row.updatedAt, now)));
+  main.append(line);
+  if (row.preview || row.worktree) {
+    const detail = element("span", "chat-detail");
+    if (row.worktree) {
+      const tag = element("span", "chat-tag", `⑂ ${row.worktree}`);
+      tag.title = `Branch ${row.worktree}`;
+      detail.append(tag);
+    }
+    if (row.preview) detail.append(highlighted("chat-preview", row.preview, query));
+    main.append(detail);
+  }
+  main.addEventListener("click", (event) => openRow(row, event.metaKey || event.ctrlKey));
+  // A middle click opens the chat in a new tab, like a link in a browser.
+  main.addEventListener("auxclick", (event) => {
+    if (event.button !== 1) return;
+    event.preventDefault();
+    openRow(row, true);
+  });
+  node.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    selectRow(index, false);
+    showRowMenu(row, more, { x: event.clientX, y: event.clientY });
+  });
+  const more = element("button", "chat-more");
+  more.type = "button";
+  more.tabIndex = -1;
+  more.title = "Chat actions";
+  more.setAttribute("aria-label", `Actions for ${row.title}`);
+  more.setAttribute("aria-haspopup", "menu");
+  more.append(iconNode("more"));
+  more.addEventListener("click", (event) => {
+    event.stopPropagation();
+    selectRow(index, false);
+    showRowMenu(row, more);
+  });
+  node.addEventListener("mousemove", () => {
+    if (selectedRow !== index) selectRow(index, false);
+  });
+  node.append(main, more);
+  return node;
+}
+
+function selectRow(index: number, scroll = true): void {
+  selectedRow = index;
+  const input = $<HTMLInputElement>("historySearch");
+  for (const node of chatList.querySelectorAll<HTMLElement>(".chat-row")) {
+    const selected = node.dataset.index === String(index);
+    node.classList.toggle("selected", selected);
+    node.setAttribute("aria-selected", String(selected));
+    if (selected) {
+      input.setAttribute("aria-activedescendant", node.id);
+      if (scroll) node.scrollIntoView({ block: "nearest" });
+    }
+  }
+  if (visibleRows.length === 0) input.removeAttribute("aria-activedescendant");
+}
+
+function openRow(row: ChatRow, inTab = false): void {
+  if (inTab) vscode.postMessage({ type: "openInEditor", id: row.id });
+  else if (row.open) vscode.postMessage({ type: "switchSession", id: row.id });
+  else vscode.postMessage({ type: "openConversation", id: row.id });
+  togglePanel(false);
+}
+
+function closeRowMenu(): void {
+  rowMenu.hidden = true;
+  for (const node of chatList.querySelectorAll(".chat-more[aria-expanded]")) node.removeAttribute("aria-expanded");
+  startMenu.hidden = true;
+  $("panelMore").setAttribute("aria-expanded", "false");
+}
+
+function menuItem(name: string, label: string, onClick: () => void, className = ""): HTMLButtonElement {
+  const node = element("button", `menu-item${className ? ` ${className}` : ""}`);
+  node.type = "button";
+  node.setAttribute("role", "menuitem");
+  node.append(iconNode(name), element("span", "menu-label", label));
+  node.addEventListener("click", (event) => {
+    event.stopPropagation();
+    closeRowMenu();
+    onClick();
+  });
+  return node;
+}
+
+function showRowMenu(row: ChatRow, anchor: HTMLElement, at?: { x: number; y: number }): void {
+  const wasOpen = !rowMenu.hidden && rowMenu.dataset.id === row.id;
+  closeRowMenu();
+  if (wasOpen) return;
+  const items: HTMLButtonElement[] = [];
+  items.push(
+    menuItem("pin", row.pinned ? "Unpin" : "Pin to top", () =>
+      vscode.postMessage({ type: "pinChat", id: row.id, pinned: !row.pinned }),
+    ),
+  );
+  if (row.open) items.push(menuItem("edit", "Rename", () => vscode.postMessage({ type: "renameChat", id: row.id })));
+  items.push(
+    menuItem("split", "Open in a new tab", () => {
+      vscode.postMessage({ type: "openInEditor", id: row.id });
+      togglePanel(false);
     }),
   );
-  const items = history.filter((item) => item.title.toLowerCase().includes(query));
-  $("historyList").replaceChildren(
-    ...(items.length === 0
-      ? [element("li", "empty", query ? "No chats match." : "No saved chats yet.")]
-      : items.map((item) => {
-          const row = element("li", "item");
-          const label = element("button", "item-title", item.title);
-          label.type = "button";
-          label.title = new Date(item.updatedAt).toLocaleString();
-          label.addEventListener("click", () => {
-            vscode.postMessage({ type: "openConversation", id: item.id });
-            panel.hidden = true;
-          });
-          row.append(label, element("span", "when", relativeTime(item.updatedAt)));
-          if (item.worktree) row.append(element("span", "badge", `⑂ ${item.worktree}`));
-          row.append(
-            button("×", "remove", () => vscode.postMessage({ type: "deleteConversation", id: item.id }), "Delete"),
-          );
-          return row;
-        })),
+  items.push(menuItem("export", "Export as Markdown", () => vscode.postMessage({ type: "exportChat", id: row.id })));
+  const remove = menuItem("trash", "Delete", () => deleteChat(row), "danger");
+  if (row.running) {
+    remove.disabled = true;
+    remove.title = "Stop this chat before you delete it.";
+  }
+  items.push(remove);
+  rowMenu.replaceChildren(...items);
+  rowMenu.dataset.id = row.id;
+  rowMenu.hidden = false;
+  anchor.setAttribute("aria-expanded", "true");
+  const height = rowMenu.offsetHeight;
+  const width = rowMenu.offsetWidth;
+  if (at) {
+    rowMenu.style.top = `${Math.max(4, Math.min(at.y, window.innerHeight - height - 4))}px`;
+    rowMenu.style.left = `${Math.max(4, Math.min(at.x, window.innerWidth - width - 4))}px`;
+  } else {
+    const box = anchor.getBoundingClientRect();
+    const below = box.bottom + 4 + height <= window.innerHeight;
+    rowMenu.style.top = `${below ? box.bottom + 4 : Math.max(4, box.top - height - 4)}px`;
+    rowMenu.style.left = `${Math.max(4, box.right - width)}px`;
+  }
+  items[0]?.focus();
+}
+
+function finishDelete(id: string): void {
+  const timer = pendingDeletes.get(id);
+  if (timer === undefined) return;
+  clearTimeout(timer);
+  pendingDeletes.delete(id);
+  vscode.postMessage({ type: "deleteConversation", id });
+}
+
+function deleteChat(row: ChatRow): void {
+  for (const id of [...pendingDeletes.keys()]) finishDelete(id);
+  pendingDeletes.set(
+    row.id,
+    setTimeout(() => finishDelete(row.id), 6000),
   );
+  $("undoText").textContent = `Deleted “${row.title}”`;
+  $("undoButton").onclick = () => {
+    const timer = pendingDeletes.get(row.id);
+    if (timer !== undefined) clearTimeout(timer);
+    pendingDeletes.delete(row.id);
+    hideUndo();
+    renderPanel();
+  };
+  const toast = $("undoToast");
+  toast.hidden = false;
+  if (undoTimer) clearTimeout(undoTimer);
+  undoTimer = setTimeout(hideUndo, 6000);
+  renderPanel();
+  if (!panel.hidden) $<HTMLInputElement>("historySearch").focus();
+}
+
+function hideUndo(): void {
+  $("undoToast").hidden = true;
 }
 
 function relativeTime(at: number): string {
@@ -1089,11 +1419,19 @@ function relativeTime(at: number): string {
   return `${Math.round(hours / 24)} d`;
 }
 
-function togglePanel(show = panel.hidden): void {
+function togglePanel(show: boolean = panel.hidden !== false): void {
   panel.hidden = !show;
+  closeRowMenu();
+  $("historyButton").classList.toggle("pressed", show);
   if (show) {
+    const search = $<HTMLInputElement>("historySearch");
+    search.value = "";
+    selectedRow = 0;
+    renderPanel();
     vscode.postMessage({ type: "listSessions" });
-    $<HTMLInputElement>("historySearch").focus();
+    search.focus();
+  } else if (document.activeElement && panel.contains(document.activeElement)) {
+    prompt.focus();
   }
 }
 
@@ -1125,6 +1463,12 @@ function handle(message: HostMessage): void {
     case "tool":
       updateTool(message);
       break;
+    case "toolOutput": {
+      if (message.where) setCommandWhere(message.id, message.where);
+      const atEnd = nearBottom();
+      if (appendCommandOutput(message.id, message.text)) follow(atEnd);
+      break;
+    }
     case "approval":
       addApproval(message);
       break;
@@ -1211,7 +1555,10 @@ function handle(message: HostMessage): void {
     case "sessions":
       sessions = [...message.sessions];
       history = [...message.history];
-      renderPanel();
+      if (!panel.hidden) renderPanel();
+      break;
+    case "contextOptions":
+      attachMenu.setOptions(message.options);
       break;
     case "addAttachment":
       addAttachment(message.attachment, message.label);
@@ -1232,9 +1579,43 @@ function handle(message: HostMessage): void {
 
 // Input
 
+/** The send button shows what Enter will do: nothing yet, send, or add to the queue. */
+function updateSendButton(): void {
+  const empty = !prompt.value.trim() && attachments.length === 0;
+  const busy = state?.busy ?? false;
+  const key =
+    state?.sendWith === "ctrlEnter" ? (navigator.platform.toLowerCase().includes("mac") ? "⌘↩" : "Ctrl+↩") : "↩";
+  const queue = busy && !empty;
+  // While the agent works and nothing is typed, only Stop shows.
+  sendButton.hidden = busy && empty;
+  sendButton.classList.toggle("empty", empty);
+  sendButton.classList.toggle("queue", queue);
+  sendButton.setAttribute("aria-disabled", String(empty));
+  const label = empty ? "Type a message to send" : queue ? `Add to the queue (${key})` : `Send (${key})`;
+  sendButton.title = label;
+  sendButton.setAttribute("aria-label", label);
+  // Ready to send: the symbol of the assistant's look; on hover it turns into the arrow, so the meaning stays clear.
+  const look = lookOf(state?.assistant.avatar ?? "") ?? (state?.assistant.avatar ? undefined : "drop");
+  const wanted = queue ? "queue" : empty || !look ? "send" : `send-${look}`;
+  sendButton.dataset.look = !queue && !empty && look ? look : "";
+  if (sendButton.dataset.icon !== wanted) {
+    sendButton.dataset.icon = wanted;
+    if (wanted.startsWith("send-")) {
+      const glyph = element("span", "send-glyph");
+      glyph.append(iconNode(wanted));
+      const arrow = element("span", "send-arrow");
+      arrow.append(iconNode("send"));
+      sendButton.replaceChildren(glyph, arrow);
+    } else sendButton.replaceChildren(iconNode(wanted));
+  }
+}
+
 function sendNow(interrupt: boolean): void {
   const text = prompt.value.trim();
   if (!text && attachments.length === 0) return;
+  sendButton.classList.remove("launch");
+  void sendButton.getBoundingClientRect();
+  sendButton.classList.add("launch");
   vscode.postMessage({
     type: "send",
     text,
@@ -1274,6 +1655,11 @@ prompt.addEventListener("keydown", (event) => {
       showMentions([]);
       return;
     }
+  }
+  // Shift+Tab switches the mode, like in terminal agents.
+  if (event.key === "Tab" && event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
+    if (modeMenu.cycle(1)) event.preventDefault();
+    return;
   }
   const atStart = prompt.selectionStart === 0 && prompt.selectionEnd === 0;
   const atEnd = prompt.selectionStart === prompt.value.length;
@@ -1317,7 +1703,12 @@ prompt.addEventListener("keydown", (event) => {
 });
 
 let mentionTimer: ReturnType<typeof setTimeout> | undefined;
+// The value also changes from code (history, Edit and send again), so these events refresh the button too.
+prompt.addEventListener("keyup", updateSendButton);
+prompt.addEventListener("focus", updateSendButton);
 prompt.addEventListener("input", () => {
+  updateSendButton();
+  mascotSeesTyping();
   historyPosition = -1;
   if (slashMenu()) return;
   const query = currentMention();
@@ -1342,9 +1733,24 @@ prompt.addEventListener("paste", (event) => {
   }
 });
 
+// While files are dragged over the chat, the whole view shows where they go.
+let dragDepth = 0;
+const carriesFiles = (event: DragEvent) =>
+  [...(event.dataTransfer?.types ?? [])].some((type) => type === "Files" || type === "text/uri-list");
+document.addEventListener("dragenter", (event) => {
+  if (!carriesFiles(event)) return;
+  dragDepth++;
+  document.body.classList.add("dragging-files");
+});
+document.addEventListener("dragleave", () => {
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (dragDepth === 0) document.body.classList.remove("dragging-files");
+});
 document.addEventListener("dragover", (event) => event.preventDefault());
 document.addEventListener("drop", (event) => {
   event.preventDefault();
+  dragDepth = 0;
+  document.body.classList.remove("dragging-files");
   const data = event.dataTransfer;
   if (!data) return;
   for (const file of data.files) readImage(file);
@@ -1362,7 +1768,47 @@ document.addEventListener("drop", (event) => {
 function closePopovers(except?: HTMLElement): void {
   for (const popover of document.querySelectorAll<HTMLElement>(".popover"))
     if (popover !== except) popover.hidden = true;
+  if (except?.id !== "modeMenu") $("mode").setAttribute("aria-expanded", "false");
+  if (except?.id !== "attachMenu") $("attachButton").setAttribute("aria-expanded", "false");
+  if (except?.id !== "modelMenu") modelButton.setAttribute("aria-expanded", "false");
+  if (except?.id !== "approvals") $("approvalsButton").setAttribute("aria-expanded", "false");
 }
+
+const attachMenu = createAttachMenu({
+  button: $<HTMLButtonElement>("attachButton"),
+  menu: $("attachMenu"),
+  post: (message) => vscode.postMessage(message),
+  closeOthers: closePopovers,
+  has: (attachment) => attachments.some((item) => JSON.stringify(item.attachment) === JSON.stringify(attachment)),
+  add: (attachment, label) => addAttachment(attachment, label),
+  remove: (attachment) => removeAttachment(attachment),
+  mention: startMention,
+  pickImage: () => imageInput.click(),
+});
+
+setCopyFallback((message) => vscode.postMessage(message));
+
+const approvalsPanel = createApprovalsPanel({
+  button: $<HTMLButtonElement>("approvalsButton"),
+  panel: $("approvals"),
+  dot: $("approvalDot"),
+  post: (message) => vscode.postMessage(message),
+});
+
+const modelMenu = createModelMenu({
+  button: modelButton,
+  menu: $("modelMenu"),
+  post: (message) => vscode.postMessage(message),
+  closeOthers: closePopovers,
+});
+
+const modeMenu = createModeMenu({
+  button: $<HTMLButtonElement>("mode"),
+  menu: $("modeMenu"),
+  composer: form,
+  post: (message) => vscode.postMessage(message),
+  closeOthers: closePopovers,
+});
 
 function togglePopover(id: string): void {
   const popover = $(id);
@@ -1372,26 +1818,70 @@ function togglePopover(id: string): void {
 
 document.addEventListener("click", (event) => {
   const target = event.target as HTMLElement;
-  if (!target.closest(".popover, #attachButton, #approvalsButton, #appearanceButton")) closePopovers();
+  // The path still holds nodes that a re-render removed during the click.
+  const inside = event
+    .composedPath()
+    .some(
+      (node) =>
+        node instanceof Element &&
+        node.matches(".popover, #attachButton, #approvalsButton, #appearanceButton, #mode, #model"),
+    );
+  if (!inside && !target.closest(".popover")) closePopovers();
 });
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closePopovers();
 });
-$("attachButton").addEventListener("click", () => togglePopover("attachMenu"));
+$("attachButton").addEventListener("click", () => attachMenu.toggle());
 $("appearanceButton").addEventListener("click", () => togglePopover("appearance"));
 const swatches = $("swatches");
 for (const preset of [{ name: "Theme", color: "" }, ...accentPresets]) {
   const swatch = element("button", "swatch");
   swatch.type = "button";
-  swatch.title = preset.name;
-  swatch.dataset.color = preset.color;
-  if (preset.color) swatch.style.background = preset.color;
+  swatch.setAttribute("role", "radio");
+  swatch.title = preset.color ? preset.name : "The accent color of your theme";
+  swatch.setAttribute("aria-label", preset.color ? preset.name : "Theme color");
+  swatch.dataset.color = preset.color.toLowerCase();
+  if (preset.color) swatch.style.setProperty("--swatch", preset.color);
   else swatch.classList.add("theme");
   swatch.addEventListener("click", () =>
     vscode.postMessage({ type: "setAppearance", key: "accentColor", value: preset.color }),
   );
   swatches.append(swatch);
 }
+{
+  // Your own color: the system color picker behind a "+" swatch.
+  const custom = element("label", "swatch custom");
+  custom.id = "customSwatch";
+  custom.title = "Your own color";
+  custom.setAttribute("role", "radio");
+  custom.setAttribute("aria-label", "Your own color");
+  const picker = element("input");
+  picker.type = "color";
+  picker.tabIndex = 0;
+  picker.addEventListener("change", () =>
+    vscode.postMessage({ type: "setAppearance", key: "accentColor", value: picker.value }),
+  );
+  custom.addEventListener("click", () => {
+    const value = state?.appearance.accentColor ?? "";
+    if (/^#[0-9a-f]{6}$/i.test(value)) picker.value = value;
+  });
+  custom.append(picker);
+  swatches.append(custom);
+}
+for (const [id, key] of [
+  ["timestampChoice", "timestamps"],
+  ["mascotChoice", "mascot"],
+] as const) {
+  for (const option of document.querySelectorAll<HTMLButtonElement>(`#${id} button`)) {
+    option.addEventListener("click", () =>
+      vscode.postMessage({ type: "setAppearance", key, value: option.dataset.value ?? "" }),
+    );
+  }
+}
+$("fontReset").addEventListener("click", () =>
+  vscode.postMessage({ type: "setAppearance", key: "fontSize", value: null }),
+);
+$("resetAppearance").addEventListener("click", () => vscode.postMessage({ type: "resetAppearance" }));
 for (const option of document.querySelectorAll<HTMLButtonElement>("#styleChoice button")) {
   option.addEventListener("click", () =>
     vscode.postMessage({ type: "setAppearance", key: "style", value: option.dataset.style ?? "bubbles" }),
@@ -1403,9 +1893,6 @@ const changeFont = (delta: number) => {
 };
 $("fontDown").addEventListener("click", () => changeFont(-1));
 $("fontUp").addEventListener("click", () => changeFont(1));
-$<HTMLSelectElement>("timestampChoice").addEventListener("change", (event) =>
-  vscode.postMessage({ type: "setAppearance", key: "timestamps", value: (event.target as HTMLSelectElement).value }),
-);
 $("editAssistant").addEventListener("click", () => {
   closePopovers();
   showAssistantCard(state?.assistant, false, (message) => vscode.postMessage(message));
@@ -1421,9 +1908,13 @@ $("moreAppearance").addEventListener("click", () => {
   closePopovers();
   vscode.postMessage({ type: "openSettings" });
 });
-$("approvalsButton").addEventListener("click", () => togglePopover("approvals"));
-$("attachContext").addEventListener("click", () => {
-  closePopovers();
+$("approvalsButton").addEventListener("click", () => {
+  togglePopover("approvals");
+  const open = !$("approvals").hidden;
+  $("approvalsButton").setAttribute("aria-expanded", String(open));
+  if (open) $("approvals").querySelector<HTMLElement>(".approval-level.active, .approval-level[tabindex='0']")?.focus();
+});
+function startMention(): void {
   const position = prompt.selectionStart;
   const before = prompt.value.slice(0, position);
   const insert = before === "" || /\s$/.test(before) ? "@" : " @";
@@ -1431,11 +1922,7 @@ $("attachContext").addEventListener("click", () => {
   prompt.selectionStart = prompt.selectionEnd = position + insert.length;
   prompt.focus();
   prompt.dispatchEvent(new Event("input"));
-});
-$("imageButton").addEventListener("click", () => {
-  closePopovers();
-  imageInput.click();
-});
+}
 imageInput.addEventListener("change", () => {
   for (const file of imageInput.files ?? []) readImage(file);
   imageInput.value = "";
@@ -1451,22 +1938,92 @@ $("titleText").addEventListener("dblclick", (event) => {
 $("popOut").addEventListener("click", () => vscode.postMessage({ type: "openInEditor" }));
 $("panelNew").addEventListener("click", () => {
   vscode.postMessage({ type: "newChat" });
-  panel.hidden = true;
+  togglePanel(false);
+});
+$("panelMore").addEventListener("click", (event) => {
+  event.stopPropagation();
+  const show = startMenu.hidden;
+  closeRowMenu();
+  startMenu.hidden = !show;
+  $("panelMore").setAttribute("aria-expanded", String(show));
+  if (show) $("panelParallel").focus();
 });
 $("panelParallel").addEventListener("click", () => {
   vscode.postMessage({ type: "openInEditor" });
-  panel.hidden = true;
+  togglePanel(false);
 });
 $("panelWorktree").addEventListener("click", () => {
   vscode.postMessage({ type: "newWorktreeAgent" });
-  panel.hidden = true;
+  togglePanel(false);
 });
-$("panelExport").addEventListener("click", () => vscode.postMessage({ type: "exportChat" }));
-$("historyButton").addEventListener("click", () => togglePanel());
-$("title").addEventListener("click", () => togglePanel());
-$("closePanel").addEventListener("click", () => togglePanel(false));
-$("historySearch").addEventListener("input", renderPanel);
-modelButton.addEventListener("click", () => vscode.postMessage({ type: "configureModel" }));
+$("historyButton").addEventListener("click", (event) => {
+  event.stopPropagation();
+  togglePanel();
+});
+$("title").addEventListener("click", (event) => {
+  event.stopPropagation();
+  togglePanel();
+});
+$("historySearch").addEventListener("input", () => {
+  selectedRow = 0;
+  closeRowMenu();
+  renderPanel();
+});
+$("historySearch").addEventListener("keydown", (event) => {
+  const row = visibleRows[selectedRow];
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    event.preventDefault();
+    if (visibleRows.length === 0) return;
+    const step = event.key === "ArrowDown" ? 1 : -1;
+    selectRow((selectedRow + step + visibleRows.length) % visibleRows.length);
+  } else if (event.key === "Enter") {
+    event.preventDefault();
+    if (row) {
+      if (selectedRow > 0 || $<HTMLInputElement>("historySearch").value) {
+        saved.chatKeysUsed++;
+        vscode.setState(saved);
+      }
+      openRow(row, event.metaKey || event.ctrlKey);
+    }
+  } else if (event.key === "Escape") {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!rowMenu.hidden || !startMenu.hidden) closeRowMenu();
+    else if ($<HTMLInputElement>("historySearch").value) {
+      $<HTMLInputElement>("historySearch").value = "";
+      renderPanel();
+    } else togglePanel(false);
+  } else if (event.key === "Delete" && event.shiftKey && row && !row.running) {
+    event.preventDefault();
+    deleteChat(row);
+  }
+});
+panel.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  event.stopPropagation();
+  if (!startMenu.hidden) {
+    closeRowMenu();
+    $("panelMore").focus();
+  } else togglePanel(false);
+});
+rowMenu.addEventListener("keydown", (event) => {
+  const items = [...rowMenu.querySelectorAll<HTMLButtonElement>(".menu-item:not(:disabled)")];
+  const at = items.indexOf(document.activeElement as HTMLButtonElement);
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    event.preventDefault();
+    items[(at + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]?.focus();
+  } else if (event.key === "Escape" || event.key === "Tab") {
+    event.preventDefault();
+    event.stopPropagation();
+    closeRowMenu();
+    $<HTMLInputElement>("historySearch").focus();
+  }
+});
+document.addEventListener("mousedown", (event) => {
+  const target = event.target as HTMLElement;
+  if (!target.closest("#rowMenu, .chat-more, #startMenu, #panelMore")) closeRowMenu();
+  if (!panel.hidden && !target.closest("#panel, #rowMenu, #undoToast, #historyButton, #title")) togglePanel(false);
+});
 $("setup").addEventListener("click", () => vscode.postMessage({ type: "configureModel" }));
 $("guide").addEventListener("click", () => vscode.postMessage({ type: "openWalkthrough" }));
 $("reviewNext").addEventListener("click", () => vscode.postMessage({ type: "reviewNext" }));
@@ -1474,32 +2031,15 @@ $("context").addEventListener("click", () => {
   if (Number.parseInt($("contextLabel").textContent ?? "0", 10) >= 50 && !state?.busy)
     vscode.postMessage({ type: "compact" });
 });
-$("saveApprovals").addEventListener("click", () => vscode.postMessage({ type: "resetApprovals" }));
 $("planToggle").addEventListener("click", () => {
   saved.planOpen = !saved.planOpen;
   vscode.setState(saved);
   $("planItems").hidden = !saved.planOpen;
   $("planToggle").setAttribute("aria-expanded", String(saved.planOpen));
 });
-modeSelect.addEventListener("change", () => vscode.postMessage({ type: "setMode", mode: modeSelect.value }));
-$<HTMLSelectElement>("approvalReview").addEventListener("change", (event) =>
-  vscode.postMessage({
-    type: "setApproval",
-    key: "review",
-    value: (event.target as HTMLSelectElement).value as "chat" | "editor" | "none",
-  }),
-);
-$<HTMLSelectElement>("approvalCommands").addEventListener("change", (event) =>
-  vscode.postMessage({
-    type: "setApproval",
-    key: "commands",
-    value: (event.target as HTMLSelectElement).value as "ask" | "allowlist" | "safe",
-  }),
-);
-$<HTMLSelectElement>("approvalMcp").addEventListener("change", (event) =>
-  vscode.postMessage({ type: "setApproval", key: "mcp", value: (event.target as HTMLSelectElement).value === "true" }),
-);
+
 window.addEventListener("message", (event: MessageEvent<HostMessage>) => handle(event.data));
+startMascotLife();
 vscode.postMessage({ type: "ready" });
 
 transcript.addEventListener("scroll", () => {

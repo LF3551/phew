@@ -104,10 +104,15 @@ export const changeTools: readonly ToolDefinition[] = [
   {
     name: "run_command",
     description:
-      "Run a shell command in the workspace root and return its exit code and output. Use it for tests, builds, and linters. Do not start servers that do not stop.",
+      "Run a shell command and return its exit code and output. Commands of this chat work like one shell: after `cd`, the next command starts there (inside the workspace), and exported variables stay. The user watches the commands in a terminal and can answer a prompt, but prefer non-interactive flags (for example --yes, --no-pager) so nothing waits for input. Use it for tests, builds, and linters. Do not start servers that do not stop.",
     parameters: object(
       {
         command: { type: "string", description: "The command to run." },
+        description: {
+          type: "string",
+          description:
+            'What the command does, in 3 to 8 plain words for the user, for example "Run the unit tests" or "List files in src". Do not repeat the command.',
+        },
         cwd: { type: "string", description: "Folder to run in, relative to the workspace. Default: the main folder." },
       },
       ["command"],

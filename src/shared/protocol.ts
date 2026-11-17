@@ -1,5 +1,6 @@
 import type { Achievement, Wrapped } from "../core/achievements";
 import type { Appearance } from "../core/appearance";
+import { type ApprovalLevel, approvalLevels } from "../core/approvals";
 import { type Attachment, attachmentLabel, maximumAttachments, parseAttachment } from "../core/attachments";
 import { isModeId, type Mode } from "../core/modes";
 import { type Persona, personas } from "../core/persona";
@@ -9,6 +10,9 @@ export interface ModeView {
   readonly id: Mode;
   readonly name: string;
   readonly description: string;
+  /** True when the mode may change files or run commands. */
+  readonly changes: boolean;
+  readonly builtIn: boolean;
 }
 
 export type ReviewSetting = "chat" | "editor" | "none";
@@ -35,6 +39,10 @@ export interface ViewState {
     readonly mcp: boolean;
     /** True when this chat uses its own approval settings. */
     readonly custom: boolean;
+    /** The defaults for new chats, from the settings. */
+    readonly defaults: { readonly review: ReviewSetting; readonly commands: CommandSetting; readonly mcp: boolean };
+    /** Command prefixes that run without asking in the Allowlist mode. */
+    readonly allowlist: readonly string[];
   };
   readonly reviewFiles: number;
   readonly runningSessions: number;
@@ -48,6 +56,8 @@ export interface ViewState {
     readonly name: string;
     readonly avatar: string;
     readonly persona: Persona;
+    /** The description of the Custom character. */
+    readonly customPersona: string;
     readonly userName: string;
     readonly language: string;
   };
@@ -55,6 +65,10 @@ export interface ViewState {
   readonly onboarding: boolean;
   /** The model id of the active profile, for example gpt-5.1. */
   readonly modelId: string;
+  /** All model profiles, for the menu under the input. */
+  readonly models: readonly ModelOption[];
+  /** The name of the model that the current mode always uses, when the mode sets one. */
+  readonly modeModel?: string;
   /** The latest handoff note of the workspace, for "Continue where you left off". */
   readonly handoff?: {
     readonly path: string;
@@ -89,6 +103,10 @@ export interface SessionSummary {
   readonly active: boolean;
   readonly worktree?: string;
   readonly needsApproval: boolean;
+  readonly updatedAt: number;
+  /** A short line from the conversation that tells chats apart. */
+  readonly preview?: string;
+  readonly pinned?: boolean;
 }
 
 export interface HistoryItem {
@@ -97,12 +115,39 @@ export interface HistoryItem {
   readonly updatedAt: number;
   readonly messages: number;
   readonly worktree?: string;
+  /** A short line from the conversation that tells chats apart. */
+  readonly preview?: string;
+  readonly pinned?: boolean;
 }
 
 export interface MentionItem {
   readonly label: string;
   readonly detail?: string;
   readonly attachment: Attachment;
+}
+
+/** A model profile for the model menu under the input. */
+export interface ModelOption {
+  readonly id: string;
+  readonly name: string;
+  readonly provider: "openai" | "anthropic" | "gemini" | "vscode";
+  /** The model name of the provider, for example claude-sonnet-4.5. */
+  readonly model: string;
+  readonly contextWindow?: number;
+  readonly active: boolean;
+}
+
+/** Context that the attach menu offers in one click, from the state of the editor. */
+export interface ContextOption {
+  readonly id: "file" | "selection" | "fileProblems" | "problems" | "git" | "terminal";
+  readonly label: string;
+  /** What exactly is added, for example the file name or "3 errors". */
+  readonly detail: string;
+  readonly attachment: Attachment;
+  /** The label of the chip. */
+  readonly chip: string;
+  /** For a warning tone, for example errors or a failed command. */
+  readonly tone?: "error" | "warning" | "ok";
 }
 
 /** A task that the welcome screen offers, from the state of the project. */
@@ -154,12 +199,25 @@ export type HostMessage = (
   | { readonly type: "suggestions"; readonly items: readonly Suggestion[] }
   | { readonly type: "handoff"; readonly path: string; readonly manual: boolean }
   | {
+      readonly type: "toolOutput";
+      readonly id: string;
+      readonly text: string;
+      /** Where the command runs, sent once when it starts. */
+      readonly where?: "terminal" | "background";
+    }
+  | {
       readonly type: "tool";
       readonly id: string;
       readonly name: string;
       readonly summary: string;
       readonly status: "running" | "done" | "error";
       readonly detail?: string;
+      /** The full command of run_command. */
+      readonly command?: string;
+      /** What the command does, in plain words. */
+      readonly description?: string;
+      /** Where the command ran: the real terminal of the chat or the background. */
+      readonly where?: "terminal" | "background";
     }
   | {
       readonly type: "approval";
@@ -192,6 +250,7 @@ export type HostMessage = (
     }
   | { readonly type: "addAttachment"; readonly attachment: Attachment; readonly label: string }
   | { readonly type: "mentions"; readonly query: string; readonly items: readonly MentionItem[] }
+  | { readonly type: "contextOptions"; readonly options: readonly ContextOption[] }
   | { readonly type: "focusInput"; readonly text?: string }
   | { readonly type: "openPanel" }
 ) & {
@@ -222,8 +281,18 @@ export type WebviewMessage =
   | { readonly type: "restoreCheckpoint"; readonly checkpointId: string }
   | { readonly type: "configureModel" }
   | { readonly type: "openSettings" }
+  | { readonly type: "editModes" }
   | { readonly type: "showStats" }
   | { readonly type: "mentionQuery"; readonly query: string }
+  | { readonly type: "contextQuery" }
+  | { readonly type: "setApprovalLevel"; readonly level: ApprovalLevel }
+  | { readonly type: "editAllowlist" }
+  | { readonly type: "useModel"; readonly id: string }
+  | { readonly type: "manageModels" }
+  | { readonly type: "stopCommand"; readonly id: string }
+  | { readonly type: "showTerminal" }
+  | { readonly type: "commandInput"; readonly id: string; readonly data: string }
+  | { readonly type: "copyText"; readonly text: string }
   | { readonly type: "setApproval"; readonly key: "review"; readonly value: ReviewSetting }
   | { readonly type: "setApproval"; readonly key: "commands"; readonly value: CommandSetting }
   | { readonly type: "setApproval"; readonly key: "mcp"; readonly value: boolean }
@@ -231,7 +300,8 @@ export type WebviewMessage =
   | { readonly type: "switchSession"; readonly id: string }
   | { readonly type: "openConversation"; readonly id: string }
   | { readonly type: "deleteConversation"; readonly id: string }
-  | { readonly type: "exportChat" }
+  | { readonly type: "pinChat"; readonly id: string; readonly pinned: boolean }
+  | { readonly type: "exportChat"; readonly id?: string }
   | { readonly type: "reviewNext" }
   | { readonly type: "newWorktreeAgent" }
   | { readonly type: "openWalkthrough" }
@@ -256,9 +326,10 @@ export type WebviewMessage =
   | { readonly type: "suggest" }
   | { readonly type: "runSuggestion"; readonly id: string }
   | { readonly type: "showWrapped"; readonly period: "week" | "month" }
+  | { readonly type: "resetAppearance" }
   | { readonly type: "saveImage"; readonly dataUrl: string; readonly fileName: string };
 
-export type AppearanceKey = "style" | "accentColor" | "fontSize" | "timestamps";
+export type AppearanceKey = "style" | "accentColor" | "fontSize" | "timestamps" | "mascot";
 
 export const maximumPromptLength = 100_000;
 const idPattern = /^[A-Za-z0-9_-]{1,64}$/;
@@ -275,15 +346,20 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
     case "newChat":
     case "configureModel":
     case "openSettings":
+    case "editModes":
+    case "editAllowlist":
+    case "showTerminal":
+    case "manageModels":
+    case "contextQuery":
     case "showStats":
     case "listSessions":
-    case "exportChat":
     case "reviewNext":
     case "newWorktreeAgent":
     case "openWalkthrough":
     case "resetApprovals":
     case "compact":
     case "skipOnboarding":
+    case "resetAppearance":
       return { type: message.type };
     case "saveAssistant": {
       const text = (key: string, max: number) =>
@@ -320,6 +396,10 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
       return message.period === "week" || message.period === "month"
         ? { type: "showWrapped", period: message.period }
         : undefined;
+    case "copyText":
+      return typeof message.text === "string" && message.text.length > 0 && message.text.length <= 2_000_000
+        ? { type: "copyText", text: message.text }
+        : undefined;
     case "saveImage": {
       const dataUrl = typeof message.dataUrl === "string" ? message.dataUrl : "";
       const fileName = typeof message.fileName === "string" ? message.fileName : "";
@@ -331,6 +411,7 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
       const value = id("id");
       return value ? { type: "removeQueued", id: value } : undefined;
     }
+    case "exportChat":
     case "renameChat":
     case "openInEditor": {
       if (message.id === undefined) return { type: message.type };
@@ -395,6 +476,12 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
       const value = id("id");
       return value ? ({ type: message.type, id: value } as WebviewMessage) : undefined;
     }
+    case "pinChat": {
+      const value = id("id");
+      return value && typeof message.pinned === "boolean"
+        ? { type: "pinChat", id: value, pinned: message.pinned }
+        : undefined;
+    }
     case "restoreCheckpoint": {
       const checkpointId = id("checkpointId");
       return checkpointId ? { type: "restoreCheckpoint", checkpointId } : undefined;
@@ -409,12 +496,32 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
         return { type: "setAppearance", key, value: value as string };
       if (key === "timestamps" && ["hover", "always", "never"].includes(String(value)))
         return { type: "setAppearance", key, value: value as string };
+      if (key === "mascot" && ["lively", "calm", "still"].includes(String(value)))
+        return { type: "setAppearance", key, value: value as string };
       if (key === "accentColor" && (value === "" || (typeof value === "string" && value.length <= 40)))
         return { type: "setAppearance", key, value: value as string };
       if (key === "fontSize" && (value === null || (typeof value === "number" && value >= 8 && value <= 32)))
         return { type: "setAppearance", key, value };
       return undefined;
     }
+    case "useModel":
+      return typeof message.id === "string" && message.id.length > 0 && message.id.length <= 200
+        ? { type: "useModel", id: message.id }
+        : undefined;
+    case "commandInput": {
+      const value = id("id");
+      return value && typeof message.data === "string" && message.data.length > 0 && message.data.length <= 10_000
+        ? { type: "commandInput", id: value, data: message.data }
+        : undefined;
+    }
+    case "stopCommand": {
+      const value = id("id");
+      return value ? { type: "stopCommand", id: value } : undefined;
+    }
+    case "setApprovalLevel":
+      return approvalLevels.includes(message.level as ApprovalLevel)
+        ? { type: "setApprovalLevel", level: message.level as ApprovalLevel }
+        : undefined;
     case "setApproval": {
       if (message.key === "review" && ["chat", "editor", "none"].includes(String(message.value))) {
         return { type: "setApproval", key: "review", value: message.value as ReviewSetting };

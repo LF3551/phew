@@ -17,6 +17,9 @@ export interface Settings {
   readonly reviewMode: ReviewMode;
   readonly commands: CommandPolicySettings & { readonly mode: AutoApproveMode };
   readonly commandTimeoutSeconds: number;
+  /** Mirrors the agent's commands in a terminal of the chat and opens it with the first command. */
+  readonly commandsTerminal: "open" | "background" | "off";
+
   readonly verifyCommand: string;
   readonly verifyMaxAttempts: number;
   readonly budget: BudgetLimits;
@@ -37,6 +40,8 @@ export interface Settings {
   readonly sendWith: "enter" | "ctrlEnter";
   readonly appearance: Appearance;
   readonly notifyOnComplete: "unfocused" | "always" | "never";
+  /** A finished task notifies only when it took at least this long. */
+  readonly notifyMinSeconds: number;
   /** When to play a sound: never, only when the chat is not visible, or always. */
   readonly sound: "off" | "unfocused" | "always";
   readonly soundStyle: "phew" | "chime";
@@ -54,6 +59,8 @@ export interface Settings {
   readonly offerTerminalFix: boolean;
   readonly restoreLastChat: boolean;
   readonly historyLimit: number;
+  /** Name chats with a short title from the model after the first answer. */
+  readonly autoTitle: boolean;
   readonly customModes: unknown;
   readonly memoryEnabled: boolean;
   readonly index: {
@@ -108,6 +115,8 @@ export function readSettings(scope?: vscode.Uri): Settings {
       deny: strings(config.get("commands.deny")),
     },
     commandTimeoutSeconds: Math.max(5, positive(config.get("commands.timeoutSeconds"), 120, 3600)),
+    commandsTerminal: oneOf(config.get("commands.terminal"), ["open", "background", "off"] as const, "open"),
+
     verifyCommand: text(config.get("verify.command")),
     verifyMaxAttempts: Math.max(1, Math.round(positive(config.get("verify.maxAttempts"), 3, 10))),
     budget: {
@@ -150,12 +159,14 @@ export function readSettings(scope?: vscode.Uri): Settings {
       timestamps: oneOf(config.get("appearance.timestamps"), ["hover", "always", "never"] as const, "hover"),
       messageActions: oneOf(config.get("appearance.messageActions"), ["hover", "always"] as const, "hover"),
       avatars: config.get<boolean>("appearance.avatars") === true,
+      mascot: oneOf(config.get("appearance.mascot"), ["lively", "calm", "still"] as const, "lively"),
     },
     notifyOnComplete: oneOf(
       config.get("notifications.onComplete"),
       ["unfocused", "always", "never"] as const,
       "unfocused",
     ),
+    notifyMinSeconds: Math.min(3600, Math.max(0, Number(config.get("notifications.minSeconds") ?? 30) || 0)),
     sound: oneOf(config.get("notifications.sound"), ["off", "unfocused", "always"] as const, "off"),
     soundStyle: oneOf(config.get("notifications.soundStyle"), ["phew", "chime"] as const, "phew"),
     handoff: {
@@ -178,6 +189,7 @@ export function readSettings(scope?: vscode.Uri): Settings {
     minutesPerBug: positive(config.get("stats.minutesPerBug"), 15, 600),
     offerTerminalFix: config.get<boolean>("terminal.offerFix") !== false,
     restoreLastChat: config.get<boolean>("chat.restoreLastChat") !== false,
+    autoTitle: config.get<boolean>("chat.autoTitle") !== false,
     historyLimit: Math.max(1, Math.round(positive(config.get("chat.historyLimit"), 200, 5000))),
     customModes: config.get("modes"),
     memoryEnabled: config.get<boolean>("memory.enabled") !== false,
@@ -218,4 +230,12 @@ export function readSettings(scope?: vscode.Uri): Settings {
 /** Updates a user setting. Toggles in the chat and the settings page use it. */
 export async function updateSetting(key: string, value: unknown): Promise<void> {
   await vscode.workspace.getConfiguration(section).update(key, value, vscode.ConfigurationTarget.Global);
+}
+
+/** Removes a setting from the user and the workspace settings, so the default applies everywhere. */
+export async function clearSetting(key: string): Promise<void> {
+  const config = vscode.workspace.getConfiguration(section);
+  const values = config.inspect(key);
+  if (values?.globalValue !== undefined) await config.update(key, undefined, vscode.ConfigurationTarget.Global);
+  if (values?.workspaceValue !== undefined) await config.update(key, undefined, vscode.ConfigurationTarget.Workspace);
 }
