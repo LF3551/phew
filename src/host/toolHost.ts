@@ -12,6 +12,7 @@ import {
 } from "../core/chat";
 import { formatHits } from "../core/codeIndex";
 import { decideCommand } from "../core/commandPolicy";
+import { describeShellResult } from "../core/commandResult";
 import { adjustAgentGitCommand, describeCommitIdentity } from "../core/commit";
 import { detectEol } from "../core/diff";
 import { LineEditor } from "../core/lineEditor";
@@ -30,6 +31,7 @@ import { git, gitIdentity } from "./git";
 import type { McpManager } from "./mcpManager";
 import type { MemoryStore } from "./memoryStore";
 import type { Settings } from "./settings";
+import type { ShellSession } from "./shellSession";
 import type { SkillStore } from "./skillStore";
 
 const maximumToolOutput = 40_000;
@@ -51,8 +53,10 @@ export interface ToolHostOptions {
   readonly mode: ModeDefinition;
   readonly settings: Settings;
   readonly broker: ApprovalBroker;
-  /** The terminal of the chat, which mirrors the commands while they run. */
+  /** The terminal of the chat, which mirrors the commands while they run (when no real shell is available). */
   readonly terminal?: AgentTerminal;
+  /** The real shell of the chat (a PTY), like the terminal of the Copilot agent. */
+  readonly shellSession?: ShellSession;
   /** Where a command runs, for the chat: a real terminal or the background. */
   readonly onCommandStart?: (callId: string, where: "terminal" | "background") => void;
   /** The folder of the chat's shell. `cd` in one command carries over to the next, like in Claude Code. */
@@ -397,7 +401,9 @@ export class ToolHost {
 
   /** Keys typed in a terminal of the chat for a running command. */
   commandInput(callId: string, data: string): void {
-    this.commandInputs.get(callId)?.feed(data);
+    const shellSession = this.options.settings.commandsTerminal !== "off" ? this.options.shellSession : undefined;
+    if (shellSession) shellSession.userInput(data);
+    else this.commandInputs.get(callId)?.feed(data);
   }
 
   /** Stops one running command. The agent goes on and sees that the command was cancelled. */
@@ -409,6 +415,14 @@ export class ToolHost {
 
   private async runCommand(args: Record<string, unknown>, signal: AbortSignal, callId = ""): Promise<ToolResult> {
     const requested = (stringArgument(args, "command") as string).trim();
+    const interrupt = args.interrupt === true;
+    const background = args.background === true;
+    const shellSession = this.options.settings.commandsTerminal !== "off" ? this.options.shellSession : undefined;
+    if (!requested) {
+      if (!interrupt) throw new Error("The command is empty.");
+      shellSession?.interrupt();
+      return { content: "Phew pressed Ctrl+C in the terminal of the chat." };
+    }
     const folder = stringArgument(args, "cwd", false);
     const shellCwd = this.options.shell?.cwd;
     const remembered = shellCwd && this.options.roots.resolve(shellCwd) ? shellCwd : undefined;
@@ -439,6 +453,40 @@ export class ToolHost {
     const onAbort = () => own.abort();
     signal.addEventListener("abort", onAbort, { once: true });
     this.runningCommands.set(callId, own);
+    if (shellSession) {
+      // Like the Copilot agent: the command runs in the real shell of the chat, which the user sees and can type into.
+      try {
+        this.options.onCommandStart?.(callId, "terminal");
+        if (interrupt) shellSession.interrupt();
+        const timeoutSeconds = this.options.settings.commandTimeoutSeconds;
+        const line = folder
+          ? process.platform === "win32"
+            ? `Push-Location ${shellQuote(cwd)}; ${command}; Pop-Location`
+            : `(cd ${shellQuote(cwd)} && ${command})`
+          : command;
+        const outcome = await shellSession.run(line, {
+          timeoutMs: timeoutSeconds * 1000,
+          signal: own.signal,
+          onOutput: (text) => this.options.onCommandOutput?.(callId, text),
+          background,
+          reveal: this.options.settings.commandsTerminal === "open",
+        });
+        if (outcome.state === "busy")
+          throw new Error(
+            "The terminal of the chat runs a command that the user started. Wait for it, or ask the user.",
+          );
+        let note = "";
+        if (outcome.cwd && this.options.shell && outcome.cwd !== this.options.shell.cwd) {
+          this.options.shell.cwd = outcome.cwd;
+          note = `\nThe shell is now in ${this.options.roots.resolve(outcome.cwd) ? this.options.roots.display(outcome.cwd) : outcome.cwd}.`;
+        }
+        const prefix = notes.length > 0 ? `${notes.join(" ")}\n` : "";
+        return { content: prefix + describeShellResult(command, outcome, timeoutSeconds) + note };
+      } finally {
+        this.runningCommands.delete(callId);
+        signal.removeEventListener("abort", onAbort);
+      }
+    }
     let result: Awaited<ReturnType<typeof runShellCommand>>;
     try {
       const timeout = this.options.settings.commandTimeoutSeconds;
@@ -548,4 +596,9 @@ export class ToolHost {
     const result = await this.options.mcp.call(binding, args);
     return { content: `${result.isError ? "MCP tool error: " : ""}${result.text || "(no output)"}` };
   }
+}
+
+/** Quotes a path for the shell of the terminal: single quotes, which POSIX shells and PowerShell both read. */
+function shellQuote(value: string): string {
+  return process.platform === "win32" ? `'${value.replace(/'/g, "''")}'` : `'${value.replace(/'/g, "'\\''")}'`;
 }

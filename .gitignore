@@ -11,3 +11,4 @@ coverage/
 
 # Local release builds
 /release/
+.cache/

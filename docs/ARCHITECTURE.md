@@ -74,7 +74,8 @@ Pure TypeScript without the `vscode` module, so unit tests run in Node.js.
 | `changes.ts` | Shows changes as hunks, applies the selected hunks, records checkpoints, and serves the diff editor. |
 | `approvals.ts` | Sends approval requests to the view and waits for the decision. |
 | `commandRunner.ts` | Runs shell commands with a timeout, an output limit, and cancellation. Keeps the folder and the exported variables of a chat between commands, and passes typed input to the command. |
-| `agentTerminal.ts` | The terminal of a chat in the panel (a pseudoterminal). It mirrors the output of the agent's commands in color, and its keys go to the running command. |
+| `shellSession.ts`, `shellScripts.ts` | The terminal of a chat: a real PTY (node-pty) with the user's shell, shown in the panel. The agent types its commands into it. Small startup scripts print invisible marks (`core/shellMarks.ts`) when a command starts and at each prompt, with the exit code and the folder. A quiet program with a prompt waits for input, and the next command types into it (ssh, a REPL). node-pty comes prebuilt for six platforms in `dist/pty` (`scripts/vendor-pty.mjs`). |
+| `agentTerminal.ts` | The fallback when node-pty does not load: commands run in processes, and a pseudoterminal mirrors their output. |
 | `mcpManager.ts` | Reads MCP configurations, connects stdio and HTTP servers, signs in with OAuth, filters tools, and logs. |
 | `phewIt.ts` | The "Phew it!" quick fix on problems. |
 | `terminalWatcher.ts` | Remembers failed terminal commands through shell integration. |

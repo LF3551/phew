@@ -29,14 +29,14 @@
 ## Why Phew
 
 <p align="center">
-  <img src="docs/images/terminal.png" alt="A command runs in a terminal inside the chat: npm test shows passing and failing tests in color, with Stop, Show terminal, and Copy" width="800">
+  <img src="docs/images/terminal.png" alt="The agent ran git status, opened ssh to a jump host that now waits for input, and runs the tests live in a terminal inside the chat" width="800">
 </p>
 
 <p align="center">
   <img src="docs/images/real-tasks.png" alt="The welcome screen offers real tasks: continue yesterday's work, fix errors, fix a failed command, review changes" width="800">
 </p>
 
-- **Watch every command.** Each command of the agent runs in a real terminal inside the chat, live and in color, and the terminal of the chat in the panel shows the same output. Type an answer or press Ctrl+C in either one. Commands of a chat work like one shell: `cd` and exported variables carry over.
+- **A real terminal, shared.** The agent works in your own shell, in a terminal of the chat, like the Copilot agent: `cd`, variables, virtual environments, `ssh` into another machine, and REPLs carry over between commands. You see every command live, in the panel and in the chat, and you can type at any time: answer a prompt, press Ctrl+C, or run your own command. When a program waits for input, the agent notices and types the answer or the next command inside ssh, and it asks you for passwords. Works with bash, zsh, fish, PowerShell, and sh on Linux, macOS, and Windows.
 - **Phew it!** One click on an error in the editor, a failed terminal command, or failing tests. Phew finds the cause, fixes it, and checks the result.
 - **Fixes until green.** Phew runs your check command, for example `npm test`, and keeps fixing until it passes.
 - **Review in the editor.** Each change has **Keep** and **Undo** buttons in the file, and **Keep All** and **Undo All** in the editor title. Prefer to approve first? Switch **Edits** to **Ask first** in the chat.
@@ -143,7 +143,7 @@ On macOS, use `Cmd` instead of `Ctrl`.
 **Phew: Open Settings** opens a settings page with sections for models, the agent, approvals, checks, budget, commits, worktrees, the code index, autocomplete, memory, modes, and skills, MCP, privacy, and the interface.
 The approval toggles in the chat change only that chat; **save as default** makes them the default.
 Notifications, the sound, the font size of the chat, and the send key (`Enter` or `Ctrl+Enter`) are in **Agent**.
-`phew.commands.terminal` chooses whether the terminal of the chat opens in the panel with the first command, only on request, or never.
+`phew.commands.terminal` chooses whether the terminal of the chat opens in the panel with the first command, only on request, or never (then each command runs in a hidden process). `phew.commands.shell` sets its shell.
 Every setting is also available in the VS Code settings under **Phew**.
 
 ## Security and privacy

@@ -2,6 +2,7 @@
 !dist/extension.js
 !dist/webview.js
 !dist/webview.css
+!dist/pty/**
 !dist/settings.js
 !media/**
 !resources/icon.png

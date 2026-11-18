@@ -5,11 +5,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- A real terminal for the agent, like the Copilot agent. Each chat has a terminal in the panel with your own shell (bash, zsh, fish, PowerShell, or sh), started with your startup files, and the agent types its commands into it. The session stays between commands: `cd`, variables, virtual environments, `ssh` into another machine, and REPLs carry over. You see every command live, in the panel and in a terminal inside the chat, and you can type at any time: answer a prompt, press Ctrl+C, or run your own command. When a program waits for input, Phew notices it, and the agent types the answer or the next command inside ssh; it asks you to type passwords. Servers and watchers can run in the background. In the chat, each command is one line like "Running `npm test`", with the full command in color when it is long, and its live output; a command that worked folds into its line. Phew brings node-pty, prebuilt for Linux, macOS, and Windows on x64 and arm64, so it does not depend on the VS Code version. `phew.commands.shell` sets the shell.
+
 ## [0.2.0] - 2026-11-17
 
 ### Added
 
-- A real terminal for each command, in the chat and in the panel, like the Copilot agent. The chat shows the command in a terminal (xterm.js) with the colors of your VS Code terminal theme, and the terminal of the chat in the panel, **Phew: <chat>**, shows the same output; it opens with the first command. You can type an answer, press Ctrl+C to stop the command, or Ctrl+D to end its input in either one. Commands of a chat work like one shell: `cd` and exported variables carry over. Above each terminal the chat shows what the command does in plain words, the command, and the result, with **Stop**, **Show terminal**, and **Copy**; a quiet command asks whether it waits for an answer. It works with any shell. `phew.commands.terminal` opens the panel terminal by itself (default), only on request, or never.
 - A living mascot. The Phew drop blinks at irregular times and shows with its eyes what the agent does: it looks up while it thinks, reads along a line while it reads or searches, looks down at the terminal while a command runs, and squints while it edits.
 - While the agent waits for your answer, the mascot looks at the request and sweats a little. It also sweats when a task takes long.
 - On the welcome screen the eyes follow the pointer, look down at the input while you type, and doze off after a few idle minutes.

@@ -26,16 +26,14 @@ if (pageNonce) {
 }
 
 const maximumRows = 16;
-/** A command in the terminal that is quiet this long may wait for an answer. */
-const quietMs = 8000;
 /** Older terminals become plain text, so a long chat stays light. */
 const liveTerminals = 12;
 
 interface CommandView {
   readonly root: HTMLElement;
-  readonly title: HTMLElement;
-  readonly command: HTMLElement;
-  readonly status: HTMLElement;
+  readonly verb: HTMLElement;
+  readonly commandLine: HTMLElement;
+  readonly full: HTMLElement;
   readonly actions: HTMLElement;
   readonly screen: HTMLElement;
   readonly hint: HTMLElement;
@@ -47,7 +45,10 @@ interface CommandView {
   started: number;
   finished?: number;
   lastOutput: number;
-  result?: { label: string; tone: "ok" | "error" | "muted" };
+  /** The command still runs in the terminal of the chat (waiting for input, or in the background). */
+  live: boolean;
+  result?: { label: string; tone: "ok" | "error" | "muted" | "waiting" };
+  description?: string;
   renderActions: () => void;
   post: (message: WebviewMessage) => void;
 }
@@ -110,14 +111,40 @@ function terminalTheme(): ITheme {
 }
 
 function renderStatus(view: CommandView): void {
-  if (view.result) {
-    view.status.dataset.tone = view.result.tone;
-    const time = view.finished !== undefined ? ` · ${seconds(view.finished - view.started)}` : "";
-    view.status.textContent = `${view.result.label}${time}`;
-  } else {
-    view.status.dataset.tone = "running";
-    view.status.textContent = seconds(Date.now() - view.started);
+  const time = seconds((view.finished ?? Date.now()) - view.started);
+  view.verb.textContent = view.result ? view.result.label : "Running";
+  view.root.dataset.tone = view.result?.tone ?? "running";
+  view.root.title = [view.description, view.result ? `${view.result.label} after ${time}` : `Running for ${time}`]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** Colors the parts of a shell command: programs, flags, strings, variables, and operators. */
+export function highlightCommand(command: string): DocumentFragment {
+  const fragment = document.createDocumentFragment();
+  const pattern =
+    /("(?:[^"\\]|\\.)*"?|'[^']*'?)|(\$\{?[A-Za-z_][\w]*\}?|\$\(|\$\d)|(\|\||&&|[|;&<>]+)|(\s--?[\w][\w-]*(?:=\S*)?)|(\s+)|([^\s|;&<>"'$]+)|([\s\S])/g;
+  let atCommand = true;
+  for (const match of command.matchAll(pattern)) {
+    const [text, string, variable, operator, flag, space, word] = match;
+    let className: string | undefined;
+    if (string) className = "cmd-string";
+    else if (variable) className = "cmd-var";
+    else if (operator) {
+      className = "cmd-op";
+      atCommand = true;
+    } else if (flag) className = "cmd-flag";
+    else if (word) {
+      if (atCommand && !/=/.test(word)) {
+        className = "cmd-name";
+        atCommand = false;
+      }
+    } else if (space && /\n/.test(space)) atCommand = true;
+    if (variable === "$(") atCommand = true;
+    const node = className ? el("span", className, text) : document.createTextNode(text);
+    fragment.append(node);
   }
+  return fragment;
 }
 
 /** The terminal grows with its output up to a limit, then scrolls inside. */
@@ -164,7 +191,7 @@ function createTerminal(view: CommandView, id: string, post: (message: WebviewMe
   term.open(view.screen);
   // Typing goes to the running command, like in the terminal of the Copilot agent.
   term.onData((data) => {
-    if (view.finished === undefined) post({ type: "commandInput", id, data });
+    if (view.finished === undefined || view.live) post({ type: "commandInput", id, data });
   });
   view.term = term;
   view.fit = fit;
@@ -202,7 +229,6 @@ function tick(): void {
     } else if (view.finished === undefined) {
       running = true;
       renderStatus(view);
-      view.hint.hidden = Date.now() - view.lastOutput < quietMs;
     }
   }
   if (!running && ticker) {
@@ -222,9 +248,8 @@ function renderActions(view: CommandView, id: string, command: string, post: (me
     button.addEventListener("click", () => onClick(button));
     buttons.push(button);
   };
-  if (!view.result) action("stop", "Stop this command (Ctrl+C)", () => post({ type: "stopCommand", id }));
-  if (view.where === "terminal")
-    action("terminal", "Show it in the terminal panel", () => post({ type: "showTerminal" }));
+  if (!view.result) action("stop", "Stop (Ctrl+C)", () => post({ type: "stopCommand", id }));
+  if (view.where === "terminal") action("terminal", "Show in the terminal", () => post({ type: "showTerminal" }));
   action(
     "copy",
     "Copy the command and its output",
@@ -233,7 +258,7 @@ function renderActions(view: CommandView, id: string, command: string, post: (me
   view.actions.replaceChildren(...buttons);
 }
 
-/** Creates or updates the view of a command. */
+/** Creates or updates the view of a command: one line like the Copilot agent, the command, and its terminal. */
 export function renderCommandTerminal(
   id: string,
   update: {
@@ -250,41 +275,57 @@ export function renderCommandTerminal(
   if (!view) {
     const root = el("div", "term");
     const head = el("div", "term-head");
-    const title = el("span", "term-title");
-    const status = el("span", "term-status");
+    const toggle = el("button", "term-toggle");
+    toggle.type = "button";
+    const chevron = iconNode("chevron");
+    chevron.classList.add("term-chevron");
+    const verb = el("span", "term-verb");
+    const commandLine = el("code", "term-line");
+    toggle.append(chevron, verb, commandLine);
     const actions = el("span", "term-actions");
-    head.append(el("span", "term-dot"), title, status, actions);
-    const command = el("code", "term-command");
+    head.append(toggle, actions);
+    const body = el("div", "term-body");
+    const full = el("pre", "term-full");
     const screen = el("div", "term-screen");
-    const hint = el("div", "term-hint");
+    const hint = el("div", "term-hint", "Waiting for input. Type here or in the terminal.");
     hint.hidden = true;
-    const hintButton = el("button", "link", "Type the answer here");
-    hintButton.type = "button";
-    hint.append(el("span", undefined, "No output for a while. Does it wait for an answer?"), hintButton);
-    root.append(head, command, screen, hint);
+    body.append(full, screen, hint);
+    root.append(head, body);
     const created: CommandView = {
       root,
-      title,
-      command,
-      status,
+      verb,
+      commandLine,
+      full,
       actions,
       screen,
       hint,
       text: "",
       started: update.at ?? Date.now(),
       lastOutput: update.at ?? Date.now(),
+      live: false,
       renderActions: () => undefined,
       post,
     };
-    hintButton.addEventListener("click", () => created.term?.focus());
+    toggle.addEventListener("click", () => {
+      root.classList.toggle("collapsed");
+      toggle.setAttribute("aria-expanded", String(!root.classList.contains("collapsed")));
+      if (!root.classList.contains("collapsed")) requestAnimationFrame(() => resize(created));
+    });
+    hint.addEventListener("click", () => created.term?.focus());
     views.set(id, created);
     view = created;
   }
   const current = view;
-  current.title.textContent = update.description || update.command;
-  current.command.textContent = `$ ${update.command}`;
-  current.command.hidden = !update.description;
-  current.root.title = update.command;
+  current.description = update.description;
+  const firstLine = update.command.split("\n")[0] ?? "";
+  current.commandLine.textContent = firstLine;
+  // A long or multi-line command shows in full under the line, with colors.
+  const long = update.command.includes("\n") || update.command.length > 70;
+  current.full.hidden = !long;
+  if (long && current.full.dataset.command !== update.command) {
+    current.full.dataset.command = update.command;
+    current.full.replaceChildren(highlightCommand(update.command));
+  }
   if (update.where) {
     current.where = update.where;
     current.root.dataset.where = update.where;
@@ -299,7 +340,6 @@ export function renderCommandTerminal(
     });
   } else {
     current.finished ??= update.at ?? Date.now();
-    current.hint.hidden = true;
     const parsed = parseCommandResult(update.detail ?? "");
     // A chat that opens later has no live output: the result fills the terminal.
     if (!current.text.trim() && parsed.output.trim()) {
@@ -307,19 +347,28 @@ export function renderCommandTerminal(
       write(current, parsed.output.replace(/\r?\n/g, "\r\n"));
       if (!current.term) current.text = parsed.output;
     }
-    if (update.status === "error" && parsed.status === undefined)
+    const status = parsed.status ?? "";
+    current.live = status === "waiting for input" || status === "running in the background";
+    if (update.status === "error" && !status)
       current.result = { label: (update.detail ?? "Failed").replace(/^Error:\s*/, "").slice(0, 80), tone: "error" };
-    else if (parsed.exitCode === 0) current.result = { label: "Done", tone: "ok" };
-    else if (parsed.exitCode !== undefined) current.result = { label: `Exit ${parsed.exitCode}`, tone: "error" };
-    else if (parsed.status === "cancelled") current.result = { label: "Stopped", tone: "muted" };
-    else if (parsed.status === "timed out") current.result = { label: "Timed out", tone: "error" };
+    else if (parsed.exitCode === 0) current.result = { label: "Ran", tone: "ok" };
+    else if (parsed.exitCode !== undefined)
+      current.result = { label: `Failed · exit ${parsed.exitCode}`, tone: "error" };
+    else if (status === "waiting for input") current.result = { label: "Waiting for input", tone: "waiting" };
+    else if (status === "running in the background")
+      current.result = { label: "Running in the background", tone: "waiting" };
+    else if (status === "cancelled") current.result = { label: "Stopped", tone: "muted" };
+    else if (status.startsWith("timed out")) current.result = { label: "Timed out", tone: "error" };
     else if (/did not allow/.test(update.detail ?? "")) current.result = { label: "Denied", tone: "muted" };
-    else current.result = { label: parsed.status ?? "Finished", tone: "muted" };
-    if (current.term) {
+    else current.result = { label: status ? status[0]?.toUpperCase() + status.slice(1) : "Ran", tone: "muted" };
+    current.hint.hidden = status !== "waiting for input";
+    // A command that worked folds into its line; failures and waiting programs stay open.
+    if (current.result.tone === "ok") current.root.classList.add("collapsed");
+    if (current.term && !current.live) {
       current.term.options.cursorBlink = false;
       current.term.options.disableStdin = true;
       current.term.write("\x1b[?25l", () => resize(current));
-    } else if (!current.root.isConnected) {
+    } else if (!current.term && !current.root.isConnected) {
       // The view is not in the chat yet; it shows the text when it arrives.
       requestAnimationFrame(() => {
         if (!current.term && current.text.trim()) {
@@ -352,7 +401,6 @@ export function appendCommandOutput(id: string, text: string): boolean {
   if (!view || view.finished !== undefined || !text) return false;
   if (!view.term && view.root.isConnected) createTerminal(view, id, view.post);
   view.lastOutput = Date.now();
-  view.hint.hidden = true;
   write(view, text);
   return true;
 }

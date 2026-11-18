@@ -1,5 +1,8 @@
 import * as esbuild from "esbuild";
 
+// The prebuilt terminals (node-pty) of every platform go next to the bundle.
+await import("./vendor-pty.mjs");
+
 const production = process.argv.includes("--production");
 const watch = process.argv.includes("--watch");
 

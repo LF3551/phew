@@ -104,16 +104,34 @@ export const changeTools: readonly ToolDefinition[] = [
   {
     name: "run_command",
     description:
-      "Run a shell command and return its exit code and output. Commands of this chat work like one shell: after `cd`, the next command starts there (inside the workspace), and exported variables stay. The user watches the commands in a terminal and can answer a prompt, but prefer non-interactive flags (for example --yes, --no-pager) so nothing waits for input. Use it for tests, builds, and linters. Do not start servers that do not stop.",
+      "Run a command in the terminal of this chat: one real, interactive shell that the user sees and can type into. The session stays between commands: `cd`, variables, activated environments, and programs such as `ssh` or a REPL carry over. " +
+      "When a program waits for input (a prompt, a question, a remote shell after ssh), the result says so, and your next run_command types into that program: an answer, or the next command inside ssh. Set interrupt to press Ctrl+C first. " +
+      "Never type passwords or secrets: ask the user to type them in the terminal, then continue. Prefer non-interactive flags (for example --yes, --no-pager). For servers and watchers, set background: the command keeps running and you get its first output.",
     parameters: object(
       {
-        command: { type: "string", description: "The command to run." },
+        command: {
+          type: "string",
+          description:
+            "The command, or the text to type into the program that waits for input. Empty with interrupt to only stop.",
+        },
         description: {
           type: "string",
           description:
             'What the command does, in 3 to 8 plain words for the user, for example "Run the unit tests" or "List files in src". Do not repeat the command.',
         },
-        cwd: { type: "string", description: "Folder to run in, relative to the workspace. Default: the main folder." },
+        cwd: {
+          type: "string",
+          description: "Folder for this command only, relative to the workspace. Default: where the shell is now.",
+        },
+        background: {
+          type: "boolean",
+          description:
+            "For servers and watchers that do not stop: return after the first seconds of output and keep it running.",
+        },
+        interrupt: {
+          type: "boolean",
+          description: "Press Ctrl+C before the command, to stop a running program.",
+        },
       },
       ["command"],
     ),

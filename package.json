@@ -1123,12 +1123,17 @@
               "off"
             ],
             "enumDescriptions": [
-              "Show the agent's commands live in a terminal of the chat, and open it with the first command. Ctrl+C stops a command; typing answers it.",
-              "Keep the terminal of the chat, but open it only when you click Show terminal.",
-              "No terminal; the chat shows the output."
+              "Run the agent's commands in a real terminal of the chat with your shell, and open it with the first command. You can type in it at any time: answer a prompt, press Ctrl+C, or run your own commands.",
+              "The same real terminal, but it opens only when you click Show terminal.",
+              "No terminal: each command runs in a hidden process, and the chat shows the output."
             ],
             "default": "open",
-            "markdownDescription": "The terminal of the chat, which mirrors the agent's commands while they run. The chat always shows the output too."
+            "markdownDescription": "The terminal of the chat: a real shell where the agent runs its commands, like the Copilot agent. The chat shows the same output."
+          },
+          "phew.commands.shell": {
+            "type": "string",
+            "default": "",
+            "markdownDescription": "The shell of the terminal of the chat, for example `/bin/zsh` or `pwsh.exe`. Empty uses your shell (`$SHELL`, or bash instead of a plain sh)."
           },
           "phew.commands.timeoutSeconds": {
             "type": "number",

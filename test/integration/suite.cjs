@@ -84,13 +84,16 @@ async function script(data) {
       : { content: "planned" };
   }
   if (task.startsWith("Shell persists")) {
-    if (step === 0)
-      return call("run_command", {
-        command: "mkdir -p sub && cd sub && export PHEW_X=42",
-        description: "Make a folder and go there",
-      });
-    if (step === 1) return call("run_command", { command: 'pwd; echo "x=$PHEW_X"', description: "Show the folder" });
-    return { content: `RESULT ${lastToolResult(messages)}` };
+    const steps = [
+      { command: "mkdir -p sub && cd sub && export PHEW_X=42", description: "Make a folder and go there" },
+      { command: 'pwd; echo "x=$PHEW_X"', description: "Show the folder" },
+      { command: "sh", description: "Open a nested shell, like ssh" },
+      { command: "echo inside-$((20+22))", description: "Run a command inside" },
+      { command: "exit", description: "Leave the nested shell" },
+    ];
+    if (step < steps.length) return call("run_command", steps[step]);
+    const results = messages.filter((message) => message.role === "tool").map((message) => message.content);
+    return { content: `RESULT ${results.join("\n---\n")}` };
   }
   if (task.startsWith("Slow")) {
     await delay(1500);
@@ -281,18 +284,20 @@ async function run() {
       .all()
       .filter((item) => item.type === "tool" && item.name === "run_command" && item.status !== "running");
     console.log(`[shell] where=${tools.map((item) => item.where).join(",")} result=${JSON.stringify(shellResult)}`);
-    assert.match(shellResult, /\/sub\b/, "the next command starts in the folder of cd");
+    const parts = shellResult.replace(/^RESULT /, "").split("\n---\n");
+    assert.match(parts[1], /\[exit code 0\]\n\S*\/sub\nx=42/, "cd and export carry over in the real shell");
+    assert.match(parts[2], /\[waiting for input\]/, "a nested shell waits for input, like ssh");
+    assert.match(parts[3], /inside-42/, "the next command runs inside the nested shell");
+    assert.match(parts[4], /\[exit code 0\]/, "exit returns to the shell of the chat with its prompt");
     assert.ok(
       tools.every((item) => item.where === "terminal"),
       "the commands ran in the terminal of the chat",
     );
-    assert.match(shellResult, /x=42/, "an exported variable stays in the terminal");
     assert.ok(
       vscode.window.terminals.some((terminal) => terminal.name.startsWith("Phew:")),
       "the chat has its own terminal",
     );
 
-    console.log("[it] step 4");
     // 4. A queued message reaches the running agent, and /btw answers on the side.
     sessions.newSession();
     const busy = sessions.active;

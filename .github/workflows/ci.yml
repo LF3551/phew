@@ -41,6 +41,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run package
+      - run: node scripts/check-pty.mjs
 
   macos:
     name: Check on macos-latest
@@ -57,3 +58,4 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run package
+      - run: node scripts/check-pty.mjs

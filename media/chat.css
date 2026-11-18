@@ -312,64 +312,92 @@ summary:focus-visible {
 
 .term {
   --term-tone: var(--phew-accent);
-  padding-left: 2px;
 }
 
-.term[data-status="ok"] {
+.term[data-tone="ok"] {
   --term-tone: var(--phew-success);
 }
 
-.term[data-status="error"] {
+.term[data-tone="error"] {
   --term-tone: var(--phew-error);
 }
 
-.term[data-status="muted"] {
+.term[data-tone="waiting"] {
+  --term-tone: var(--phew-warning);
+}
+
+.term[data-tone="muted"] {
   --term-tone: var(--vscode-descriptionForeground);
 }
 
+/* One line, like the Copilot agent: "Running npm test", "Ran …", "Failed · exit 1". */
 .term-head {
   display: flex;
-  gap: 8px;
+  gap: 4px;
   align-items: center;
-  min-height: 22px;
+  min-height: 24px;
 }
 
-.term-dot {
+.term-toggle {
+  display: flex;
+  flex: 1;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+  padding: 2px 4px 2px 0;
+  color: var(--vscode-descriptionForeground);
+  text-align: left;
+  font: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.term-toggle:hover {
+  color: var(--vscode-foreground);
+}
+
+.term-chevron {
   flex: none;
-  width: 7px;
-  height: 7px;
-  background: var(--term-tone);
-  border-radius: 50%;
+  width: 14px;
+  height: 14px;
+  transition: transform 0.12s;
 }
 
-.term[data-status="running"] .term-dot {
-  animation: phew-term-pulse 1.2s ease-in-out infinite;
+.term.collapsed .term-chevron {
+  transform: rotate(-90deg);
+}
+
+.term-verb {
+  flex: none;
+}
+
+.term[data-tone="running"] .term-verb {
+  animation: phew-term-pulse 1.6s ease-in-out infinite;
+}
+
+.term[data-tone="error"] .term-verb,
+.term[data-tone="waiting"] .term-verb {
+  color: var(--term-tone);
 }
 
 @keyframes phew-term-pulse {
   50% {
-    opacity: 0.25;
+    opacity: 0.55;
   }
 }
 
-.term-title {
-  flex: 1;
+.term-line {
   min-width: 0;
   overflow: hidden;
-  font-weight: 600;
+  padding: 1px 6px;
+  color: var(--vscode-textPreformat-foreground, var(--vscode-foreground));
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.9em;
   white-space: nowrap;
   text-overflow: ellipsis;
-}
-
-.term-status {
-  flex: none;
-  color: var(--vscode-descriptionForeground);
-  font-size: 0.85em;
-  font-variant-numeric: tabular-nums;
-}
-
-.term-status[data-tone="error"] {
-  color: var(--phew-error);
+  background: var(--vscode-textCodeBlock-background);
+  border-radius: 4px;
 }
 
 .term-actions {
@@ -382,7 +410,6 @@ summary:focus-visible {
 
 .term:hover .term-actions,
 .term:focus-within .term-actions,
-.term[data-status="running"] .term-actions,
 .term-actions:has([data-copy-state]) {
   opacity: 1;
 }
@@ -411,38 +438,74 @@ summary:focus-visible {
   background: var(--vscode-toolbar-hoverBackground, #8883);
 }
 
-.term-command {
-  display: block;
-  margin: 2px 0 0 15px;
-  color: var(--vscode-descriptionForeground);
-  font-family: var(--vscode-editor-font-family);
-  font-size: 0.88em;
-  white-space: pre-wrap;
-  word-break: break-all;
+.term-body {
+  margin: 4px 0 0 20px;
+  overflow: hidden;
+  border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border, #8884));
+  border-radius: 6px;
 }
 
-.term-command[hidden] {
+.term.collapsed .term-body {
   display: none;
+}
+
+.term pre.term-full {
+  margin: 0;
+  border-radius: 0;
+  padding: 8px 10px;
+  max-height: 220px;
+  overflow: auto;
+  color: var(--vscode-foreground);
+  font-family: var(--vscode-editor-font-family);
+  font-size: var(--vscode-editor-font-size);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--vscode-textCodeBlock-background);
+  border-bottom: 1px solid var(--vscode-widget-border, var(--vscode-panel-border, #8884));
+}
+
+.term pre.term-full[hidden] {
+  display: none;
+}
+
+.term-full .cmd-name {
+  color: var(--vscode-terminal-ansiYellow, #dcdcaa);
+}
+
+.term-full .cmd-flag {
+  color: var(--vscode-terminal-ansiCyan, #4ec9b0);
+}
+
+.term-full .cmd-string {
+  color: var(--vscode-terminal-ansiGreen, #ce9178);
+}
+
+.term-full .cmd-var {
+  color: var(--vscode-terminal-ansiMagenta, #c586c0);
+}
+
+.term-full .cmd-op {
+  color: var(--vscode-descriptionForeground);
 }
 
 /* The terminal inside the chat (xterm.js), with the colors of the VS Code terminal. */
 .term-screen {
-  margin: 4px 0 0 15px;
   padding: 6px 4px 6px 10px;
   overflow: hidden;
   background: var(--vscode-terminal-background, var(--vscode-editor-background));
-  border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border, #8884));
-  border-left: 2px solid var(--term-tone);
-  border-radius: 4px;
 }
 
 .term-screen[hidden] {
   display: none;
 }
 
-.term-screen:focus-within {
+.term-body:focus-within {
   border-color: var(--vscode-focusBorder);
-  border-left-color: var(--term-tone);
+}
+
+.term[data-tone="waiting"] .term-body {
+  border-color: color-mix(in srgb, var(--phew-warning) 60%, transparent);
 }
 
 .term-screen .xterm {
@@ -476,25 +539,15 @@ summary:focus-visible {
   flex-wrap: wrap;
   gap: 6px;
   align-items: center;
-  margin: 4px 0 0 15px;
-  padding: 4px 8px;
+  padding: 4px 10px;
+  cursor: text;
   color: var(--phew-warning);
   font-size: 0.82em;
   background: color-mix(in srgb, var(--phew-warning) 10%, transparent);
-  border-radius: 4px;
 }
 
 .term-hint[hidden] {
   display: none;
-}
-
-/* A command in the real terminal of the chat: a small terminal mark before the status. */
-.term[data-where="terminal"] .term-status::before {
-  margin-right: 4px;
-  content: ">_";
-  font-family: var(--vscode-editor-font-family);
-  font-size: 0.9em;
-  opacity: 0.7;
 }
 
 .hunks {
@@ -3305,7 +3358,8 @@ body.mascot-paused .mascot * {
   .attach-loading span,
   .copy-pop .icon,
   .copy-bubble,
-  .term-dot,
+  .term-verb,
+  .term-chevron,
   .dice-button svg,
   .avatar-chip {
     /* biome-ignore lint/complexity/noImportantStyles: reduced motion must win over every animation. */
