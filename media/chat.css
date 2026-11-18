@@ -203,17 +203,17 @@ summary:focus-visible {
   cursor: pointer;
 }
 
-.tool .icon {
+.tool > summary .icon {
   display: inline-block;
   width: 1.2em;
 }
 
-.tool[data-status="error"] .icon,
+.tool[data-status="error"] > summary .icon,
 .verify.failed summary {
   color: var(--vscode-errorForeground);
 }
 
-.tool[data-status="done"] .icon,
+.tool[data-status="done"] > summary .icon,
 .verify.passed summary {
   color: var(--vscode-testing-iconPassed, #3fb950);
 }
@@ -364,6 +364,7 @@ summary:focus-visible {
 
 .term-chevron {
   flex: none;
+  color: var(--vscode-descriptionForeground);
   width: 14px;
   height: 14px;
   transition: transform 0.12s;
@@ -439,8 +440,8 @@ summary:focus-visible {
 }
 
 .term-action:hover {
-  color: var(--vscode-foreground);
-  background: var(--vscode-toolbar-hoverBackground, #8883);
+  color: var(--phew-accent);
+  background: color-mix(in srgb, var(--phew-accent) 12%, transparent);
 }
 
 .term-body {
@@ -522,7 +523,7 @@ summary:focus-visible {
 }
 
 .term-body:focus-within {
-  border-color: var(--vscode-focusBorder);
+  border-color: color-mix(in srgb, var(--phew-accent) 70%, transparent);
 }
 
 .term[data-tone="waiting"] .term-body {
