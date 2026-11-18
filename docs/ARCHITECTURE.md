@@ -75,6 +75,7 @@ Pure TypeScript without the `vscode` module, so unit tests run in Node.js.
 | `approvals.ts` | Sends approval requests to the view and waits for the decision. |
 | `commandRunner.ts` | Runs shell commands with a timeout, an output limit, and cancellation. Keeps the folder and the exported variables of a chat between commands, and passes typed input to the command. |
 | `shellSession.ts`, `shellScripts.ts` | The terminal of a chat: a real PTY (node-pty) with the user's shell, shown in the panel. The agent types its commands into it. Small startup scripts print invisible marks (`core/shellMarks.ts`) when a command starts and at each prompt, with the exit code and the folder. A quiet program with a prompt waits for input, and the next command types into it (ssh, a REPL). node-pty comes prebuilt for six platforms in `dist/pty` (`scripts/vendor-pty.mjs`). |
+| `shellRegistry.ts` | The terminals of a chat: terminal 1 by default, a new one for a server, never a command into a terminal that hosts a server; the list for the chat; closing a terminal ends its whole process tree. |
 | `agentTerminal.ts` | The fallback when node-pty does not load: commands run in processes, and a pseudoterminal mirrors their output. |
 | `mcpManager.ts` | Reads MCP configurations, connects stdio and HTTP servers, signs in with OAuth, filters tools, and logs. |
 | `phewIt.ts` | The "Phew it!" quick fix on problems. |
@@ -88,7 +89,8 @@ Pure TypeScript without the `vscode` module, so unit tests run in Node.js.
 The chat view runs in a sandboxed webview with a strict Content Security Policy and a script nonce.
 `markdown.ts` builds DOM nodes from a safe Markdown subset and never parses HTML.
 `src/shared/protocol.ts` defines the messages between the view and the host, and the host validates every message.
-`terminalBlock.ts` shows each command in a terminal inside the chat (xterm.js): the same live output as the terminal in the panel, and keys go to the command through `core/lineEditor.ts`.
+`terminalBlock.ts` shows each command in a terminal inside the chat (xterm.js): the same live output as the terminal in the panel, the mascot, the result, links to files, search, Your turn, and Phew it!. Keys go straight to the real shell; in the fallback without node-pty they go through `core/lineEditor.ts`. `terminalsPanel.ts` lists the terminals of the chat.
+`core/outputLimit.ts` keeps huge output bounded for the model and the chat; `core/commandPolicy.ts` decides which commands run without asking.
 xterm.js adds `<style>` elements; they get the nonce of the page, so the policy needs no `unsafe-inline`.
 The menus under the input are separate modules: `modeMenu.ts`, `modelMenu.ts`, `attachMenu.ts`, and `approvalsPanel.ts`.
 

@@ -33,6 +33,10 @@
 </p>
 
 <p align="center">
+  <img src="docs/images/terminals.png" alt="The Terminals panel: terminal 1 is idle, terminal 2 runs npm run dev, terminal 3 waits for a password in ssh, with process ids, folders, Stop, and Close" width="800">
+</p>
+
+<p align="center">
   <img src="docs/images/real-tasks.png" alt="The welcome screen offers real tasks: continue yesterday's work, fix errors, fix a failed command, review changes" width="800">
 </p>
 
@@ -133,17 +137,26 @@ Ask, Plan, and Review are read-only: the mode switch shows a lock for them.
 | `Ctrl+Alt+Y` / `Ctrl+Alt+Z` | Keep or undo all changes in the file |
 | `↑` in the input | Reuse an earlier request |
 | `Shift+Tab` in the input | Switch the mode |
-| `Ctrl+C` in a command terminal | Stop the command (typing answers its prompt) |
 | `/btw`, `/goal`, `/compact` | Side question, goal of the chat, compact the chat |
 
 On macOS, use `Cmd` instead of `Ctrl`.
+
+In the terminal of a command in the chat:
+
+| Shortcut | Action |
+| --- | --- |
+| `Ctrl+C` (also on macOS) | Stop the command |
+| `Ctrl+D` | End the input of the command |
+| `Ctrl+F` (`Cmd+F` on macOS) | Find in the output |
+| Typing and `Enter` | Answer a prompt of the command |
 
 ## Settings
 
 **Phew: Open Settings** opens a settings page with sections for models, the agent, approvals, checks, budget, commits, worktrees, the code index, autocomplete, memory, modes, and skills, MCP, privacy, and the interface.
 The approval toggles in the chat change only that chat; **save as default** makes them the default.
 Notifications, the sound, the font size of the chat, and the send key (`Enter` or `Ctrl+Enter`) are in **Agent**.
-`phew.commands.terminal` chooses whether the terminal of the chat opens in the panel with the first command, only on request, or never (then each command runs in a hidden process). `phew.commands.shell` sets its shell.
+`phew.commands.terminal` chooses whether the terminal of the chat opens in the panel with the first command, only on request, or never (then each command runs in a hidden process). `phew.commands.shell` sets its shell, and `phew.commands.shellStartupFiles` turns your startup files off for a fast, plain shell.
+`phew.commands.approval` (**Ask**, **Smart**, or **All**), `phew.commands.autoApprove`, and `phew.commands.deny` decide which commands run without asking.
 Every setting is also available in the VS Code settings under **Phew**.
 
 ## Security and privacy
@@ -153,6 +166,9 @@ Every setting is also available in the VS Code settings under **Phew**.
 - In Restricted Mode, Phew only answers questions.
   It does not change files, run commands, start MCP servers, or read project rules, memory, or modes.
 - Model profiles come only from the user settings, so a workspace cannot send your API keys to another server.
+- Commands that change something ask first in the default **Smart** mode; dangerous commands such as `git push`, `rm -rf`, `sudo`, or `terraform apply` always ask, and `phew.commands.deny` blocks commands for good.
+- The agent's terminal is yours: you see every command, and passwords go from you to the program, never to the model.
+  Closing a terminal or a chat ends every process that it started.
 - Every tool call is written to the **Phew** output channel (`Phew: Show Log`).
 - Phew collects no telemetry. Statistics stay on your computer.
 

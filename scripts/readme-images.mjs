@@ -294,6 +294,58 @@ const scenes = {
       },
     ],
   },
+  terminals: {
+    title: "Every terminal in sight",
+    text: "See what each terminal of the agent runs, with its process and folder. Stop it, or close it with every process it started.",
+    chatTitle: "Run the shop locally",
+    alt: "The Terminals panel: terminal 1 is idle, terminal 2 runs npm run dev, terminal 3 waits for a password in ssh, with process ids, folders, Stop, and Close",
+    messages: [
+      {
+        type: "state",
+        state: state({
+          title: "Run the shop locally",
+          terminals: [
+            { id: "1", name: "Terminal 1", pid: 41207, shell: "zsh", cwd: "/Users/sam/shop", state: "idle" },
+            {
+              id: "2",
+              name: "Terminal 2",
+              pid: 41388,
+              shell: "zsh",
+              cwd: "/Users/sam/shop/web",
+              state: "running",
+              command: "npm run dev",
+            },
+            {
+              id: "3",
+              name: "Terminal 3",
+              pid: 41502,
+              shell: "zsh",
+              cwd: "/Users/sam/shop",
+              state: "waiting",
+              command: "ssh deploy@staging",
+            },
+          ],
+        }),
+      },
+      {
+        type: "user",
+        id: "u1",
+        text: "Start the web app and the API, then check the staging server.",
+        checkpointId: "c1",
+        at: now - 90000,
+      },
+      { type: "assistantStart", id: "a1" },
+      {
+        type: "assistantEnd",
+        id: "a1",
+        text: "The web app runs in terminal 2 and answers on `http://localhost:5173`. Terminal 3 is connected to staging and waits for your password.",
+        at: now - 20000,
+      },
+    ],
+    after: async (page) => {
+      await page.click("#terminalsButton");
+    },
+  },
   family: {
     title: "Make it yours",
     text: "Pick a look from the Phew family, a name, and a character. The mascot blinks, follows your pointer, and sweats while it works.",

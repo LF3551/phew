@@ -7,34 +7,32 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
-- A real terminal for the agent. Each chat has a terminal in the panel with your own shell (bash, zsh, fish, PowerShell, or sh), started with your startup files, and the agent types its commands into it. The session stays between commands: `cd`, variables, virtual environments, `ssh` into another machine, and REPLs carry over. You see every command live, in the panel and in a terminal inside the chat, and you can type at any time: answer a prompt, press Ctrl+C, or run your own command. When a program waits for input, Phew notices it, and the agent types the answer or the next command inside ssh; it asks you to type passwords. Servers and watchers can run in the background. In the chat, each command is a copy of the terminal like in Copilot: a line such as "Running `npm test`", then a box with the command in color and its live output. A program that keeps running, such as ssh or a server, keeps showing in its box what happens in the terminal, also what you type. Phew brings node-pty, prebuilt for Linux, macOS, and Windows on x64 and arm64, so it does not depend on the VS Code version. `phew.commands.shell` sets the shell.
+- **A real terminal for the agent.** Each chat has a terminal in the panel with your own shell (bash, zsh, fish, PowerShell, or sh) and your startup files, and the agent types its commands into it. The session stays between commands: `cd`, variables, virtual environments, `ssh` into another machine, and REPLs carry over. You see every command live, in the panel and in a terminal inside the chat, and you can type at any time: answer a prompt, press Ctrl+C, or run your own command. Phew brings node-pty, prebuilt for Linux, macOS, and Windows on x64 and arm64, so it does not depend on the VS Code version.
+- **Programs that wait for input.** Phew notices a prompt, a question, or a remote shell after `ssh`, and the agent types the answer or the next command; it asks you to type passwords. In the chat, **Your turn** gives an answer field, with a lock that hides a password.
+- **Servers and watchers.** The agent starts them in their own terminal (`terminal: "new"`, `background`), reads their new log, and waits until they say, for example, "listening on" (`read_terminal`). A command never goes into a terminal that hosts a server.
+- **Terminals** under the input: every terminal of the chat with its state, shell, process id, folder, and running command, with Ctrl+C and Close. Closing a terminal, deleting a chat, or closing VS Code ends every process that the terminal started.
+- **Phew it! on a failed command**: one click starts a task that finds the cause in the output, fixes it, and runs the command again.
+- Each command in the chat: the mascot of your assistant reads along, sweats while it waits for you, sighs with relief, or worries; the header says what the command does in plain words, with the time, the lines, and the errors; a thin line beats with the output. **Find in output** (Ctrl+F), **Run again**, **Copy**, and **Show in the terminal**.
+- File paths in the output open in the editor at their line and column (`src/login.ts:42:7`, `src/a.ts(12,5)`), relative to the folder of the terminal; web addresses open in the browser.
+- Commands get `PHEW_AGENT=1` and `PHEW_TERMINAL`, so scripts and Git hooks know that an agent runs them.
+- The attach menu offers the recent output of each terminal of the chat.
+- Settings: `phew.commands.terminal` (open the terminal with the first command, on request, or never), `phew.commands.shell`, and `phew.commands.shellStartupFiles`.
 
 ### Changed
 
-- Test runners and bundlers in watch mode no longer hang a task: the terminal of the agent sets `CI=1`, and a watcher that still starts is noticed and keeps running in its own terminal.
-- A long command is no longer stopped after the time limit: it keeps running, and the agent waits for it with `read_terminal` or stops it.
+- **Fewer questions about commands.** The default **Smart** mode runs commands that only read (`ls`, `pwd`, `cat`, `grep`, `find` without `-delete` or `-exec`, `git status`, `git log`, `git diff`, `--version`, and more) without asking, also in pipes and chains such as `find . 2>/dev/null | wc -l`; each part of a chain is checked, quotes are respected, and writes into `/tmp` are fine. **All** (before: Safe) runs every command except dangerous ones. A request has **Always allow `npm test`**, which adds the command to your allowlist. Each command says why it ran without asking, for example "auto: only reads". A short answer to a question of a running program, such as `y`, needs no new approval. Dangerous commands still always ask.
+- Huge output stays fast: the model gets the start and the end with the number of lines left out, the chat skips lines that come faster than it can show and says so, and the terminal keeps everything.
+- A long command is no longer stopped after the time limit: it keeps running, and the agent waits for it or stops it.
 - **Stop** ends a program that ignores Ctrl+C: its processes end three seconds later.
-- A quiet line such as `Installing dependencies:` no longer looks like a question; a program waits for input only when the cursor stays on its line.
-- A short answer to a question of a running program, such as `y` for `Continue? [y/N]`, needs no new approval. Commands inside ssh still follow the rules.
-- File paths in the output of a command open in the editor at their line and column (`src/login.ts:42:7`, `src/a.ts(12,5)`), relative to the folder of the terminal; web addresses open in the browser.
-- **Find in output** (Ctrl+F) and **Run again** for each command.
+- The terminals of Phew in the panel have the Phew drop as their icon and the cyan of its logo.
+
+### Fixed
+
+- Test runners and bundlers in watch mode no longer hang a task: the terminal of the agent sets `CI=1`, and a watcher that still starts keeps running in its own terminal.
+- Prompt themes such as powerlevel10k with its instant prompt no longer break the end of a command.
+- A quiet line such as `Installing dependencies:` no longer looks like a question.
+- Letters such as я or ö show correctly when the system has no UTF-8 locale.
 - After VS Code reloads, the agent learns that its shell is new and that the folder and the variables of earlier commands are gone.
-
-- Commands in the chat look like Phew. The mascot of your assistant reads along while a command runs, sweats while it waits for you, sighs with relief, or worries. The header says what the command does in plain words, with a short result: the time, the lines, and the errors. A failed command has **Phew it!**, which starts a task that finds the cause and fixes it. A thin line beats with the output, so a silent command looks silent. A program that waits for input gets **Your turn**: an answer field, with a lock that hides a password. The terminals of Phew in the panel have the Phew drop as their icon and the cyan of its logo.
-
-- The agent reads and waits for terminals that keep running (`read_terminal`): the new log of a server or a watcher since the last read, and waiting until it says, for example, "listening on". A command without a terminal never goes into a terminal that hosts a server.
-- Each command in the chat says why it ran without asking, for example "auto: only reads" or "your allowlist: npm test", and in which terminal.
-- Closing a terminal of the chat, deleting the chat, or closing VS Code ends every process that the terminal started, so no dev server keeps running.
-- Commands get `PHEW_AGENT=1` and `PHEW_TERMINAL`, so scripts and Git hooks know that an agent runs them.
-- Writes into `/tmp` and `$TMPDIR` run without asking in the Smart mode.
-- Heavy prompt themes work: zsh with powerlevel10k and its instant prompt is tested, the mark stays first when a theme rebuilds its hooks, and a prompt that comes back without its mark still ends the command. `phew.commands.shellStartupFiles` turns the startup files off for a fast, plain shell.
-- The attach menu offers the recent output of each terminal of the chat.
-
-- Several terminals per chat. The agent opens another one when it needs it (`terminal: "new"`), for example for a server while it runs the tests. The **Terminals** button under the input shows how many terminals the chat has, and for each one its state, shell, process id, folder, and running command, with Ctrl+C and Close.
-- Huge output stays fast. The model gets the start and the end of the output with the number of lines left out, the chat skips lines that come faster than it can show and says so, and the terminal keeps everything.
-- The terminal of the chat uses a UTF-8 locale when the system has none, so letters such as я or ö show correctly.
-
-- Fewer questions about commands. The default **Smart** mode runs commands that only read (`ls`, `pwd`, `cat`, `grep`, `find` without `-delete` or `-exec`, `git status`, `git log`, `git diff`, `--version`, and more) without asking, also in pipes and chains such as `find . 2>/dev/null | wc -l`; each part of a chain is checked, and quotes are respected. **All** (before: Safe) runs every command except dangerous ones, also chains and redirections. A command request has **Always allow `npm test`**, which runs it and adds it to your allowlist. Dangerous commands still always ask.
 
 ## [0.2.0] - 2026-11-17
 
