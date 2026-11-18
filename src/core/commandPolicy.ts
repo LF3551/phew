@@ -69,8 +69,7 @@ export function isCompound(command: string): boolean {
 }
 
 /**
- * Commands that only read: they run without asking in the default mode, like the default rules of the
- * Copilot agent. A subcommand with a flag that changes something (for example `find -delete`) is not read-only.
+ * Commands that only read: they run without asking in the default mode. A subcommand with a flag that changes something (for example `find -delete`) is not read-only.
  */
 const readOnlyCommands = new Set([
   "ls",

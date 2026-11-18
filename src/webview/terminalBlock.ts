@@ -1,13 +1,16 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { type ITheme, Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
-import { parseCommandResult } from "../core/commandResult";
+import { countErrors, parseCommandResult } from "../core/commandResult";
+import { type AvatarLook, lookOf } from "../core/persona";
 import { icon } from "../shared/icons";
 import type { WebviewMessage } from "../shared/protocol";
 import { copyWithFeedback } from "./copy";
+import { mascotMotion } from "./mascotLife";
+import { mascot } from "./persona";
 
 /**
- * A command in the chat, like the terminal of the Copilot agent: a real terminal (xterm.js) inside the
+ * A command in the chat: a real terminal (xterm.js) inside the
  * chat that shows the output live and in color, the same as the terminal of the chat in the panel.
  * Typing in it goes to the running command; Ctrl+C stops it. Above it: what the command does in plain
  * words, the command, and the result.
@@ -31,6 +34,15 @@ const liveTerminals = 12;
 
 interface CommandView {
   readonly root: HTMLElement;
+  /** The mascot of the assistant in the header: it reads while the command runs and reacts to the result. */
+  readonly face: SVGSVGElement;
+  readonly title: HTMLElement;
+  readonly summary: HTMLElement;
+  readonly fix: HTMLButtonElement;
+  readonly body: HTMLElement;
+  readonly answer: HTMLElement;
+  readonly answerInput: HTMLInputElement;
+  lastBeat: number;
   readonly verb: HTMLElement;
   readonly commandLine: HTMLElement;
   readonly full: HTMLElement;
@@ -55,6 +67,14 @@ interface CommandView {
 }
 
 const views = new Map<string, CommandView>();
+/** The look of the assistant, so the mascot in each command matches it. */
+let look: AvatarLook | undefined;
+
+/** The chat tells the terminals which look the assistant has. */
+export function setTerminalLook(avatar: string): void {
+  look = lookOf(avatar);
+}
+
 const order: string[] = [];
 let ticker: ReturnType<typeof setInterval> | undefined;
 
@@ -112,12 +132,34 @@ function terminalTheme(): ITheme {
 }
 
 function renderStatus(view: CommandView): void {
-  const time = seconds((view.finished ?? Date.now()) - view.started);
+  const elapsed = (view.finished ?? Date.now()) - view.started;
+  const time = seconds(elapsed);
   view.verb.textContent = view.result ? view.result.label : "Running";
   view.root.dataset.tone = view.result?.tone ?? "running";
+  // A short result on the right: the time, the lines, and the errors of a failed command.
+  const lines = view.text ? view.text.replace(/\s+$/, "").split("\n").length : 0;
+  const parts = [time];
+  if (view.result && lines > 0) parts.push(`${lines.toLocaleString("en-US")} ${lines === 1 ? "line" : "lines"}`);
+  const errors = view.result?.tone === "error" ? countErrors(view.text) : 0;
+  if (errors > 0) parts.push(`${errors} ${errors === 1 ? "error" : "errors"}`);
+  view.summary.textContent = parts.join(" · ");
+  view.fix.hidden = view.result?.tone !== "error" || /^Denied|^Stopped/.test(view.result.label);
+  view.answer.hidden = view.result?.tone !== "waiting" || view.result.label !== "Waiting for input";
   view.root.title = [view.description, view.result ? `${view.result.label} after ${time}` : `Running for ${time}`]
     .filter(Boolean)
     .join(" · ");
+  setFace(view);
+}
+
+/** The mascot reads while the command runs, sweats while it waits for you, sighs with relief, or worries. */
+function setFace(view: CommandView): void {
+  const lively = mascotMotion() === "lively";
+  const tone = view.result?.tone ?? "running";
+  const face = tone === "ok" ? "relief" : tone === "error" ? "worry" : tone === "muted" ? "sleepy" : "open";
+  const gaze = tone === "running" && lively ? "scan" : tone === "waiting" ? "down" : "center";
+  if (view.face.dataset.face !== face) view.face.dataset.face = face;
+  if (view.face.dataset.look !== gaze) view.face.dataset.look = gaze;
+  view.face.classList.toggle("sweat", tone === "waiting");
 }
 
 /** Colors the parts of a shell command: programs, flags, strings, variables, and operators. */
@@ -190,7 +232,7 @@ function createTerminal(view: CommandView, id: string, post: (message: WebviewMe
   const fit = new FitAddon();
   term.loadAddon(fit);
   term.open(view.screen);
-  // Typing goes to the running command, like in the terminal of the Copilot agent.
+  // Typing goes to the running command.
   term.onData((data) => {
     if (view.finished === undefined || view.live) post({ type: "commandInput", id, data });
   });
@@ -215,7 +257,18 @@ function toText(view: CommandView): void {
   view.screen.hidden = !view.text.trim();
 }
 
+/** The line along the top of the box beats with the output, so a silent command looks silent. */
+function beat(view: CommandView): void {
+  const now = Date.now();
+  if (now - view.lastBeat < 180) return;
+  view.lastBeat = now;
+  view.body.classList.remove("beat");
+  void view.body.offsetWidth;
+  view.body.classList.add("beat");
+}
+
 function write(view: CommandView, text: string): void {
+  if (view.finished === undefined || view.live) beat(view);
   view.text += plain(text);
   if (view.text.length > 200_000) view.text = view.text.slice(-200_000);
   if (view.term) view.term.write(text, () => resize(view));
@@ -259,7 +312,7 @@ function renderActions(view: CommandView, id: string, command: string, post: (me
   view.actions.replaceChildren(...buttons);
 }
 
-/** Creates or updates the view of a command: one line like the Copilot agent, the command, and its terminal. */
+/** Creates or updates the view of a command: one line, the command, and its terminal. */
 export function renderCommandTerminal(
   id: string,
   update: {
@@ -282,25 +335,76 @@ export function renderCommandTerminal(
     toggle.type = "button";
     const chevron = iconNode("chevron");
     chevron.classList.add("term-chevron");
+    const face = mascot("idle", look);
+    face.classList.add("term-mascot");
     const verb = el("span", "term-verb");
+    const title = el("span", "term-title");
     const commandLine = el("code", "term-line");
-    toggle.append(chevron, verb, commandLine);
+    toggle.append(chevron, face, verb, title, commandLine);
     const actions = el("span", "term-actions");
-    head.append(toggle);
+    const summary = el("span", "term-summary");
+    // A failed command: one click asks the assistant to find the cause and fix it.
+    const fix = el("button", "term-fix");
+    fix.type = "button";
+    fix.hidden = true;
+    fix.append(iconNode("bug"), el("span", undefined, "Phew it!"));
+    fix.title = "Find the cause of this failure and fix it";
+    fix.addEventListener("click", () => {
+      fix.disabled = true;
+      post({ type: "fixCommand", id });
+    });
+    head.append(toggle, summary, fix);
     const body = el("div", "term-body");
-    // Like the Copilot agent: the command at the top of the terminal box, with its buttons on the right.
+    // The command at the top of the terminal box, with its buttons on the right.
     const top = el("div", "term-top");
     const full = el("pre", "term-full");
     // Which terminal runs it and why it ran without asking, quiet on the right.
     const meta = el("span", "term-meta");
     top.append(full, meta, actions);
     const screen = el("div", "term-screen");
-    const hint = el("div", "term-hint", "Waiting for input. Type here or in the terminal.");
+    const hint = el("div", "term-hint");
     hint.hidden = true;
-    body.append(top, screen, hint);
+    // Your turn: an answer field under a program that waits for input; the key hides what you type.
+    const answer = el("form", "term-answer");
+    answer.hidden = true;
+    const answerInput = el("input", "term-answer-input");
+    answerInput.type = "text";
+    answerInput.placeholder = "Your answer…";
+    answerInput.setAttribute("aria-label", "Answer for the command");
+    answerInput.autocomplete = "off";
+    answerInput.spellcheck = false;
+    const secret = el("button", "term-action term-secret");
+    secret.type = "button";
+    secret.title = "Hide what I type (for passwords)";
+    secret.setAttribute("aria-pressed", "false");
+    secret.append(iconNode("lock"));
+    secret.addEventListener("click", () => {
+      const hidden = answerInput.type === "text";
+      answerInput.type = hidden ? "password" : "text";
+      secret.setAttribute("aria-pressed", String(hidden));
+      secret.classList.toggle("on", hidden);
+      answerInput.focus();
+    });
+    const send = el("button", "term-answer-send", "Send");
+    send.type = "submit";
+    answer.append(el("span", "term-answer-label", "Your turn"), answerInput, secret, send);
+    answer.addEventListener("submit", (event) => {
+      event.preventDefault();
+      post({ type: "commandInput", id, data: `${answerInput.value}\r` });
+      answerInput.value = "";
+    });
+    body.append(top, screen, hint, answer);
     root.append(head, body);
     const created: CommandView = {
       root,
+      face,
+      title,
+      summary,
+      fix,
+      body,
+      answer,
+      answerInput,
+      lastBeat: 0,
       verb,
       commandLine,
       full,
@@ -327,7 +431,11 @@ export function renderCommandTerminal(
   const current = view;
   current.description = update.description;
   const firstLine = update.command.split("\n")[0] ?? "";
+  // Plain words first, when the assistant says what the command does; the command is in the box below.
+  current.title.textContent = update.description ?? "";
+  current.title.hidden = !update.description;
   current.commandLine.textContent = firstLine;
+  current.commandLine.hidden = Boolean(update.description);
   // The command shows in full at the top of the box, with colors.
   if (current.full.dataset.command !== update.command) {
     current.full.dataset.command = update.command;

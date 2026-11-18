@@ -14,7 +14,7 @@ export interface TerminalInfo {
 
 /**
  * The terminals of a chat. The agent works in terminal 1 by default; `terminal: "new"` opens another one,
- * for example for a server while it runs the tests, like the Copilot agent does. Each one is a real shell.
+ * for example for a server while it runs the tests. Each one is a real shell.
  */
 export class ShellRegistry implements vscode.Disposable {
   private readonly shells = new Map<string, ShellSessionType>();
@@ -57,6 +57,7 @@ export class ShellRegistry implements vscode.Disposable {
       session = new ShellSession(pty, this.title, this.startFolder, this.shellPath, this.onChange);
       session.nameSuffix = id === "1" ? "" : ` (${id})`;
       session.terminalId = id;
+      session.extensionRoot = this.extensionPath ?? "";
       session.loadStartupFiles = this.loadStartupFiles;
       this.shells.set(id, session);
     }

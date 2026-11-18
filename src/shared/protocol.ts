@@ -311,6 +311,7 @@ export type WebviewMessage =
   | { readonly type: "manageModels" }
   | { readonly type: "stopCommand"; readonly id: string }
   | { readonly type: "showTerminal" }
+  | { readonly type: "fixCommand"; readonly id: string }
   | { readonly type: "terminalAction"; readonly id: string; readonly action: "show" | "interrupt" | "kill" }
   | { readonly type: "commandInput"; readonly id: string; readonly data: string }
   | { readonly type: "copyText"; readonly text: string }
@@ -541,6 +542,10 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
       return value && typeof message.data === "string" && message.data.length > 0 && message.data.length <= 10_000
         ? { type: "commandInput", id: value, data: message.data }
         : undefined;
+    }
+    case "fixCommand": {
+      const value = id("id");
+      return value ? { type: "fixCommand", id: value } : undefined;
     }
     case "stopCommand": {
       const value = id("id");

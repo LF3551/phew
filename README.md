@@ -29,14 +29,14 @@
 ## Why Phew
 
 <p align="center">
-  <img src="docs/images/terminal.png" alt="The agent opened ssh to a jump host that now waits for input, and runs the tests live in a terminal inside the chat" width="800">
+  <img src="docs/images/terminal.png" alt="Commands in the chat: a sudo prompt that waits for an answer, failing tests with Phew it!, and a build that runs live" width="800">
 </p>
 
 <p align="center">
   <img src="docs/images/real-tasks.png" alt="The welcome screen offers real tasks: continue yesterday's work, fix errors, fix a failed command, review changes" width="800">
 </p>
 
-- **A real terminal, shared.** The agent works in your own shell, in a terminal of the chat, like the Copilot agent: `cd`, variables, virtual environments, `ssh` into another machine, and REPLs carry over between commands. You see every command live, in the panel and in the chat, and you can type at any time: answer a prompt, press Ctrl+C, or run your own command. When a program waits for input, the agent notices and types the answer or the next command inside ssh, and it asks you for passwords. Servers run in their own terminal, and the agent reads their log and waits until they are ready. The **Terminals** button shows every terminal of the chat with its process id; closing one ends all its processes, so no dev server is left behind. Commands get `PHEW_AGENT=1`, so your scripts know that an agent runs them. Works with bash, zsh (also with powerlevel10k), fish, PowerShell, and sh on Linux, macOS, and Windows.
+- **A real terminal, shared.** The agent works in your own shell, in a terminal of the chat: `cd`, variables, virtual environments, `ssh` into another machine, and REPLs carry over between commands. You see every command live, in the panel and in the chat, and you can type at any time: answer a prompt, press Ctrl+C, or run your own command. When a program waits for input, the agent notices and types the answer or the next command inside ssh, and it asks you for passwords; you can answer in the chat with **Your turn**, also hidden for a password. A failed command has **Phew it!**, which finds the cause and fixes it. Servers run in their own terminal, and the agent reads their log and waits until they are ready. The **Terminals** button shows every terminal of the chat with its process id; closing one ends all its processes, so no dev server is left behind. Commands get `PHEW_AGENT=1`, so your scripts know that an agent runs them. Works with bash, zsh (also with powerlevel10k), fish, PowerShell, and sh on Linux, macOS, and Windows.
 - **Phew it!** One click on an error in the editor, a failed terminal command, or failing tests. Phew finds the cause, fixes it, and checks the result.
 - **Fixes until green.** Phew runs your check command, for example `npm test`, and keeps fixing until it passes.
 - **Review in the editor.** Each change has **Keep** and **Undo** buttons in the file, and **Keep All** and **Undo All** in the editor title. Prefer to approve first? Switch **Edits** to **Ask first** in the chat.

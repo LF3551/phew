@@ -9,6 +9,7 @@ import { type ChatMessage, type ModelClient, type ToolCall, trimHistory, truncat
 import { buildTitleMessages, cleanTitle, firstExchange } from "../core/chatTitle";
 import { CheckpointStore } from "../core/checkpoints";
 import { decideCommand } from "../core/commandPolicy";
+import { parseCommandResult } from "../core/commandResult";
 import {
   applyCompaction,
   buildCompactionMessages,
@@ -20,7 +21,7 @@ import { CostMeter, formatCost, formatTokens } from "../core/cost";
 import { titleFromText } from "../core/export";
 import { exitCodeOf, type JournalEvent } from "../core/journal";
 import { canChange, findMode, type Mode, type ModeDefinition } from "../core/modes";
-import { limitForChat } from "../core/outputLimit";
+import { limitForChat, limitForModel } from "../core/outputLimit";
 import { personaPrompt } from "../core/persona";
 import { emptyPlan, type Plan, planPrompt } from "../core/plan";
 import { buildSystemPrompt } from "../core/prompts";
@@ -841,6 +842,26 @@ export class AgentSession {
     this.deps.log.info(`[audit] checkpoint restored: ${files.join(", ")}`);
     this.emit({ type: "checkpointRestored", checkpointId, files });
     await this.deps.persist(this);
+  }
+
+  /** "Phew it!" on a command that failed: a new task that finds the cause and fixes it, with the output attached. */
+  async fixCommand(toolId: string): Promise<void> {
+    const tool = [...this.transcript.all()]
+      .reverse()
+      .find((item): item is Extract<HostMessage, { type: "tool" }> => item.type === "tool" && item.id === toolId);
+    if (!tool || tool.status === "running") return;
+    const command = tool.command ?? tool.summary.replace(/^run_command\s*/, "");
+    const parsed = parseCommandResult(tool.detail ?? "");
+    const how =
+      parsed.exitCode !== undefined
+        ? `failed with exit code ${parsed.exitCode}`
+        : `ended: ${parsed.status ?? "failed"}`;
+    await this.run({
+      text: `The command \`${command}\` ${how}. Find the cause in the output, fix it, and run the command again to check.`,
+      display: `Phew it! \`${command.split("\n")[0]?.slice(0, 80)}\` ${how}.`,
+      kind: "fix",
+      attachments: [{ kind: "terminal", command, output: limitForModel(parsed.output, 4_000, 20_000) }],
+    });
   }
 
   /** Keys typed in the terminal of a command in the chat. */

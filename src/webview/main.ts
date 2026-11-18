@@ -40,7 +40,7 @@ import {
   showAssistantCard,
   showWrapped,
 } from "./persona";
-import { appendCommandOutput, renderCommandTerminal, setCommandWhere } from "./terminalBlock";
+import { appendCommandOutput, renderCommandTerminal, setCommandWhere, setTerminalLook } from "./terminalBlock";
 import { createTerminalsPanel } from "./terminalsPanel";
 import { groupSummary, toolLabel } from "./toolLabels";
 
@@ -272,6 +272,7 @@ function moveMascot(next: MascotState, settleAfter?: number): void {
 
 /** Shows the name and the avatar of the assistant in the header and on the welcome screen. */
 function applyAssistant(next: ViewState): void {
+  setTerminalLook(next.assistant.avatar);
   const key = JSON.stringify(next.assistant);
   if (key !== assistantKey) {
     assistantKey = key;
@@ -628,7 +629,7 @@ function updateTool(message: Extract<HostMessage, { type: "tool" }>): void {
     node = element("details", "tool");
     tools.set(message.id, node);
     const atEnd = nearBottom();
-    // A command stands on its own in the chat, like in Claude Code; other tools share a quiet group line.
+    // A command stands on its own in the chat; other tools share a quiet group line.
     if (message.name === "run_command") append(node);
     else toolGroup().querySelector(".group-body")?.append(node);
     follow(atEnd);

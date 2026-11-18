@@ -58,3 +58,16 @@ export function describeShellResult(command: string, outcome: ShellOutcome, time
     lines.push("Phew pressed Ctrl+C. For a long command, set background or a longer timeout in the settings.");
   return lines.join("\n");
 }
+
+/** Lines that report errors, for the summary of a failed command. "0 errors" does not count. */
+export function countErrors(text: string): number {
+  let count = 0;
+  for (const line of text.split("\n")) {
+    if (
+      /\b(error|errors|failed|failure|fatal|exception|traceback|panic)\b|✗|✕|×/i.test(line) &&
+      !/\b0 (errors?|failed|failures?)\b/i.test(line)
+    )
+      count++;
+  }
+  return count;
+}

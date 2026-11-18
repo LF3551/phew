@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 
 /**
- * The terminal of the chat in the panel. Like the Copilot agent, the agent's commands show here live
+ * The terminal of the chat in the panel. The agent's commands show here live
  * and in color, and the same output shows in the terminal inside the chat. Typing goes to the running
  * command through its input line, so both terminals echo it. It is a terminal of Phew itself
  * (a pseudoterminal), so it works with every shell and needs no shell integration.
@@ -33,7 +33,7 @@ export class AgentTerminal implements vscode.Disposable {
 
   /** The terminals of Phew, so the terminal watcher does not offer to fix the agent's own commands. */
   static isAgentTerminal(terminal: vscode.Terminal): boolean {
-    return terminal.name.startsWith("Phew:");
+    return terminal.name.startsWith("Phew · ") || terminal.name.startsWith("Phew:");
   }
 
   private ensure(): vscode.Terminal {

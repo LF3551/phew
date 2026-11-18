@@ -88,7 +88,7 @@ Pure TypeScript without the `vscode` module, so unit tests run in Node.js.
 The chat view runs in a sandboxed webview with a strict Content Security Policy and a script nonce.
 `markdown.ts` builds DOM nodes from a safe Markdown subset and never parses HTML.
 `src/shared/protocol.ts` defines the messages between the view and the host, and the host validates every message.
-`terminalBlock.ts` shows each command in a terminal inside the chat (xterm.js), like the Copilot agent: the same live output as the terminal in the panel, and keys go to the command through `core/lineEditor.ts`.
+`terminalBlock.ts` shows each command in a terminal inside the chat (xterm.js): the same live output as the terminal in the panel, and keys go to the command through `core/lineEditor.ts`.
 xterm.js adds `<style>` elements; they get the nonce of the page, so the policy needs no `unsafe-inline`.
 The menus under the input are separate modules: `modeMenu.ts`, `modelMenu.ts`, `attachMenu.ts`, and `approvalsPanel.ts`.
 

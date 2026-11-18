@@ -316,7 +316,7 @@ async function run() {
     shell.terminalAction("2", "kill");
     assert.equal(shell.terminals.length, 1, "closing a terminal removes it");
     assert.ok(
-      vscode.window.terminals.some((terminal) => terminal.name.startsWith("Phew:")),
+      vscode.window.terminals.some((terminal) => terminal.name.startsWith("Phew")),
       "the chat has its own terminal",
     );
 

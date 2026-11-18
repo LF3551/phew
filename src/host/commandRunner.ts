@@ -43,7 +43,7 @@ export function runShellCommand(
     let output = "";
     let timedOut = false;
     let cancelled = false;
-    // Like the shell of Claude Code: after the command, the shell writes its folder to a file, keeping the exit code.
+    // After the command, the shell writes its folder to a file, keeping the exit code.
     const cwdFile = posixShell
       ? path.join(tmpdir(), `phew-cwd-${process.pid}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`)
       : undefined;

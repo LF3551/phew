@@ -1128,7 +1128,7 @@
               "No terminal: each command runs in a hidden process, and the chat shows the output."
             ],
             "default": "open",
-            "markdownDescription": "The terminal of the chat: a real shell where the agent runs its commands, like the Copilot agent. The chat shows the same output."
+            "markdownDescription": "The terminal of the chat: a real shell where the agent runs its commands. The chat shows the same output."
           },
           "phew.commands.shellStartupFiles": {
             "type": "boolean",

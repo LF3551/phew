@@ -8,7 +8,7 @@ import { lastLine, looksLikePrompt, plainTerminalText, type ShellMark, ShellMark
 import { type ShellLaunch, shellLaunch, userShell } from "./shellScripts";
 
 /**
- * The shell of a chat, like the terminal of the Copilot agent: a real terminal (a PTY from node-pty)
+ * The shell of a chat: a real terminal (a PTY from node-pty)
  * with the user's own shell, shown in the terminal panel. The agent types its commands into it, the user
  * sees them live and can type too: answer a prompt, press Ctrl+C, or run own commands. The session stays,
  * so `cd`, variables, and `ssh` into another machine carry over to the next command.
@@ -110,7 +110,7 @@ export class ShellSession implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [this.writer, this.closer];
   /**
    * A program that the agent left running (ssh, a server, a prompt) keeps showing in its view in the chat,
-   * like the terminal of the Copilot agent: everything that happens in the terminal goes there, until the
+   * so everything that happens in the terminal goes there, until the
    * program ends or the next command starts.
    */
   private tail: ((text: string) => void) | undefined;
@@ -136,6 +136,8 @@ export class ShellSession implements vscode.Disposable {
     return this.backgroundJob && this.busy;
   }
   private backgroundJob = false;
+  /** The folder of the extension, for the icon of the terminal. */
+  extensionRoot = "";
   /** " (2)" for the second terminal of a chat. */
   nameSuffix = "";
   /** The last command that the agent ran, for the list of terminals. */
@@ -158,7 +160,7 @@ export class ShellSession implements vscode.Disposable {
 
   /** The terminals of Phew, so the terminal watcher does not offer to fix the agent's own commands. */
   static isAgentTerminal(terminal: vscode.Terminal): boolean {
-    return terminal.name.startsWith("Phew:");
+    return terminal.name.startsWith("Phew · ") || terminal.name.startsWith("Phew:");
   }
 
   get started(): boolean {
@@ -311,9 +313,16 @@ export class ShellSession implements vscode.Disposable {
       setDimensions: (dimensions) => this.resize(dimensions.columns, dimensions.rows),
     };
     this.terminal = vscode.window.createTerminal({
-      name: `Phew: ${this.title()}`.slice(0, 44) + this.nameSuffix,
+      name: `Phew · ${this.title()}`.slice(0, 44) + this.nameSuffix,
       pty,
-      iconPath: new vscode.ThemeIcon("sparkle"),
+      // The drop of Phew in the cyan of its logo, so the agent's terminals stand out from the user's own.
+      iconPath: this.extensionRoot
+        ? {
+            light: vscode.Uri.joinPath(vscode.Uri.file(this.extensionRoot), "resources", "phew.svg"),
+            dark: vscode.Uri.joinPath(vscode.Uri.file(this.extensionRoot), "resources", "phew-dark.svg"),
+          }
+        : new vscode.ThemeIcon("sparkle"),
+      color: new vscode.ThemeColor("terminal.ansiCyan"),
       isTransient: true,
     });
     return this.terminal;
@@ -350,7 +359,7 @@ export class ShellSession implements vscode.Disposable {
       cols: this.cols,
       rows: this.rows,
       cwd,
-      // PHEW_AGENT tells scripts, Git hooks, and CLIs that an agent runs the command, like CLAUDECODE or CURSOR_AGENT.
+      // PHEW_AGENT tells scripts, Git hooks, and CLIs that an agent runs the command.
       env: {
         ...process.env,
         ...utf8Locale(),

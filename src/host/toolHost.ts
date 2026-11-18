@@ -56,7 +56,7 @@ export interface ToolHostOptions {
   readonly broker: ApprovalBroker;
   /** The terminal of the chat, which mirrors the commands while they run (when no real shell is available). */
   readonly terminal?: AgentTerminal;
-  /** The terminals of the chat (real shells), like the terminals of the Copilot agent. */
+  /** The terminals of the chat (real shells). */
   readonly shells?: ShellRegistry;
   /** Where a command runs, for the chat: a real terminal or the background. */
   readonly onCommandStart?: (
@@ -65,7 +65,7 @@ export interface ToolHostOptions {
     terminal?: string,
     approval?: string,
   ) => void;
-  /** The folder of the chat's shell. `cd` in one command carries over to the next, like in Claude Code. */
+  /** The folder of the chat's shell. `cd` in one command carries over to the next. */
   readonly shell?: { cwd?: string; envFile?: string };
   /** Live output of a running command, by the id of the tool call. */
   readonly onCommandOutput?: (callId: string, text: string) => void;
@@ -519,7 +519,7 @@ export class ToolHost {
     signal.addEventListener("abort", onAbort, { once: true });
     this.runningCommands.set(callId, own);
     if (shellSession) {
-      // Like the Copilot agent: the command runs in the real shell of the chat, which the user sees and can type into.
+      // The command runs in the real shell of the chat, which the user sees and can type into.
       try {
         this.options.onCommandStart?.(callId, "terminal", picked?.id, approval);
         if (interrupt) shellSession.interrupt();
@@ -557,7 +557,7 @@ export class ToolHost {
     let result: Awaited<ReturnType<typeof runShellCommand>>;
     try {
       const timeout = this.options.settings.commandTimeoutSeconds;
-      // Like the Copilot agent: the terminal in the chat and the terminal in the panel show the same output,
+      // The terminal in the chat and the terminal in the panel show the same output,
       // in color, and typing in either one goes to the command through one input line.
       const mode = this.options.settings.commandsTerminal;
       const terminal = mode !== "off" ? this.options.terminal : undefined;

@@ -158,7 +158,7 @@ test("terminal output loses escape codes and redrawn lines", async () => {
   expect(cleanTerminalText("\u001b[32mok\u001b[0m\r\nprogress 10%\rprogress 100%\n")).toBe("ok\nprogress 100%\n");
 });
 
-test.skipIf(process.platform === "win32")("a command remembers its folder, like the shell of Claude Code", async () => {
+test.skipIf(process.platform === "win32")("a command remembers its folder between commands", async () => {
   const { runShellCommand } = await import("../src/host/commandRunner");
   const { realpathSync } = await import("node:fs");
   const { tmpdir } = await import("node:os");

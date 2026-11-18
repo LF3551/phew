@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { describeShellResult, parseCommandResult } from "../src/core/commandResult";
+import { countErrors, describeShellResult, parseCommandResult } from "../src/core/commandResult";
 import { lastLine, looksLikePrompt, plainTerminalText, ShellMarkParser } from "../src/core/shellMarks";
 
 test("the parser finds marks between text, also when a mark arrives in two chunks", () => {
@@ -52,4 +52,9 @@ test("the model learns what to do with a program that waits", () => {
   expect(describeShellResult("npm test", { state: "done", output: "", exitCode: 1 }, 120)).toBe(
     "$ npm test\n[exit code 1]\n(no output)",
   );
+});
+
+test("a failed command counts the lines that report errors", () => {
+  expect(countErrors("ok\nsrc/a.ts:3 error TS2304\nFAIL test/b\n✕ adds numbers\nTests: 1 failed, 2 passed")).toBe(3);
+  expect(countErrors("Found 0 errors\nall good")).toBe(0);
 });

@@ -378,6 +378,74 @@ summary:focus-visible {
   flex: none;
 }
 
+/* The mascot of the assistant reads along with the command. */
+.term-mascot {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.term-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--vscode-foreground);
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.term-title[hidden],
+.term-line[hidden] {
+  display: none;
+}
+
+.term-summary {
+  flex: none;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.82em;
+  font-variant-numeric: tabular-nums;
+}
+
+.term[data-tone="error"] .term-summary {
+  color: var(--phew-error);
+}
+
+/* Phew it! on a failed command */
+.term-fix {
+  display: inline-flex;
+  flex: none;
+  gap: 4px;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px 0 6px;
+  color: var(--phew-on-accent);
+  font: inherit;
+  font-size: 0.82em;
+  font-weight: 600;
+  background: var(--phew-accent);
+  border: none;
+  border-radius: 11px;
+  cursor: pointer;
+}
+
+.term-fix .icon {
+  width: 13px;
+  height: 13px;
+}
+
+.term-fix:hover {
+  background: color-mix(in srgb, var(--phew-accent) 86%, #fff);
+}
+
+.term-fix:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.term-fix[hidden] {
+  display: none;
+}
+
 .term[data-tone="running"] .term-verb {
   animation: phew-term-pulse 1.6s ease-in-out infinite;
 }
@@ -445,6 +513,7 @@ summary:focus-visible {
 }
 
 .term-body {
+  position: relative;
   margin: 4px 0 0 20px;
   overflow: hidden;
   border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border, #8884));
@@ -453,6 +522,92 @@ summary:focus-visible {
 
 .term.collapsed .term-body {
   display: none;
+}
+
+/* The pulse of the output: a line along the top that beats when output arrives. */
+.term-body::before {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 2px;
+  content: "";
+  background: linear-gradient(90deg, transparent, var(--term-tone), transparent);
+  opacity: 0;
+}
+
+.term[data-tone="running"] .term-body::before {
+  opacity: 0.25;
+}
+
+.term-body.beat::before {
+  animation: phew-beat 0.5s ease-out;
+}
+
+@keyframes phew-beat {
+  0% {
+    opacity: 0.95;
+    transform: scaleX(0.4);
+  }
+  100% {
+    opacity: 0.25;
+    transform: scaleX(1);
+  }
+}
+
+/* Your turn: the answer for a program that waits for input. */
+.term-answer {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 8px;
+  background: color-mix(in srgb, var(--phew-warning) 9%, var(--vscode-editor-background));
+  border-top: 1px solid color-mix(in srgb, var(--phew-warning) 35%, transparent);
+}
+
+.term-answer[hidden] {
+  display: none;
+}
+
+.term-answer-label {
+  flex: none;
+  color: var(--phew-warning);
+  font-size: 0.82em;
+  font-weight: 600;
+}
+
+.term-answer-input {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 7px;
+  color: var(--vscode-input-foreground);
+  font-family: var(--vscode-editor-font-family);
+  font-size: var(--vscode-editor-font-size);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 5px;
+}
+
+.term-answer-input:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--phew-accent) 70%, transparent);
+}
+
+.term-secret.on {
+  color: var(--phew-accent);
+}
+
+.term-answer-send {
+  flex: none;
+  padding: 3px 10px;
+  color: var(--phew-on-accent);
+  font: inherit;
+  font-size: 0.85em;
+  background: var(--phew-accent);
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
 }
 
 .term-top {
@@ -3537,6 +3692,7 @@ body.mascot-paused .mascot * {
   .copy-bubble,
   .term-verb,
   .term-chevron,
+  .term-body::before,
   .dice-button svg,
   .avatar-chip {
     /* biome-ignore lint/complexity/noImportantStyles: reduced motion must win over every animation. */
