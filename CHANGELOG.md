@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-18
+
 ### Changed
 
 - A new look for **Phew: Open Settings**: a menu in groups with icons that marks the section in view, a title and a short line for each section, settings in two columns with the control on the right, switches instead of check boxes, readable names for choices, and quiet tags. Models show as one row each, with the provider, the name, the facts, and the actions by weight; providers show as tiles.
@@ -168,7 +170,8 @@ The first public preview of Phew.
 - Phew Wrapped: a weekly or monthly card with bugs fixed, time saved, tasks, and the streak, which you can save as an image, and eight local achievements.
 - A getting started walkthrough and a settings page.
 
-[Unreleased]: https://github.com/LF3551/phew/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/LF3551/phew/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/LF3551/phew/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/LF3551/phew/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/LF3551/phew/compare/v0.1.4...v0.2.0
 [0.1.4]: https://github.com/LF3551/phew/compare/v0.1.3...v0.1.4
