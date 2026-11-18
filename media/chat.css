@@ -4443,11 +4443,11 @@ html body .tool-group .tool {
   font-size: 1em;
 }
 
-html body .tool[data-status="done"] .icon {
+html body .tool[data-status="done"] > summary .icon {
   color: var(--phew-success);
 }
 
-html body .tool[data-status="error"] .icon {
+html body .tool[data-status="error"] > summary .icon {
   color: var(--phew-error);
 }
 
