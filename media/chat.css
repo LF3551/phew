@@ -454,7 +454,21 @@ summary:focus-visible {
   display: none;
 }
 
+.term-top {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  background: var(--vscode-textCodeBlock-background);
+  border-bottom: 1px solid var(--vscode-widget-border, var(--vscode-panel-border, #8884));
+}
+
+.term-top .term-actions {
+  padding: 5px 4px 0 0;
+}
+
 .term pre.term-full {
+  flex: 1;
+  min-width: 0;
   margin: 0;
   border-radius: 0;
   padding: 8px 10px;
@@ -466,8 +480,8 @@ summary:focus-visible {
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
-  background: var(--vscode-textCodeBlock-background);
-  border-bottom: 1px solid var(--vscode-widget-border, var(--vscode-panel-border, #8884));
+  background: none;
+  border-bottom: none;
 }
 
 .term pre.term-full[hidden] {

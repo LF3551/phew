@@ -29,7 +29,7 @@
 ## Why Phew
 
 <p align="center">
-  <img src="docs/images/terminal.png" alt="The agent ran git status, opened ssh to a jump host that now waits for input, and runs the tests live in a terminal inside the chat" width="800">
+  <img src="docs/images/terminal.png" alt="The agent opened ssh to a jump host that now waits for input, and runs the tests live in a terminal inside the chat" width="800">
 </p>
 
 <p align="center">

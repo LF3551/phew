@@ -199,7 +199,7 @@ const scenes = {
     title: "A real terminal, shared",
     text: "The agent works in your shell, like you do: ssh, venvs, and REPLs carry over. Watch it live, type an answer, or press Ctrl+C.",
     chatTitle: "Check the jump host",
-    alt: "The agent ran git status, opened ssh to a jump host that now waits for input, and runs the tests live in a terminal inside the chat",
+    alt: "The agent opened ssh to a jump host that now waits for input, and runs the tests live in a terminal inside the chat",
     messages: [
       { type: "state", state: state({ busy: true, title: "Check the jump host" }) },
       {
@@ -208,28 +208,6 @@ const scenes = {
         text: "Check the gcloud account on the jump host, then run the tests.",
         checkpointId: "c1",
         at: now - 40000,
-      },
-      {
-        type: "tool",
-        id: "t0",
-        name: "run_command",
-        summary: "run_command git status --short",
-        status: "running",
-        command: "git status --short",
-        at: now - 38000,
-      },
-      { type: "toolOutput", id: "t0", text: "", where: "terminal" },
-      { type: "toolOutput", id: "t0", text: " M src/login.ts\r\n" },
-      {
-        type: "tool",
-        id: "t0",
-        name: "run_command",
-        summary: "run_command git status --short",
-        status: "done",
-        command: "git status --short",
-        where: "terminal",
-        detail: "$ git status --short\n[exit code 0]\n M src/login.ts",
-        at: now - 37600,
       },
       {
         type: "tool",

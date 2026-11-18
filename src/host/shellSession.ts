@@ -103,6 +103,12 @@ export class ShellSession implements vscode.Disposable {
   private listeners = new Set<(piece: { text?: string; mark?: ShellMark }) => void>();
   private revealed = false;
   private readonly disposables: vscode.Disposable[] = [this.writer, this.closer];
+  /**
+   * A program that the agent left running (ssh, a server, a prompt) keeps showing in its view in the chat,
+   * like the terminal of the Copilot agent: everything that happens in the terminal goes there, until the
+   * program ends or the next command starts.
+   */
+  private tail: ((text: string) => void) | undefined;
   /** After Ctrl+C the shell prints a prompt later; the next command waits for it, so it does not take it as its own. */
   private settling: Promise<void> | undefined;
   /** The folder of the shell, from its last prompt. */
@@ -210,10 +216,13 @@ export class ShellSession implements vscode.Disposable {
     pty.onData((data) => {
       if (this.pty !== pty) return;
       for (const piece of this.parser.push(data)) {
-        if ("text" in piece) this.show(piece.text);
-        else if (piece.mark.kind === "prompt") {
+        if ("text" in piece) {
+          this.show(piece.text);
+          if (this.listeners.size === 0) this.tail?.(piece.text);
+        } else if (piece.mark.kind === "prompt") {
           this.busy = false;
           this.agentOwnsForeground = false;
+          this.tail = undefined;
           if (piece.mark.cwd) this.cwd = piece.mark.cwd;
         }
         for (const listener of this.listeners) listener(piece as { text?: string; mark?: ShellMark });
@@ -297,6 +306,8 @@ export class ShellSession implements vscode.Disposable {
       return { state: "busy", output: "", prompt: "" };
     }
     const insideProgram = this.busy;
+    // The next command has its own view; the previous one stops following the terminal.
+    this.tail = undefined;
     const echo = command.split("\n")[0]?.trim().slice(0, 40) ?? "";
     // Shells with marks say exactly where the output starts; elsewhere it starts after the echo of the command.
     const useStartMark = (launch.kind === "bash" || launch.kind === "zsh" || launch.kind === "fish") && !insideProgram;
@@ -318,6 +329,8 @@ export class ShellSession implements vscode.Disposable {
         clearTimeout(echoTimer);
         options.signal.removeEventListener("abort", onAbort);
         const output = result.output ?? plainTerminalText(raw).replace(/^\n+/, "").replace(/\s+$/, "");
+        // The program keeps running: its view in the chat keeps following the terminal.
+        if (result.state === "waiting" || result.state === "running") this.tail = options.onOutput;
         resolve({ ...result, output });
       };
 

@@ -283,13 +283,16 @@ export function renderCommandTerminal(
     const commandLine = el("code", "term-line");
     toggle.append(chevron, verb, commandLine);
     const actions = el("span", "term-actions");
-    head.append(toggle, actions);
+    head.append(toggle);
     const body = el("div", "term-body");
+    // Like the Copilot agent: the command at the top of the terminal box, with its buttons on the right.
+    const top = el("div", "term-top");
     const full = el("pre", "term-full");
+    top.append(full, actions);
     const screen = el("div", "term-screen");
     const hint = el("div", "term-hint", "Waiting for input. Type here or in the terminal.");
     hint.hidden = true;
-    body.append(full, screen, hint);
+    body.append(top, screen, hint);
     root.append(head, body);
     const created: CommandView = {
       root,
@@ -319,10 +322,8 @@ export function renderCommandTerminal(
   current.description = update.description;
   const firstLine = update.command.split("\n")[0] ?? "";
   current.commandLine.textContent = firstLine;
-  // A long or multi-line command shows in full under the line, with colors.
-  const long = update.command.includes("\n") || update.command.length > 70;
-  current.full.hidden = !long;
-  if (long && current.full.dataset.command !== update.command) {
+  // The command shows in full at the top of the box, with colors.
+  if (current.full.dataset.command !== update.command) {
     current.full.dataset.command = update.command;
     current.full.replaceChildren(highlightCommand(update.command));
   }
@@ -362,8 +363,6 @@ export function renderCommandTerminal(
     else if (/did not allow/.test(update.detail ?? "")) current.result = { label: "Denied", tone: "muted" };
     else current.result = { label: status ? status[0]?.toUpperCase() + status.slice(1) : "Ran", tone: "muted" };
     current.hint.hidden = status !== "waiting for input";
-    // A command that worked folds into its line; failures and waiting programs stay open.
-    if (current.result.tone === "ok") current.root.classList.add("collapsed");
     if (current.term && !current.live) {
       current.term.options.cursorBlink = false;
       current.term.options.disableStdin = true;
@@ -398,7 +397,8 @@ export function setCommandWhere(id: string, where: "terminal" | "background"): v
 /** Adds live output (with colors) to a running command. */
 export function appendCommandOutput(id: string, text: string): boolean {
   const view = views.get(id);
-  if (!view || view.finished !== undefined || !text) return false;
+  // A program that keeps running (ssh, a server) keeps showing what happens in the terminal.
+  if (!view || (view.finished !== undefined && !view.live) || !text) return false;
   if (!view.term && view.root.isConnected) createTerminal(view, id, view.post);
   view.lastOutput = Date.now();
   write(view, text);
