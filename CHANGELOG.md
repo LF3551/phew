@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-18
+
 ### Added
 
 - **A real terminal for the agent.** Each chat has a terminal in the panel with your own shell (bash, zsh, fish, PowerShell, or sh) and your startup files, and the agent types its commands into it. The session stays between commands: `cd`, variables, virtual environments, `ssh` into another machine, and REPLs carry over. You see every command live, in the panel and in a terminal inside the chat, and you can type at any time: answer a prompt, press Ctrl+C, or run your own command. Phew brings node-pty, prebuilt for Linux, macOS, and Windows on x64 and arm64, so it does not depend on the VS Code version.
@@ -158,7 +160,8 @@ The first public preview of Phew.
 - Phew Wrapped: a weekly or monthly card with bugs fixed, time saved, tasks, and the streak, which you can save as an image, and eight local achievements.
 - A getting started walkthrough and a settings page.
 
-[Unreleased]: https://github.com/LF3551/phew/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/LF3551/phew/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/LF3551/phew/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/LF3551/phew/compare/v0.1.4...v0.2.0
 [0.1.4]: https://github.com/LF3551/phew/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/LF3551/phew/releases/tag/v0.1.3
