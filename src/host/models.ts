@@ -135,14 +135,18 @@ export class ModelManager {
           modelHint: preset.modelHint,
         };
         if (preset.provider === "vscode")
-          return { ...status, available: vscodeModels.length > 0, note: `${vscodeModels.length} models` };
+          return {
+            ...status,
+            available: vscodeModels.length > 0,
+            note: `${vscodeModels.length} ${vscodeModels.length === 1 ? "model" : "models"}`,
+          };
         if (preset.id === "copilot-token") return { ...status, piKey: (await piCopilotToken()) !== undefined };
         if (preset.group === "Local") {
           const count = await local(preset.baseUrl);
           return {
             ...status,
             available: count !== undefined,
-            note: count === undefined ? "Not running" : `Running · ${count} models`,
+            note: count === undefined ? "Not running" : `Running · ${count} ${count === 1 ? "model" : "models"}`,
           };
         }
         return status;

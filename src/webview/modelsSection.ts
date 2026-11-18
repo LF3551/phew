@@ -1,3 +1,4 @@
+import { iconNode, sectionHeader } from "./settingsParts";
 /** The Models section of the settings page: connected models and a guided form to connect a new one. */
 
 export interface ProviderItem {
@@ -73,7 +74,8 @@ function el<K extends keyof HTMLElementTagNameMap>(
 function button(
   label: string,
   onClick: () => void,
-  kind: "primary" | "secondary" | "link" = "secondary",
+  /** "primary", "secondary", "link", or "ghost", with "small", "icon-only", or "danger". */
+  kind = "secondary",
 ): HTMLButtonElement {
   const node = el("button", kind, label);
   node.type = "button";
@@ -197,7 +199,7 @@ export class ModelsSection {
   render(): void {
     const focused = document.activeElement instanceof HTMLElement ? document.activeElement.dataset.focusKey : undefined;
     this.root.replaceChildren();
-    this.root.append(el("h2", undefined, "Models"));
+    this.root.append(sectionHeader("Models"));
     this.root.append(
       el(
         "p",
@@ -218,42 +220,74 @@ export class ModelsSection {
   }
 
   private modelCard(model: ModelItem): HTMLElement {
+    // One clear row: the provider, the name, the facts, and the actions by weight; the rest is behind ⋯.
     const card = el("div", `model-card${model.active ? " active" : ""}`);
     const header = el("div", "model-header");
+    const style = providerStyle(model.provider);
+    const badge = el("span", "provider-badge", style.badge);
+    badge.style.setProperty("--provider-color", style.color);
+    badge.title = model.provider;
     const title = el("div", "model-title");
-    title.append(el("strong", undefined, model.name));
-    if (model.active) title.append(el("span", "badge ok", "In use"));
-    header.append(title);
-    const actions = el("div", "actions");
-    if (!model.active) actions.append(button("Use", () => this.post({ type: "useModel", id: model.id }), "primary"));
-    actions.append(
-      button("Test", () => {
-        this.tests.set(model.id, "running");
-        this.render();
-        this.post({ type: "testModel", id: model.id });
-      }),
-      button(this.open.has(`key:${model.id}`) ? "Cancel" : model.needsKey ? "Change key" : "Rename", () => {
-        this.toggle(model.needsKey ? `key:${model.id}` : `more:${model.id}`);
-      }),
-      button(this.open.has(`more:${model.id}`) ? "Less" : "More", () => this.toggle(`more:${model.id}`)),
-      button("Remove", () => this.post({ type: "removeModel", id: model.id }), "link"),
-    );
-    header.append(actions);
-    card.append(header);
-
+    const suffix = ` · ${model.model}`;
+    const name =
+      model.name.endsWith(suffix) && model.name.length > suffix.length
+        ? model.name.slice(0, -suffix.length)
+        : model.name;
+    const nameRow = el("div", "model-name-row");
+    nameRow.append(el("strong", "model-name", name));
+    if (model.active) nameRow.append(el("span", "tag accent", "In use"));
     const facts = el("div", "facts");
-    facts.append(el("span", undefined, `${model.provider} · ${model.model}`));
-    if (model.contextWindow) facts.append(el("span", undefined, `${formatTokens(model.contextWindow)} context`));
+    const parts = [model.model, model.provider];
+    if (model.contextWindow) parts.push(`${formatTokens(model.contextWindow)} context`);
+    facts.append(el("span", undefined, parts.join(" · ")));
     if (model.needsKey) {
       facts.append(
         model.key === "saved"
-          ? el("span", "badge ok", "🔑 Key saved")
+          ? el("span", "tag ok", "Key saved")
           : model.key === "env"
-            ? el("span", "badge ok", `🔑 Key from $${model.keyEnv}`)
-            : el("span", "badge error", "⚠ No API key"),
+            ? el("span", "tag ok", `Key from $${model.keyEnv}`)
+            : el("span", "tag error", "No API key"),
       );
     }
-    card.append(facts);
+    title.append(nameRow, facts);
+    header.append(badge, title);
+    const actions = el("div", "model-actions");
+    if (!model.active)
+      actions.append(button("Use", () => this.post({ type: "useModel", id: model.id }), "primary small"));
+    actions.append(
+      button(
+        "Test",
+        () => {
+          this.tests.set(model.id, "running");
+          this.render();
+          this.post({ type: "testModel", id: model.id });
+        },
+        "ghost small",
+      ),
+    );
+    if (model.needsKey)
+      actions.append(
+        button(
+          this.open.has(`key:${model.id}`) ? "Cancel" : "Key",
+          () => this.toggle(`key:${model.id}`),
+          "ghost small",
+        ),
+      );
+    const more = button(
+      "",
+      () => this.toggle(`more:${model.id}`),
+      `ghost small icon-only${this.open.has(`more:${model.id}`) ? " pressed" : ""}`,
+    );
+    more.title = "Rename, settings, and more";
+    more.setAttribute("aria-label", `More for ${name}`);
+    more.append(iconNode("more"));
+    const remove = button("", () => this.post({ type: "removeModel", id: model.id }), "ghost small icon-only danger");
+    remove.title = "Remove this model";
+    remove.setAttribute("aria-label", `Remove ${name}`);
+    remove.append(iconNode("trash"));
+    actions.append(more, remove);
+    header.append(actions);
+    card.append(header);
     card.append(testLine(this.tests.get(model.id)));
 
     if (this.open.has(`key:${model.id}`)) {
@@ -378,11 +412,11 @@ export class ModelsSection {
         const card = el("button", `provider${this.selected?.id === provider.id ? " selected" : ""}`);
         card.type = "button";
         const badges = el("div", "badges");
-        if (!provider.needsKey && provider.group !== "Local") badges.append(el("span", "badge ok", "No key"));
-        if (provider.envFound) badges.append(el("span", "badge ok", `Key found: $${provider.keyEnv}`));
-        else if (provider.piKey) badges.append(el("span", "badge ok", "Token found in Pi"));
-        else if (provider.needsKey) badges.append(el("span", "badge muted", "🔑 API key"));
-        if (provider.note) badges.append(el("span", `badge ${provider.available ? "ok" : "muted"}`, provider.note));
+        if (!provider.needsKey && provider.group !== "Local") badges.append(el("span", "tag ok", "No key"));
+        if (provider.envFound) badges.append(el("span", "tag ok", `Key found: $${provider.keyEnv}`));
+        else if (provider.piKey) badges.append(el("span", "tag ok", "Token found in Pi"));
+        else if (provider.needsKey) badges.append(el("span", "tag", "API key"));
+        if (provider.note) badges.append(el("span", `tag ${provider.available ? "ok" : ""}`, provider.note));
         card.append(
           el("strong", undefined, provider.label),
           el("span", "provider-description", provider.description),
@@ -651,4 +685,13 @@ export class ModelsSection {
     else this.open.add(key);
     this.render();
   }
+}
+
+/** The badge of a provider, by its display name: the same letters and colors as the model menu of the chat. */
+function providerStyle(provider: string): { badge: string; color: string } {
+  const name = provider.toLowerCase();
+  if (name.includes("anthropic")) return { badge: "A", color: "#d97757" };
+  if (name.includes("gemini") || name.includes("google")) return { badge: "G", color: "#4285f4" };
+  if (name.includes("vs code")) return { badge: "VS", color: "#3794ff" };
+  return { badge: "O", color: "#10a37f" };
 }

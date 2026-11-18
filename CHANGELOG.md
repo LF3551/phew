@@ -22,6 +22,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- A new look for **Phew: Open Settings**: a menu in groups with icons that marks the section in view, a title and a short line for each section, settings in two columns with the control on the right, switches instead of check boxes, readable names for choices, and quiet tags. Models show as one row each, with the provider, the name, the facts, and the actions by weight; providers show as tiles.
 - **Fewer questions about commands.** The default **Smart** mode runs commands that only read (`ls`, `pwd`, `cat`, `grep`, `find` without `-delete` or `-exec`, `git status`, `git log`, `git diff`, `--version`, and more) without asking, also in pipes and chains such as `find . 2>/dev/null | wc -l`; each part of a chain is checked, quotes are respected, and writes into `/tmp` are fine. **All** (before: Safe) runs every command except dangerous ones. A request has **Always allow `npm test`**, which adds the command to your allowlist. Each command says why it ran without asking, for example "auto: only reads". A short answer to a question of a running program, such as `y`, needs no new approval. Dangerous commands still always ask.
 - Huge output stays fast: the model gets the start and the end with the number of lines left out, the chat skips lines that come faster than it can show and says so, and the terminal keeps everything.
 - A long command is no longer stopped after the time limit: it keeps running, and the agent waits for it or stops it.

@@ -86,7 +86,7 @@ export class SettingsPanel implements vscode.Disposable {
 <meta http-equiv="Content-Security-Policy" content="${escapeHtml(csp)}">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="stylesheet" href="${escapeHtml(panel.webview.asWebviewUri(vscode.Uri.joinPath(media, "settings.css")).toString())}">
-<title>Phew Settings</title></head><body><div id="app" data-focus="${escapeHtml(focus ?? "")}"></div>
+<title>Phew Settings</title></head><body data-icon="${escapeHtml(panel.webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, "resources", "icon.png")).toString())}"><div id="app" data-focus="${escapeHtml(focus ?? "")}"></div>
 <script nonce="${nonce}" src="${escapeHtml(panel.webview.asWebviewUri(vscode.Uri.joinPath(dist, "settings.js")).toString())}"></script>
 </body></html>`;
     panel.webview.onDidReceiveMessage((message: unknown) => void this.handle(message));

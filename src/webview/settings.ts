@@ -1,5 +1,6 @@
 import { renderMarkdown } from "./markdown";
 import { type ModelItem, ModelsSection } from "./modelsSection";
+import { groupOrder, iconNode, sectionHeader, sectionInfo } from "./settingsParts";
 
 interface VsCodeApi {
   postMessage(message: unknown): void;
@@ -64,13 +65,30 @@ function slug(title: string): string {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 }
 
+/** Settings that the page shows in its own way, not as a raw row. */
+const managedElsewhere = new Set(["phew.models", "phew.activeModel"]);
+
+/** Readable names for the values of a choice; other values are capitalized. */
+const optionLabels: Record<string, Record<string, string>> = {
+  "phew.review.mode": { editor: "Review in the editor", chat: "Ask before each edit", none: "Apply without review" },
+  "phew.commands.approval": { ask: "Ask for every command", allowlist: "Smart", safe: "All except dangerous" },
+  "phew.commands.terminal": { open: "Open with the first command", background: "Open on request", off: "Off" },
+};
+
+function optionLabel(key: string, option: unknown): string {
+  const text = String(option);
+  const known = optionLabels[key]?.[text];
+  if (known) return known;
+  return text.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, (first) => first.toUpperCase());
+}
+
 function control(key: string, property: Property, value: unknown): HTMLElement {
   const types = Array.isArray(property.type) ? property.type : [property.type ?? "string"];
   const set = (next: unknown) => vscode.postMessage({ type: "set", key, value: next });
   if (property.enum) {
     const select = el("select");
     property.enum.forEach((option, index) => {
-      const item = el("option", undefined, String(option));
+      const item = el("option", undefined, optionLabel(key, option));
       item.value = String(option);
       if (property.enumDescriptions?.[index]) item.title = property.enumDescriptions[index];
       item.selected = option === value;
@@ -80,8 +98,9 @@ function control(key: string, property: Property, value: unknown): HTMLElement {
     const wrap = el("div", "enum");
     wrap.append(select);
     const index = property.enum.indexOf(value);
+    // "#phew.commands.autoApprove#" is a link in the VS Code settings; here it reads as the name of the setting.
     if (index >= 0 && property.enumDescriptions?.[index])
-      wrap.append(el("div", "hint", property.enumDescriptions[index]));
+      wrap.append(el("div", "hint", property.enumDescriptions[index].replace(/#(phew\.[\w.]+)#/g, "$1")));
     return wrap;
   }
   if (types.includes("boolean")) {
@@ -176,7 +195,10 @@ function settingRow(key: string, property: Property, data: Init): HTMLElement {
     .split(".")
     .map((part) => part.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase()))
     .join(": ");
-  header.append(el("span", "name", name));
+  const label = el("span", "name", name);
+  // The key of the setting, for settings.json, shows on hover instead of taking a line.
+  label.title = key;
+  header.append(label);
   if (data.modified.includes(key)) {
     header.append(el("span", "badge", "Modified"));
     const reset = el("button", "link", "Reset");
@@ -184,12 +206,16 @@ function settingRow(key: string, property: Property, data: Init): HTMLElement {
     reset.addEventListener("click", () => vscode.postMessage({ type: "reset", key }));
     header.append(reset);
   }
-  row.append(
-    header,
-    description(property.markdownDescription ?? property.description),
-    control(key, property, data.values[key]),
-  );
-  row.append(el("div", "key", key));
+  // Two columns: what the setting does on the left, its control on the right; long controls take the full row.
+  const info = el("div", "setting-info");
+  info.append(header, description(property.markdownDescription ?? property.description));
+  const input = control(key, property, data.values[key]);
+  const wide =
+    input.tagName === "TEXTAREA" || input.querySelector?.("textarea") !== null || input.classList.contains("color-row");
+  row.classList.toggle("wide", wide);
+  const side = el("div", "setting-control");
+  side.append(input);
+  row.append(info, side);
   return row;
 }
 
@@ -197,20 +223,30 @@ function render(data: Init): void {
   const focus = app.dataset.focus;
   app.replaceChildren();
   const top = el("header", "top");
-  const title = el("h1", undefined, "Phew Settings");
+  const title = el("div", "brand");
+  const logo = el("img", "brand-logo");
+  logo.src = document.body.dataset.icon ?? "";
+  logo.alt = "";
+  title.append(logo, el("h1", undefined, "Settings"));
+  const searchBox = el("label", "search-box");
+  searchBox.append(iconNode("search"));
   const search = el("input", "search");
   search.type = "search";
   search.placeholder = "Search settings";
+  search.setAttribute("aria-label", "Search settings");
+  searchBox.append(search);
   search.value = filter;
   search.addEventListener("input", () => {
     filter = search.value.toLowerCase();
     applyFilter();
   });
-  top.append(
-    title,
-    search,
-    button("Open settings.json", () => vscode.postMessage({ type: "openJson" })),
-  );
+  const json = el("button", "icon-button");
+  json.type = "button";
+  json.title = "Open settings.json";
+  json.setAttribute("aria-label", "Open settings.json");
+  json.append(iconNode("file"), el("span", undefined, "settings.json"));
+  json.addEventListener("click", () => vscode.postMessage({ type: "openJson" }));
+  top.append(title, searchBox, json);
   app.append(top);
 
   const nav = el("nav");
@@ -221,10 +257,10 @@ function render(data: Init): void {
   sections.push(["Models", modelsSection.root]);
 
   for (const category of data.categories) {
-    if (Object.keys(category.properties).length === 0) continue;
+    if (Object.keys(category.properties).filter((key) => !managedElsewhere.has(key)).length === 0) continue;
     const section = el("section", "card");
     section.id = slug(category.title);
-    section.append(el("h2", undefined, category.title));
+    section.append(sectionHeader(category.title));
     if (category.title === "Commits") {
       const identity = el("div", "identity");
       identity.append(el("strong", undefined, "How commits look now"), el("p", undefined, data.identity));
@@ -250,13 +286,17 @@ function render(data: Init): void {
       );
       section.append(memory);
     }
-    for (const [key, property] of Object.entries(category.properties)) section.append(settingRow(key, property, data));
+    for (const [key, property] of Object.entries(category.properties)) {
+      // The Models section above manages these two; settings.json still has them.
+      if (managedElsewhere.has(key)) continue;
+      section.append(settingRow(key, property, data));
+    }
     sections.push([category.title, section]);
   }
 
   const statistics = el("section", "card");
   statistics.id = "statistics";
-  statistics.append(el("h2", undefined, "Statistics"), el("pre", "stats", data.stats));
+  statistics.append(sectionHeader("Statistics"), el("pre", "stats", data.stats));
   statistics.append(
     button("Open Phew Wrapped", () => vscode.postMessage({ type: "command", command: "phew.showWrapped" })),
     button("Open the getting started guide", () =>
@@ -265,16 +305,41 @@ function render(data: Init): void {
   );
   sections.push(["Statistics", statistics]);
 
-  for (const [name, section] of sections) {
-    const link = el("a", undefined, name);
-    link.href = `#${section.id}`;
-    link.addEventListener("click", (event) => {
-      event.preventDefault();
-      section.scrollIntoView({ behavior: "smooth" });
-    });
-    nav.append(link);
-    main.append(section);
+  // The menu groups the sections, with an icon for each, and marks the section in view.
+  const links = new Map<string, HTMLAnchorElement>();
+  const byGroup = new Map<string, [string, HTMLElement][]>();
+  for (const entry of sections) {
+    const group = sectionInfo(entry[0]).group;
+    byGroup.set(group, [...(byGroup.get(group) ?? []), entry]);
   }
+  for (const group of [...groupOrder, ...[...byGroup.keys()].filter((name) => !groupOrder.includes(name))]) {
+    const entries = byGroup.get(group);
+    if (!entries) continue;
+    nav.append(el("div", "nav-group", group));
+    for (const [name, section] of entries) {
+      const link = el("a");
+      link.href = `#${section.id}`;
+      link.append(iconNode(sectionInfo(name).icon), el("span", undefined, name));
+      link.addEventListener("click", (event) => {
+        event.preventDefault();
+        section.scrollIntoView({ behavior: "smooth" });
+      });
+      links.set(section.id, link);
+      nav.append(link);
+    }
+  }
+  for (const [, section] of sections) main.append(section);
+  const observer = new IntersectionObserver(
+    (entries) => {
+      const visible = entries
+        .filter((entry) => entry.isIntersecting)
+        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+      if (!visible) return;
+      for (const [id, link] of links) link.classList.toggle("active", id === visible.target.id);
+    },
+    { rootMargin: "-80px 0px -60% 0px" },
+  );
+  for (const [, section] of sections) observer.observe(section);
   const layout = el("div", "layout");
   layout.append(nav, main);
   app.append(layout);
