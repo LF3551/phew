@@ -5,6 +5,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Changed
+
+- A new look for **Phew: Open Settings**: a menu in groups with icons that marks the section in view, a title and a short line for each section, settings in two columns with the control on the right, switches instead of check boxes, readable names for choices, and quiet tags. Models show as one row each, with the provider, the name, the facts, and the actions by weight; providers show as tiles.
+
+### Fixed
+
+- The menu of the settings marks the section that you clicked or scrolled to, also the last one, and long names no longer spill out of their row.
+
 ## [0.3.0] - 2026-11-18
 
 ### Added
@@ -22,7 +30,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
-- A new look for **Phew: Open Settings**: a menu in groups with icons that marks the section in view, a title and a short line for each section, settings in two columns with the control on the right, switches instead of check boxes, readable names for choices, and quiet tags. Models show as one row each, with the provider, the name, the facts, and the actions by weight; providers show as tiles.
 - **Fewer questions about commands.** The default **Smart** mode runs commands that only read (`ls`, `pwd`, `cat`, `grep`, `find` without `-delete` or `-exec`, `git status`, `git log`, `git diff`, `--version`, and more) without asking, also in pipes and chains such as `find . 2>/dev/null | wc -l`; each part of a chain is checked, quotes are respected, and writes into `/tmp` are fine. **All** (before: Safe) runs every command except dangerous ones. A request has **Always allow `npm test`**, which adds the command to your allowlist. Each command says why it ran without asking, for example "auto: only reads". A short answer to a question of a running program, such as `y`, needs no new approval. Dangerous commands still always ask.
 - Huge output stays fast: the model gets the start and the end with the number of lines left out, the chat skips lines that come faster than it can show and says so, and the terminal keeps everything.
 - A long command is no longer stopped after the time limit: it keeps running, and the agent waits for it or stops it.
@@ -31,7 +38,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
-- The menu of the settings marks the section that you clicked or scrolled to, also the last one, and long names no longer spill out of their row.
 - Test runners and bundlers in watch mode no longer hang a task: the terminal of the agent sets `CI=1`, and a watcher that still starts keeps running in its own terminal.
 - Prompt themes such as powerlevel10k with its instant prompt no longer break the end of a command.
 - A quiet line such as `Installing dependencies:` no longer looks like a question.
