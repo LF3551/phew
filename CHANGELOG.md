@@ -11,6 +11,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Test runners and bundlers in watch mode no longer hang a task: the terminal of the agent sets `CI=1`, and a watcher that still starts is noticed and keeps running in its own terminal.
+- A long command is no longer stopped after the time limit: it keeps running, and the agent waits for it with `read_terminal` or stops it.
+- **Stop** ends a program that ignores Ctrl+C: its processes end three seconds later.
+- A quiet line such as `Installing dependencies:` no longer looks like a question; a program waits for input only when the cursor stays on its line.
+- A short answer to a question of a running program, such as `y` for `Continue? [y/N]`, needs no new approval. Commands inside ssh still follow the rules.
+- File paths in the output of a command open in the editor at their line and column (`src/login.ts:42:7`, `src/a.ts(12,5)`), relative to the folder of the terminal; web addresses open in the browser.
+- **Find in output** (Ctrl+F) and **Run again** for each command.
+- After VS Code reloads, the agent learns that its shell is new and that the folder and the variables of earlier commands are gone.
+
 - Commands in the chat look like Phew. The mascot of your assistant reads along while a command runs, sweats while it waits for you, sighs with relief, or worries. The header says what the command does in plain words, with a short result: the time, the lines, and the errors. A failed command has **Phew it!**, which starts a task that finds the cause and fixes it. A thin line beats with the output, so a silent command looks silent. A program that waits for input gets **Your turn**: an answer field, with a lock that hides a password. The terminals of Phew in the panel have the Phew drop as their icon and the cyan of its logo.
 
 - The agent reads and waits for terminals that keep running (`read_terminal`): the new log of a server or a watcher since the last read, and waiting until it says, for example, "listening on". A command without a terminal never goes into a terminal that hosts a server.

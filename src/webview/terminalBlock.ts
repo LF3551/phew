@@ -1,7 +1,8 @@
 import { FitAddon } from "@xterm/addon-fit";
+import { SearchAddon } from "@xterm/addon-search";
 import { type ITheme, Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
-import { countErrors, parseCommandResult } from "../core/commandResult";
+import { countErrors, findLinks, parseCommandResult, parseFileLink } from "../core/commandResult";
 import { type AvatarLook, lookOf } from "../core/persona";
 import { icon } from "../shared/icons";
 import type { WebviewMessage } from "../shared/protocol";
@@ -52,6 +53,9 @@ interface CommandView {
   readonly hint: HTMLElement;
   term?: Terminal;
   fit?: FitAddon;
+  search?: SearchAddon;
+  /** The search field, shown with Ctrl+F or the search button. */
+  searchBox?: HTMLInputElement;
   /** The output without colors, for Copy and for a terminal that turned into text. */
   text: string;
   where?: "terminal" | "background";
@@ -231,7 +235,31 @@ function createTerminal(view: CommandView, id: string, post: (message: WebviewMe
   });
   const fit = new FitAddon();
   term.loadAddon(fit);
+  const search = new SearchAddon();
+  term.loadAddon(search);
+  view.search = search;
   term.open(view.screen);
+  // Ctrl+F (Cmd+F) searches the output of this command.
+  term.attachCustomKeyEventHandler((event) => {
+    if (event.type === "keydown" && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
+      openSearch(view);
+      return false;
+    }
+    return true;
+  });
+  // Paths such as src/login.ts:42:7 open the file at that line; addresses open in the browser.
+  term.registerLinkProvider({
+    provideLinks(line, callback) {
+      const text = term.buffer.active.getLine(line - 1)?.translateToString(true) ?? "";
+      const links = findLinks(text).map((link) => ({
+        range: { start: { x: link.start + 1, y: line }, end: { x: link.start + link.text.length, y: line } },
+        text: link.text,
+        decorations: { underline: true, pointerCursor: true },
+        activate: () => openLink(view, link.text),
+      }));
+      callback(links.length > 0 ? links : undefined);
+    },
+  });
   // Typing goes to the running command.
   term.onData((data) => {
     if (view.finished === undefined || view.live) post({ type: "commandInput", id, data });
@@ -246,6 +274,62 @@ function createTerminal(view: CommandView, id: string, post: (message: WebviewMe
     const old = oldId ? views.get(oldId) : undefined;
     if (old?.term && old.finished !== undefined) toText(old);
   }
+}
+
+/** The search field of a command: Enter finds the next match, Shift+Enter the previous one, Esc closes it. */
+function openSearch(view: CommandView): void {
+  view.root.classList.remove("collapsed");
+  if (!view.searchBox) {
+    const box = el("input", "term-search");
+    box.type = "search";
+    box.placeholder = "Find in output";
+    box.setAttribute("aria-label", "Find in the output of this command");
+    const find = (backwards: boolean) => {
+      if (!box.value || !view.search) return;
+      const found = backwards ? view.search.findPrevious(box.value) : view.search.findNext(box.value);
+      box.classList.toggle("missing", !found);
+    };
+    box.addEventListener("input", () => find(false));
+    box.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        find(event.shiftKey);
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        box.hidden = true;
+        view.term?.clearSelection();
+        view.term?.focus();
+      }
+    });
+    view.meta.before(box);
+    view.searchBox = box;
+  }
+  view.searchBox.hidden = false;
+  view.searchBox.focus();
+  view.searchBox.select();
+}
+
+/** Opens a link from the output: an address in the browser, a path in the editor at its line and column. */
+function openLink(view: CommandView, text: string): void {
+  if (/^https?:\/\//i.test(text)) {
+    // The webview opens a clicked link outside, after VS Code asks the user.
+    const anchor = document.createElement("a");
+    anchor.href = text;
+    anchor.target = "_blank";
+    anchor.rel = "noopener";
+    anchor.click();
+    return;
+  }
+  const target = parseFileLink(text);
+  if (!target) return;
+  view.post({
+    type: "openFile",
+    path: target.path,
+    ...(target.line ? { line: target.line } : {}),
+    ...(target.column ? { column: target.column } : {}),
+    terminal: view.meta.dataset.terminal ?? "1",
+  });
 }
 
 function toText(view: CommandView): void {
@@ -304,6 +388,10 @@ function renderActions(view: CommandView, id: string, command: string, post: (me
   };
   if (!view.result) action("stop", "Stop (Ctrl+C)", () => post({ type: "stopCommand", id }));
   if (view.where === "terminal") action("terminal", "Show in the terminal", () => post({ type: "showTerminal" }));
+  if (view.term) action("search", "Find in the output (Ctrl+F)", () => openSearch(view));
+  // Run it again in a terminal where nothing runs; the new run shows as a new command.
+  if (view.result && !view.live && view.where === "terminal")
+    action("restore", "Run again", () => post({ type: "rerunCommand", id }));
   action(
     "copy",
     "Copy the command and its output",
@@ -464,7 +552,11 @@ export function renderCommandTerminal(
       if (!current.term) current.text = parsed.output;
     }
     const status = parsed.status ?? "";
-    current.live = status === "waiting for input" || status === "running in the background";
+    current.live =
+      status === "waiting for input" ||
+      status === "running in the background" ||
+      status === "running in watch mode" ||
+      status.startsWith("still running");
     if (update.status === "error" && !status)
       current.result = { label: (update.detail ?? "Failed").replace(/^Error:\s*/, "").slice(0, 80), tone: "error" };
     else if (parsed.exitCode === 0) current.result = { label: "Ran", tone: "ok" };
@@ -473,6 +565,8 @@ export function renderCommandTerminal(
     else if (status === "waiting for input") current.result = { label: "Waiting for input", tone: "waiting" };
     else if (status === "running in the background")
       current.result = { label: "Running in the background", tone: "waiting" };
+    else if (status === "running in watch mode") current.result = { label: "Watching for changes", tone: "waiting" };
+    else if (status.startsWith("still running")) current.result = { label: "Still running", tone: "waiting" };
     else if (status === "cancelled") current.result = { label: "Stopped", tone: "muted" };
     else if (status.startsWith("timed out")) current.result = { label: "Timed out", tone: "error" };
     else if (/did not allow/.test(update.detail ?? "")) current.result = { label: "Denied", tone: "muted" };

@@ -231,15 +231,18 @@ class ChatController implements ChatViewHandle {
         return;
       }
       case "openFile": {
-        const absolute = session?.roots.resolve(message.path);
+        // A path from a terminal is relative to the folder of that terminal, and may be outside the workspace.
+        const fromTerminal = message.terminal ? session?.terminalFile(message.terminal, message.path) : undefined;
+        const absolute = fromTerminal ?? session?.roots.resolve(message.path);
         if (!absolute) {
           this.post({ type: "notice", level: "warning", text: `${message.path} is outside the workspace.` });
           return;
         }
         const line = Math.max(0, (message.line ?? 1) - 1);
+        const column = Math.max(0, (message.column ?? 1) - 1);
         try {
           await vscode.window.showTextDocument(vscode.Uri.file(absolute), {
-            selection: new vscode.Range(line, 0, line, 0),
+            selection: new vscode.Range(line, column, line, column),
             preview: true,
             viewColumn: this.pinnedId ? vscode.ViewColumn.One : undefined,
           });
@@ -304,6 +307,9 @@ class ChatController implements ChatViewHandle {
         return;
       case "fixCommand":
         await session?.fixCommand(message.id);
+        return;
+      case "rerunCommand":
+        await session?.rerunCommand(message.id);
         return;
       case "showTerminal":
         session?.showTerminal();

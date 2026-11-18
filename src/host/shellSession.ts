@@ -59,6 +59,8 @@ export type ShellState = "done" | "waiting" | "running" | "timeout" | "stopped" 
 
 export interface ShellResult {
   readonly state: ShellState;
+  /** A test runner or bundler that watches files and keeps running. */
+  readonly watch?: boolean;
   /** The output without the echo of the command and without escape codes. */
   readonly output: string;
   /** Known when the shell printed its prompt after the command. */
@@ -131,6 +133,15 @@ export class ShellSession implements vscode.Disposable {
   loadStartupFiles: () => boolean = () => true;
   /** The number of the terminal in its chat, for PHEW_TERMINAL. */
   terminalId = "1";
+  /** The question of a program that waits for an answer, for example "Continue? [y/N]". */
+  private waitingPrompt: string | undefined;
+
+  /** The question when a program waits for an answer (not a shell prompt of ssh), for the approval rules. */
+  get pendingQuestion(): string | undefined {
+    if (!this.busy || !this.agentOwnsForeground || this.backgroundJob || !this.waitingPrompt) return undefined;
+    return this.waitingPrompt;
+  }
+
   /** A server or watcher that the agent started in the background runs here; other commands go elsewhere. */
   get hostsBackgroundJob(): boolean {
     return this.backgroundJob && this.busy;
@@ -366,6 +377,8 @@ export class ShellSession implements vscode.Disposable {
         ...launch.env,
         COLORTERM: "truecolor",
         PHEW_AGENT: "1",
+        // Test runners such as Vitest and Jest start a watch mode in a terminal unless CI is set.
+        CI: process.env.CI ?? "1",
         PHEW_TERMINAL: this.terminalId,
       },
     });
@@ -388,6 +401,7 @@ export class ShellSession implements vscode.Disposable {
           this.busy = false;
           this.agentOwnsForeground = false;
           this.backgroundJob = false;
+          this.waitingPrompt = undefined;
           this.tail = undefined;
           if (piece.mark.cwd) this.cwd = piece.mark.cwd;
           this.capturePrompt();
@@ -467,6 +481,28 @@ export class ShellSession implements vscode.Disposable {
     });
   }
 
+  /**
+   * Stops what runs in the terminal: Ctrl+C first; when the program ignores it, its processes get SIGTERM after
+   * three seconds and SIGKILL after that. The shell itself stays.
+   */
+  stop(): void {
+    if (!this.pty || !this.busy) return;
+    const pid = this.pty.pid;
+    const pty = this.pty;
+    this.interrupt();
+    let ended = false;
+    const watcher = (piece: { text?: string; mark?: ShellMark }) => {
+      if (piece.mark?.kind === "prompt" || piece.text === "\u0000closed") ended = true;
+    };
+    this.watchers.add(watcher);
+    setTimeout(() => {
+      this.watchers.delete(watcher);
+      if (ended || this.pty !== pty || !this.busy) return;
+      this.show("\r\n\x1b[2m[Phew ended the processes that ignored Ctrl+C.]\x1b[0m\r\n");
+      killTree(pid);
+    }, 3000);
+  }
+
   /** Runs a command of the agent in the shell, or types it into the program that the agent started. */
   async run(command: string, options: RunOptions & { reveal: boolean }): Promise<ShellResult> {
     await this.start();
@@ -481,6 +517,7 @@ export class ShellSession implements vscode.Disposable {
     const insideProgram = this.busy;
     // The next command has its own view; the previous one stops following the terminal.
     this.tail = undefined;
+    this.waitingPrompt = undefined;
     this.unread = new OutputKeeper(4_000, 40_000);
     this.unreadPlainTail = "";
     const echo = command.split("\n")[0]?.trim().slice(0, 40) ?? "";
@@ -513,7 +550,8 @@ export class ShellSession implements vscode.Disposable {
         const output = result.output ?? plainTerminalText(kept.text()).replace(/^\n+/, "").replace(/\s+$/, "");
         // The program keeps running: its view in the chat keeps following the terminal.
         if (result.state === "waiting" || result.state === "running") this.tail = options.onOutput;
-        this.backgroundJob = result.state === "running" && options.background === true;
+        // A server, a watcher, or a long command that keeps running: other commands go to another terminal.
+        if (result.state === "running" && options.background) this.backgroundJob = true;
         this.onChange();
         resolve({ ...result, output });
       };
@@ -551,10 +589,19 @@ export class ShellSession implements vscode.Disposable {
               finish({ state: "done" });
               return;
             }
-            // A quiet program that shows a prompt or a question waits for input (ssh, a REPL, a password).
-            // A server in the background only reports "running".
-            if (!options.background && looksLikePrompt(text)) {
+            // A test runner or bundler in watch mode never ends: it keeps running like a server.
+            if (!options.background && isWatchMode(text)) {
               this.agentOwnsForeground = true;
+              this.backgroundJob = true;
+              finish({ state: "running", watch: true });
+              return;
+            }
+            // A quiet program that shows a prompt or a question waits for input (ssh, a REPL, a password).
+            // A real prompt leaves the cursor on its line; a quiet line that ends with a line break is still output.
+            // A server in the background only reports "running".
+            if (!options.background && !endsWithLineBreak(text) && looksLikePrompt(text)) {
+              this.agentOwnsForeground = true;
+              this.waitingPrompt = lastLine(text);
               finish({ state: "waiting", prompt: lastLine(text) });
             }
           },
@@ -583,9 +630,12 @@ export class ShellSession implements vscode.Disposable {
       };
       this.listeners.add(listener);
 
+      // A long command is not killed: after the time limit it keeps running like a server, and the agent
+      // can wait for it with read_terminal or stop it with interrupt.
       const timeout = setTimeout(() => {
         if (options.background) return;
-        this.interrupt();
+        this.agentOwnsForeground = true;
+        this.backgroundJob = true;
         finish({ state: "timeout" });
       }, options.timeoutMs);
       const backgroundTimer = options.background
@@ -610,8 +660,9 @@ export class ShellSession implements vscode.Disposable {
         },
         useStartMark ? 3000 : 1500,
       );
+      // Stop: Ctrl+C, then the processes that ignore it end.
       const onAbort = () => {
-        this.interrupt();
+        this.stop();
         finish({ state: "stopped" });
       };
       options.signal.addEventListener("abort", onAbort, { once: true });
@@ -702,4 +753,19 @@ export function killTree(pid: number): void {
   } catch {
     // ps or taskkill is missing; the shell still ends.
   }
+}
+
+/** Watch modes of test runners and bundlers: they never end on their own. */
+function isWatchMode(output: string): boolean {
+  const tail = plainTerminalText(output).slice(-600);
+  return /waiting for file changes|watching for (file )?changes|press h to show help|press q to quit|watch usage|watch mode|webpack compiled|ready in \d+ ?ms|local:\s+https?:\/\//i.test(
+    tail,
+  );
+}
+
+/** True when the output ends with a line break, ignoring escape sequences after it. */
+function endsWithLineBreak(output: string): boolean {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: escape sequences start with a control character.
+  const trimmed = output.replace(/(\u001b\[[0-9;?]*[ -/]*[@-~]|\u001b\][^\u0007]*\u0007)+$/, "");
+  return /\n$/.test(trimmed);
 }

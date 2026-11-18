@@ -476,13 +476,24 @@ export class ToolHost {
     const cwd = folder ? this.options.roots.resolve(folder) : (remembered ?? this.rootPath);
     if (!cwd) throw new Error(`The folder "${folder}" is outside the workspace.`);
     const { command, notes } = adjustAgentGitCommand(requested, this.options.settings.commit);
-    const decision = decideCommand(command, this.options.settings.commands);
+    // A short answer to a question of a program that already runs (for example "y" for "Continue? [y/N]")
+    // needs no new approval: the program was approved. Commands inside ssh still go through the rules.
+    const question = shellSession?.pendingQuestion;
+    const isAnswer =
+      question !== undefined &&
+      !interrupt &&
+      !/[$#%>❯]\s*$/.test(question) &&
+      !requested.includes("\n") &&
+      requested.length <= 40;
+    const decision = isAnswer ? ({ kind: "allow" } as const) : decideCommand(command, this.options.settings.commands);
     if (decision.kind === "deny") throw new Error(decision.reason);
     const isCommit = notes.length > 0 || /^\s*git\s+(-[Cc]\s+\S+\s+)*commit\b/.test(command);
     // Why it runs, for the chat: the rule that allowed it, or the decision of the user.
     let approval =
       decision.kind === "allow" && !isCommit
-        ? `Auto-approved: ${whyAllowed(command, this.options.settings.commands)}`
+        ? isAnswer
+          ? `Auto-approved: an answer to "${(question ?? "").slice(0, 60)}"`
+          : `Auto-approved: ${whyAllowed(command, this.options.settings.commands)}`
         : "";
     if (decision.kind === "ask" || isCommit) {
       // Dangerous commands always ask, so they get no "Always allow".
@@ -541,9 +552,14 @@ export class ToolHost {
             "The terminal of the chat runs a command that the user started. Wait for it, or ask the user.",
           );
         let note = "";
+        // A chat from an earlier window: its terminals ended with that window.
+        if (picked?.fresh && shells?.restoredChat && !shells.restoreNoted) {
+          shells.restoreNoted = true;
+          note += `\nThis is a new shell: the terminals of the earlier VS Code window ended, so the folder, the variables, and the programs of earlier commands are gone. It started in ${this.options.roots.display(cwd) || cwd}.`;
+        }
         if (outcome.cwd && this.options.shell && outcome.cwd !== this.options.shell.cwd) {
           this.options.shell.cwd = outcome.cwd;
-          note = `\nThe shell is now in ${this.options.roots.resolve(outcome.cwd) ? this.options.roots.display(outcome.cwd) : outcome.cwd}.`;
+          note += `\nThe shell is now in ${this.options.roots.resolve(outcome.cwd) ? this.options.roots.display(outcome.cwd) : outcome.cwd}.`;
         }
         const prefix = notes.length > 0 ? `${notes.join(" ")}\n` : "";
         // With several terminals the model learns which one ran the command and what the others do.

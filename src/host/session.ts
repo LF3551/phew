@@ -9,7 +9,7 @@ import { type ChatMessage, type ModelClient, type ToolCall, trimHistory, truncat
 import { buildTitleMessages, cleanTitle, firstExchange } from "../core/chatTitle";
 import { CheckpointStore } from "../core/checkpoints";
 import { decideCommand } from "../core/commandPolicy";
-import { parseCommandResult } from "../core/commandResult";
+import { describeShellResult, parseCommandResult } from "../core/commandResult";
 import {
   applyCompaction,
   buildCompactionMessages,
@@ -228,6 +228,7 @@ export class AgentSession {
       (path) => deps.claims.claim(this.id, path),
     );
     this.history = restored ? [...restored.history] : [];
+    this.restoredFromStore = (restored?.history.length ?? 0) > 0;
     this.modeId = restored?.mode ?? readSettings(root.uri).defaultMode;
     this.title = restored?.title ?? (worktree ? `Agent: ${worktree.branch}` : "New chat");
     if (restored) {
@@ -741,6 +742,8 @@ export class AgentSession {
   private readonly commandApprovals = new Map<string, string>();
 
   private shellRegistry: ShellRegistry | undefined;
+  /** The chat comes from an earlier window: its terminals ended, and the model should know that. */
+  private restoredFromStore = false;
   private shellWarned = false;
   /** The terminal where each command of the chat ran, for keys typed in its view. */
   private readonly commandTerminals = new Map<string, string>();
@@ -757,6 +760,7 @@ export class AgentSession {
         () => this.deps.onChange(this),
         () => readSettings().commandsStartupFiles,
       );
+      this.shellRegistry.restoredChat = this.restoredFromStore;
     }
     if (this.shellRegistry.available) return this.shellRegistry;
     if (!this.shellWarned) {
@@ -766,6 +770,18 @@ export class AgentSession {
       );
     }
     return undefined;
+  }
+
+  /** A file that the output of a terminal names: relative to the folder of the terminal; only existing files. */
+  terminalFile(terminal: string, file: string): string | undefined {
+    const folder = this.shellRegistry?.get(terminal)?.cwd ?? this.shell.cwd ?? this.root.uri.fsPath;
+    const expanded = file.startsWith("~/") ? path.join(os.homedir(), file.slice(2)) : file;
+    const absolute = path.isAbsolute(expanded) ? expanded : path.resolve(folder, expanded);
+    try {
+      return fs.statSync(absolute).isFile() ? absolute : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   /** The recent output of the terminals of the chat, for the attach menu. */
@@ -783,7 +799,7 @@ export class AgentSession {
     const registry = this.shellRegistry;
     if (!registry) return;
     if (action === "kill") registry.kill(id);
-    else if (action === "interrupt") registry.get(id)?.interrupt();
+    else if (action === "interrupt") registry.get(id)?.stop();
     else registry.get(id)?.reveal(false);
   }
 
@@ -864,6 +880,56 @@ export class AgentSession {
     });
   }
 
+  /** Runs a command of the chat again, at the request of the user, in a terminal where nothing runs. */
+  async rerunCommand(toolId: string): Promise<void> {
+    const tool = [...this.transcript.all()]
+      .reverse()
+      .find((item): item is Extract<HostMessage, { type: "tool" }> => item.type === "tool" && item.id === toolId);
+    const registry = this.agentShells();
+    if (!tool || !registry) return;
+    const command = tool.command ?? tool.summary.replace(/^run_command\s*/, "");
+    const picked = registry.pickIdle(this.commandTerminals.get(toolId));
+    if (!picked) return;
+    const id = `t_${++this.counter}_${Date.now().toString(36)}`;
+    const callId = `rerun_${id}`;
+    this.toolIdsByCall.set(callId, id);
+    this.callIdsByTool.set(id, callId);
+    this.commandTerminals.set(id, picked.id);
+    const base = {
+      type: "tool" as const,
+      id,
+      name: "run_command",
+      summary: `run_command ${command}`,
+      command,
+      ...(tool.description ? { description: tool.description } : {}),
+      where: "terminal" as const,
+      terminal: picked.id,
+      approval: "Started again by you",
+    };
+    this.emit({ ...base, status: "running" });
+    this.deps.emit(this, {
+      type: "toolOutput",
+      id,
+      text: "",
+      where: "terminal",
+      terminal: picked.id,
+      approval: "Started again by you",
+    });
+    const settings = readSettings();
+    const outcome = await picked.session.run(command, {
+      timeoutMs: settings.commandTimeoutSeconds * 1000,
+      signal: new AbortController().signal,
+      onOutput: (text) => this.bufferOutput(callId, text),
+      reveal: false,
+    });
+    this.flushOutput();
+    this.emit({
+      ...base,
+      status: "done",
+      detail: truncateMiddle(describeShellResult(command, outcome, settings.commandTimeoutSeconds), 30_000),
+    });
+  }
+
   /** Keys typed in the terminal of a command in the chat. */
   commandInput(toolId: string, data: string): void {
     // The real shell takes keys at any time, also for a program that keeps running after its tool call.
@@ -883,7 +949,7 @@ export class AgentSession {
     if (callId && this.activeTools?.stopCommand(callId)) return;
     // A program that keeps running after its tool call (waiting, in the background) stops with Ctrl+C.
     const terminal = this.commandTerminals.get(toolId);
-    ((terminal ? this.shellRegistry?.get(terminal) : undefined) ?? this.shellRegistry?.main)?.interrupt();
+    ((terminal ? this.shellRegistry?.get(terminal) : undefined) ?? this.shellRegistry?.main)?.stop();
   }
 
   private bufferOutput(callId: string, text: string): void {

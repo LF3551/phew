@@ -1,5 +1,11 @@
 import { expect, test } from "vitest";
-import { countErrors, describeShellResult, parseCommandResult } from "../src/core/commandResult";
+import {
+  countErrors,
+  describeShellResult,
+  findLinks,
+  parseCommandResult,
+  parseFileLink,
+} from "../src/core/commandResult";
 import { lastLine, looksLikePrompt, plainTerminalText, ShellMarkParser } from "../src/core/shellMarks";
 
 test("the parser finds marks between text, also when a mark arrives in two chunks", () => {
@@ -57,4 +63,18 @@ test("the model learns what to do with a program that waits", () => {
 test("a failed command counts the lines that report errors", () => {
   expect(countErrors("ok\nsrc/a.ts:3 error TS2304\nFAIL test/b\n✕ adds numbers\nTests: 1 failed, 2 passed")).toBe(3);
   expect(countErrors("Found 0 errors\nall good")).toBe(0);
+});
+
+test("terminal output links files with their line and column, and web addresses", () => {
+  const texts = (line: string) => findLinks(line).map((link) => link.text);
+  expect(texts("src/login.ts:42:7 - error TS2304: Cannot find name 'x'.")).toEqual(["src/login.ts:42:7"]);
+  expect(texts("  at handler (/app/src/server.js:12:5)")).toEqual(["/app/src/server.js:12:5"]);
+  expect(texts("src/a.ts(12,5): error")).toEqual(["src/a.ts(12,5)"]);
+  expect(texts('  File "./tools/run.py", line 3')).toEqual(["./tools/run.py"]);
+  expect(texts("Local: http://localhost:5173/ ready")).toEqual(["http://localhost:5173/"]);
+  expect(texts("vite v6.2.0 building for production, e.g. now")).toEqual([]);
+  expect(texts("edit README.md and package.json")).toEqual(["README.md", "package.json"]);
+  expect(parseFileLink("src/a.ts(12,5)")).toEqual({ path: "src/a.ts", line: 12, column: 5 });
+  expect(parseFileLink("src/login.ts:42:7")).toEqual({ path: "src/login.ts", line: 42, column: 7 });
+  expect(parseFileLink("README.md")).toEqual({ path: "README.md" });
 });

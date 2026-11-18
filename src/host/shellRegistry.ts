@@ -18,6 +18,10 @@ export interface TerminalInfo {
  */
 export class ShellRegistry implements vscode.Disposable {
   private readonly shells = new Map<string, ShellSessionType>();
+  /** The chat came from an earlier VS Code window, whose terminals ended with it. */
+  restoredChat = false;
+  /** The model has heard once that the shell is new. */
+  restoreNoted = false;
   private counter = 0;
 
   constructor(
@@ -38,7 +42,7 @@ export class ShellRegistry implements vscode.Disposable {
    * The terminal for a command: the given one, a new one for "new", or terminal 1.
    * Throws for an unknown name, with the list of terminals, so the model can choose again.
    */
-  pick(name: string | undefined): { id: string; session: ShellSessionType } | undefined {
+  pick(name: string | undefined): { id: string; session: ShellSessionType; fresh: boolean } | undefined {
     const pty = this.extensionPath ? loadPty(this.extensionPath) : undefined;
     if (!pty) return undefined;
     const wanted = name?.trim().replace(/^#/, "");
@@ -53,6 +57,7 @@ export class ShellRegistry implements vscode.Disposable {
     const free = [...this.shells].find(([, shell]) => !shell.hostsBackgroundJob)?.[0];
     const id = wanted && wanted !== "new" ? wanted : wanted === "new" || !free ? this.nextId() : free;
     let session = this.shells.get(id);
+    const fresh = !session;
     if (!session) {
       session = new ShellSession(pty, this.title, this.startFolder, this.shellPath, this.onChange);
       session.nameSuffix = id === "1" ? "" : ` (${id})`;
@@ -61,7 +66,17 @@ export class ShellRegistry implements vscode.Disposable {
       session.loadStartupFiles = this.loadStartupFiles;
       this.shells.set(id, session);
     }
-    return { id, session };
+    return { id, session, fresh };
+  }
+
+  /** A terminal where nothing runs, for a command that the user starts again; a new one when all are busy. */
+  pickIdle(preferred?: string): { id: string; session: ShellSessionType } | undefined {
+    const shell = preferred ? this.shells.get(preferred) : undefined;
+    if (shell && shell.info.state === "idle") return { id: preferred as string, session: shell };
+    const idle = [...this.shells].find(([, candidate]) => candidate.info.state === "idle");
+    if (idle) return { id: idle[0], session: idle[1] };
+    const picked = this.pick("new");
+    return picked ? { id: picked.id, session: picked.session } : undefined;
   }
 
   private nextId(): string {

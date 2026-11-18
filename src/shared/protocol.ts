@@ -312,6 +312,7 @@ export type WebviewMessage =
   | { readonly type: "stopCommand"; readonly id: string }
   | { readonly type: "showTerminal" }
   | { readonly type: "fixCommand"; readonly id: string }
+  | { readonly type: "rerunCommand"; readonly id: string }
   | { readonly type: "terminalAction"; readonly id: string; readonly action: "show" | "interrupt" | "kill" }
   | { readonly type: "commandInput"; readonly id: string; readonly data: string }
   | { readonly type: "copyText"; readonly text: string }
@@ -328,7 +329,14 @@ export type WebviewMessage =
   | { readonly type: "newWorktreeAgent" }
   | { readonly type: "openWalkthrough" }
   | { readonly type: "removeQueued"; readonly id: string }
-  | { readonly type: "openFile"; readonly path: string; readonly line?: number }
+  | {
+      readonly type: "openFile";
+      readonly path: string;
+      readonly line?: number;
+      readonly column?: number;
+      /** A path from the output of a command: relative to the folder of this terminal of the chat. */
+      readonly terminal?: string;
+    }
   | { readonly type: "renameChat"; readonly id?: string }
   | { readonly type: "openInEditor"; readonly id?: string }
   | { readonly type: "resetApprovals" }
@@ -450,10 +458,15 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
         return undefined;
       }
       const line = Number(message.line);
+      const column = Number(message.column);
+      const terminal =
+        typeof message.terminal === "string" && /^\d{1,4}$/.test(message.terminal) ? message.terminal : undefined;
       return {
         type: "openFile",
         path: message.path,
         ...(Number.isInteger(line) && line > 0 && line < 10_000_000 ? { line } : {}),
+        ...(Number.isInteger(column) && column > 0 && column < 100_000 ? { column } : {}),
+        ...(terminal ? { terminal } : {}),
       };
     }
     case "send": {
@@ -543,9 +556,10 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
         ? { type: "commandInput", id: value, data: message.data }
         : undefined;
     }
-    case "fixCommand": {
+    case "fixCommand":
+    case "rerunCommand": {
       const value = id("id");
-      return value ? { type: "fixCommand", id: value } : undefined;
+      return value ? { type: message.type, id: value } : undefined;
     }
     case "stopCommand": {
       const value = id("id");
