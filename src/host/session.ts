@@ -737,6 +737,7 @@ export class AgentSession {
 
   private terminal: AgentTerminal | undefined;
   private readonly commandWhere = new Map<string, "terminal" | "background">();
+  private readonly commandApprovals = new Map<string, string>();
 
   private shellRegistry: ShellRegistry | undefined;
   private shellWarned = false;
@@ -753,6 +754,7 @@ export class AgentSession {
         () => this.shell.cwd ?? this.root.uri.fsPath,
         () => readSettings().commandsShell || undefined,
         () => this.deps.onChange(this),
+        () => readSettings().commandsStartupFiles,
       );
     }
     if (this.shellRegistry.available) return this.shellRegistry;
@@ -763,6 +765,11 @@ export class AgentSession {
       );
     }
     return undefined;
+  }
+
+  /** The recent output of the terminals of the chat, for the attach menu. */
+  get terminalSnapshots(): { id: string; state: string; command?: string; output: string }[] {
+    return this.shellRegistry?.snapshots() ?? [];
   }
 
   /** The terminals of the chat for the list in the chat. */
@@ -940,12 +947,20 @@ export class AgentSession {
       shell: this.shell,
       terminal: vscode.workspace.isTrusted ? this.agentTerminal() : undefined,
       shells: vscode.workspace.isTrusted ? this.agentShells() : undefined,
-      onCommandStart: (callId, where, terminal) => {
+      onCommandStart: (callId, where, terminal, approval) => {
         const id = this.toolIdsByCall.get(callId);
         if (!id) return;
         this.commandWhere.set(id, where);
         if (terminal) this.commandTerminals.set(id, terminal);
-        this.deps.emit(this, { type: "toolOutput", id, text: "", where });
+        if (approval) this.commandApprovals.set(id, approval);
+        this.deps.emit(this, {
+          type: "toolOutput",
+          id,
+          text: "",
+          where,
+          ...(approval ? { approval } : {}),
+          ...(terminal ? { terminal } : {}),
+        });
       },
     });
     this.activeTools = tools;
@@ -1075,6 +1090,12 @@ export class AgentSession {
             ...(ToolHost.descriptionOf(call) ? { description: ToolHost.descriptionOf(call) } : {}),
             ...(this.commandWhere.has(toolIds.get(call.id) ?? "")
               ? { where: this.commandWhere.get(toolIds.get(call.id) ?? "") }
+              : {}),
+            ...(this.commandApprovals.has(toolIds.get(call.id) ?? "")
+              ? { approval: this.commandApprovals.get(toolIds.get(call.id) ?? "") }
+              : {}),
+            ...(this.commandTerminals.has(toolIds.get(call.id) ?? "")
+              ? { terminal: this.commandTerminals.get(toolIds.get(call.id) ?? "") }
               : {}),
             status: toolResult.content.startsWith("Error:") ? "error" : "done",
             // Commands keep more of their output, so the terminal in the chat can show it.

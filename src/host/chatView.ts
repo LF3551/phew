@@ -133,6 +133,17 @@ class ChatController implements ChatViewHandle {
       case "contextQuery": {
         const root = session?.root.uri ?? vscode.workspace.workspaceFolders?.[0]?.uri;
         const options = root ? await this.mentions.contextOptions(root).catch(() => []) : [];
+        // The terminals of the chat, so the user can show the agent what happened there.
+        for (const snapshot of session?.terminalSnapshots ?? []) {
+          const lines = snapshot.output.split("\n");
+          options.push({
+            id: "terminal",
+            label: `Terminal ${snapshot.id} of the chat`,
+            detail: `${snapshot.state}${snapshot.command ? ` · ${snapshot.command.split("\n")[0]?.slice(0, 40)}` : ""} · last ${lines.length} lines`,
+            attachment: { kind: "terminal", command: `Terminal ${snapshot.id} of the chat`, output: snapshot.output },
+            chip: `Terminal ${snapshot.id}`,
+          });
+        }
         this.post({ type: "contextOptions", options });
         return;
       }

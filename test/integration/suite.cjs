@@ -90,8 +90,17 @@ async function script(data) {
       { command: "sh", description: "Open a nested shell, like ssh" },
       { command: "echo inside-$((20+22))", description: "Run a command inside" },
       { command: "exit", description: "Leave the nested shell" },
+      {
+        command: "python3 -u -m http.server 8790 --bind 127.0.0.1",
+        description: "Start a web server",
+        terminal: "new",
+        background: true,
+      },
+      { command: "curl -s -o /dev/null localhost:8790/phew-check", description: "Call the server" },
     ];
     if (step < steps.length) return call("run_command", steps[step]);
+    if (step === steps.length)
+      return call("read_terminal", { terminal: "2", wait_for: "GET /phew-check", timeout_seconds: 10 });
     const results = messages.filter((message) => message.role === "tool").map((message) => message.content);
     return { content: `RESULT ${results.join("\n---\n")}` };
   }
@@ -293,6 +302,19 @@ async function run() {
       tools.every((item) => item.where === "terminal"),
       "the commands ran in the terminal of the chat",
     );
+    assert.match(parts[5], /\[running in the background\]/, "the server keeps running in the background");
+    assert.match(parts[6], /\[exit code 0\]/, "the next command runs in another terminal, not in the server");
+    assert.match(
+      parts[7],
+      /^\[terminal 2: a program keeps running\] Found "GET \/phew-check"/,
+      "read_terminal waits for the server log",
+    );
+    assert.equal(shell.terminals.length, 2, "the chat has two terminals");
+    assert.ok(
+      shell.terminals.some((terminal) => terminal.state === "running" && /http\.server/.test(terminal.command ?? "")),
+    );
+    shell.terminalAction("2", "kill");
+    assert.equal(shell.terminals.length, 1, "closing a terminal removes it");
     assert.ok(
       vscode.window.terminals.some((terminal) => terminal.name.startsWith("Phew:")),
       "the chat has its own terminal",

@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { allowPrefix, decideCommand, findDanger, splitCommand } from "../src/core/commandPolicy";
+import { allowPrefix, decideCommand, findDanger, splitCommand, whyAllowed } from "../src/core/commandPolicy";
 
 const settings = { autoApprove: ["npm test", "go test"], deny: ["rm"] };
 
@@ -54,6 +54,8 @@ test.each([
   "node --version",
   "cat README.md 2>&1 | head",
   "FOO=1 echo hi",
+  "ls -la > /tmp/listing.txt",
+  "git diff >> $TMPDIR/changes.diff 2>&1",
 ])("runs a read-only command without asking: %s", (command) => {
   expect(decideCommand(command, { autoApprove: [], deny: [] })).toEqual({ kind: "allow" });
 });
@@ -62,6 +64,7 @@ test.each([
   "find . -name '*.tmp' -delete",
   "find . -exec rm {} \\;",
   "echo hi > notes.txt",
+  "cat a > /tmpfile",
   "ls | tee out.txt",
   "git branch new-feature",
   "git commit -m x",
@@ -94,4 +97,11 @@ test("Always allow suggests the program, or the program and its subcommand", () 
 test("denies blocked prefixes and empty commands", () => {
   expect(decideCommand("rm file.txt", settings).kind).toBe("deny");
   expect(decideCommand("   ", settings).kind).toBe("deny");
+});
+
+test("the chat says why a command ran without asking", () => {
+  expect(whyAllowed("ls -la", { autoApprove: [], deny: [] })).toBe("only reads");
+  expect(whyAllowed("find . | wc -l", { autoApprove: [], deny: [] })).toBe("every part only reads");
+  expect(whyAllowed("npm test -- -u", { autoApprove: ["npm test"], deny: [] })).toBe("your allowlist: npm test");
+  expect(whyAllowed("make build", { mode: "safe", autoApprove: [], deny: [] })).toBe("All mode: not dangerous");
 });

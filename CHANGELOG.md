@@ -11,6 +11,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- The agent reads and waits for terminals that keep running (`read_terminal`): the new log of a server or a watcher since the last read, and waiting until it says, for example, "listening on". A command without a terminal never goes into a terminal that hosts a server.
+- Each command in the chat says why it ran without asking, for example "auto: only reads" or "your allowlist: npm test", and in which terminal.
+- Closing a terminal of the chat, deleting the chat, or closing VS Code ends every process that the terminal started, so no dev server keeps running.
+- Commands get `PHEW_AGENT=1` and `PHEW_TERMINAL`, like `CLAUDECODE` or `CURSOR_AGENT`, so scripts and Git hooks know that an agent runs them.
+- Writes into `/tmp` and `$TMPDIR` run without asking in the Smart mode.
+- Heavy prompt themes work: zsh with powerlevel10k and its instant prompt is tested, the mark stays first when a theme rebuilds its hooks, and a prompt that comes back without its mark still ends the command. `phew.commands.shellStartupFiles` turns the startup files off for a fast, plain shell.
+- The attach menu offers the recent output of each terminal of the chat.
+
 - Several terminals per chat. The agent opens another one when it needs it (`terminal: "new"`), for example for a server while it runs the tests. The **Terminals** button under the input shows how many terminals the chat has, and for each one its state, shell, process id, folder, and running command, with Ctrl+C and Close.
 - Huge output stays fast. The model gets the start and the end of the output with the number of lines left out, the chat skips lines that come faster than it can show and says so, and the terminal keeps everything.
 - The terminal of the chat uses a UTF-8 locale when the system has none, so letters such as я or ö show correctly.

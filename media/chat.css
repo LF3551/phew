@@ -463,6 +463,22 @@ summary:focus-visible {
   border-bottom: 1px solid var(--vscode-widget-border, var(--vscode-panel-border, #8884));
 }
 
+.term-meta {
+  flex: none;
+  max-width: 45%;
+  overflow: hidden;
+  padding: 9px 2px 0 0;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.78em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  opacity: 0.85;
+}
+
+.term-meta[hidden] {
+  display: none;
+}
+
 .term-top .term-actions {
   padding: 5px 4px 0 0;
 }

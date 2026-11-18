@@ -11,12 +11,13 @@ import {
   truncateMiddle,
 } from "../core/chat";
 import { formatHits } from "../core/codeIndex";
-import { allowPrefix, decideCommand } from "../core/commandPolicy";
+import { allowPrefix, decideCommand, whyAllowed } from "../core/commandPolicy";
 import { describeShellResult } from "../core/commandResult";
 import { adjustAgentGitCommand, describeCommitIdentity } from "../core/commit";
 import { detectEol } from "../core/diff";
 import { LineEditor } from "../core/lineEditor";
 import type { ModeDefinition } from "../core/modes";
+import { limitForModel } from "../core/outputLimit";
 import { type Plan, parsePlanUpdate, parseQuestion } from "../core/plan";
 import type { RootSet } from "../core/roots";
 import { isSensitivePath, redactSecrets } from "../core/secrets";
@@ -58,7 +59,12 @@ export interface ToolHostOptions {
   /** The terminals of the chat (real shells), like the terminals of the Copilot agent. */
   readonly shells?: ShellRegistry;
   /** Where a command runs, for the chat: a real terminal or the background. */
-  readonly onCommandStart?: (callId: string, where: "terminal" | "background", terminal?: string) => void;
+  readonly onCommandStart?: (
+    callId: string,
+    where: "terminal" | "background",
+    terminal?: string,
+    approval?: string,
+  ) => void;
   /** The folder of the chat's shell. `cd` in one command carries over to the next, like in Claude Code. */
   readonly shell?: { cwd?: string; envFile?: string };
   /** Live output of a running command, by the id of the tool call. */
@@ -91,6 +97,8 @@ export class ToolHost {
       memory: settings.memoryEnabled,
       index: settings.index.enabled,
       skills: skills.length > 0,
+      // read_terminal needs the real terminals of the chat.
+      terminals: settings.commandsTerminal !== "off" && this.options.shells !== undefined,
     });
     if (!mode.tools.has("mcp") || !vscode.workspace.isTrusted) return builtIn;
     try {
@@ -180,6 +188,9 @@ export class ToolHost {
         break;
       case "run_command":
         result = await this.runCommand(args, signal, call.id);
+        break;
+      case "read_terminal":
+        result = await this.readTerminal(args, signal);
         break;
       case "remember":
         result = await this.remember(args);
@@ -396,6 +407,40 @@ export class ToolHost {
     });
   }
 
+  /** New output of a terminal where a program keeps running, and waiting for a text in it. */
+  private async readTerminal(args: Record<string, unknown>, signal: AbortSignal): Promise<ToolResult> {
+    const shells = this.options.settings.commandsTerminal !== "off" ? this.options.shells : undefined;
+    if (!shells) return { content: "The commands of this chat run in processes, so there is no terminal to read." };
+    const name = stringArgument(args, "terminal", false)?.trim() || "1";
+    const session = shells.get(name.replace(/^#/, ""));
+    if (!session) {
+      const known = shells.list().map((terminal) => terminal.id);
+      throw new Error(`There is no terminal "${name}". The terminals of this chat: ${known.join(", ") || "none"}.`);
+    }
+    const waitFor = stringArgument(args, "wait_for", false)?.trim();
+    const seconds = Math.min(600, Math.max(1, typeof args.timeout_seconds === "number" ? args.timeout_seconds : 30));
+    const pattern = waitFor ? new RegExp(waitFor.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") : undefined;
+    const read = await session.readNew({ pattern, timeoutMs: seconds * 1000, signal });
+    const state =
+      read.state === "ended"
+        ? `the program ended${read.exitCode !== undefined ? ` with exit code ${read.exitCode}` : ""}`
+        : read.state === "idle"
+          ? "nothing runs, the shell waits for a command"
+          : read.state === "waiting"
+            ? "a program waits for input"
+            : read.state === "closed"
+              ? "the terminal was closed"
+              : "a program keeps running";
+    const found = waitFor
+      ? read.matched
+        ? `Found "${waitFor}". `
+        : `"${waitFor}" did not appear in ${seconds} s. `
+      : "";
+    return {
+      content: `[terminal ${name}: ${state}] ${found}\n${limitForModel(read.output) || "(no new output)"}`,
+    };
+  }
+
   private readonly runningCommands = new Map<string, AbortController>();
   private readonly commandInputs = new Map<string, LineEditor>();
 
@@ -434,6 +479,11 @@ export class ToolHost {
     const decision = decideCommand(command, this.options.settings.commands);
     if (decision.kind === "deny") throw new Error(decision.reason);
     const isCommit = notes.length > 0 || /^\s*git\s+(-[Cc]\s+\S+\s+)*commit\b/.test(command);
+    // Why it runs, for the chat: the rule that allowed it, or the decision of the user.
+    let approval =
+      decision.kind === "allow" && !isCommit
+        ? `Auto-approved: ${whyAllowed(command, this.options.settings.commands)}`
+        : "";
     if (decision.kind === "ask" || isCommit) {
       // Dangerous commands always ask, so they get no "Always allow".
       const always =
@@ -454,6 +504,7 @@ export class ToolHost {
         return { content: `The user did not allow the command: ${command}` };
       }
       // "Always allow" adds the prefix to the allowlist in the user settings.
+      approval = answer.answer === "always" && always ? `Always allowed: ${always}` : "Approved by you";
       if (answer.answer === "always" && always) {
         const config = vscode.workspace.getConfiguration("phew");
         const current = config.get<string[]>("commands.autoApprove") ?? [];
@@ -470,7 +521,7 @@ export class ToolHost {
     if (shellSession) {
       // Like the Copilot agent: the command runs in the real shell of the chat, which the user sees and can type into.
       try {
-        this.options.onCommandStart?.(callId, "terminal", picked?.id);
+        this.options.onCommandStart?.(callId, "terminal", picked?.id, approval);
         if (interrupt) shellSession.interrupt();
         const timeoutSeconds = this.options.settings.commandTimeoutSeconds;
         const line = folder
@@ -529,7 +580,7 @@ export class ToolHost {
         (data) => line.feed(data),
         mode === "open",
       );
-      this.options.onCommandStart?.(callId, terminal ? "terminal" : "background");
+      this.options.onCommandStart?.(callId, terminal ? "terminal" : "background", undefined, approval);
       const started = Date.now();
       result = await runShellCommand(command, cwd, timeout, own.signal, undefined, {
         envFile: this.options.shell?.envFile,

@@ -21,6 +21,8 @@ export interface Settings {
   readonly commandsTerminal: "open" | "background" | "off";
   /** The shell of the terminal of the chat. Empty means the user's shell. */
   readonly commandsShell: string;
+  /** Whether the terminal of the chat loads the user's startup files (.bashrc, .zshrc, profiles). */
+  readonly commandsStartupFiles: boolean;
 
   readonly verifyCommand: string;
   readonly verifyMaxAttempts: number;
@@ -119,6 +121,7 @@ export function readSettings(scope?: vscode.Uri): Settings {
     commandTimeoutSeconds: Math.max(5, positive(config.get("commands.timeoutSeconds"), 120, 3600)),
     commandsTerminal: oneOf(config.get("commands.terminal"), ["open", "background", "off"] as const, "open"),
     commandsShell: text(config.get("commands.shell")),
+    commandsStartupFiles: config.get<boolean>("commands.shellStartupFiles") !== false,
 
     verifyCommand: text(config.get("verify.command")),
     verifyMaxAttempts: Math.max(1, Math.round(positive(config.get("verify.maxAttempts"), 3, 10))),

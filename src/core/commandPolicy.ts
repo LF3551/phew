@@ -213,9 +213,15 @@ export function splitCommand(command: string): { parts: string[]; substitution: 
   return { parts, substitution };
 }
 
-/** Output redirections other than to /dev/null or between streams write a file. */
+/**
+ * Output redirections write a file, except to /dev/null, between streams, or into the temporary folder
+ * (/tmp, $TMPDIR), where scratch files of a task belong.
+ */
 function writesFile(part: string): boolean {
-  const withoutHarmless = part.replace(/\d?>>?\s*\/dev\/null|\d?>&\d|&>\s*\/dev\/null/g, "");
+  const withoutHarmless = part.replace(
+    /&?\d?>>?\s*(\/dev\/null|\/tmp\/[^\s;|&]*|\$\{?TMPDIR\}?\/[^\s;|&]*)|\d?>&\d/g,
+    "",
+  );
   return /(^|[^<])>/.test(withoutHarmless.replace(/'[^']*'|"[^"]*"/g, ""));
 }
 
@@ -296,4 +302,16 @@ export function decideCommand(rawCommand: string, settings: CommandPolicySetting
     kind: "ask",
     reason: writesFile(blocked) ? "The command writes a file." : undefined,
   };
+}
+
+/** Why a command ran without asking, in a few words for the chat: "read-only", "allowlist: npm test", "All". */
+export function whyAllowed(rawCommand: string, settings: CommandPolicySettings): string {
+  const command = normalize(rawCommand);
+  if ((settings.mode ?? "allowlist") === "safe") return "All mode: not dangerous";
+  const { parts } = splitCommand(command);
+  const listed = parts
+    .map((part) => settings.autoApprove.find((prefix) => matchesPrefix(normalize(part), prefix)))
+    .filter((prefix): prefix is string => prefix !== undefined);
+  if (listed.length === 0) return parts.length > 1 ? "every part only reads" : "only reads";
+  return `your allowlist: ${[...new Set(listed)].join(", ")}`;
 }

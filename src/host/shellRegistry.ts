@@ -26,6 +26,7 @@ export class ShellRegistry implements vscode.Disposable {
     private readonly startFolder: () => string,
     private readonly shellPath: () => string | undefined,
     private readonly onChange: () => void,
+    private readonly loadStartupFiles: () => boolean = () => true,
   ) {}
 
   /** False when node-pty does not load on this system; then commands run in processes. */
@@ -47,11 +48,16 @@ export class ShellRegistry implements vscode.Disposable {
         `There is no terminal "${wanted}". The terminals of this chat: ${known.length ? known.join(", ") : "none yet"}. Use "new" for another one.`,
       );
     }
-    const id = wanted && wanted !== "new" ? wanted : wanted === "new" || this.shells.size === 0 ? this.nextId() : "1";
+    // Without a name, a command goes to the first terminal that does not host a server in the background,
+    // so it is never typed into a running server; a program that waits for input (ssh) still gets it.
+    const free = [...this.shells].find(([, shell]) => !shell.hostsBackgroundJob)?.[0];
+    const id = wanted && wanted !== "new" ? wanted : wanted === "new" || !free ? this.nextId() : free;
     let session = this.shells.get(id);
     if (!session) {
       session = new ShellSession(pty, this.title, this.startFolder, this.shellPath, this.onChange);
       session.nameSuffix = id === "1" ? "" : ` (${id})`;
+      session.terminalId = id;
+      session.loadStartupFiles = this.loadStartupFiles;
       this.shells.set(id, session);
     }
     return { id, session };
@@ -92,6 +98,18 @@ export class ShellRegistry implements vscode.Disposable {
         `${terminal.id} (${terminal.state}${terminal.command ? `: ${terminal.command.slice(0, 40)}` : ""}${terminal.cwd ? `, ${terminal.cwd}` : ""})`,
     );
     return `Terminals of this chat: ${parts.join("; ")}.`;
+  }
+
+  /** The recent output of each terminal that has some, for "attach the output of a terminal". */
+  snapshots(): { id: string; state: TerminalInfo["state"]; command?: string; output: string }[] {
+    return this.list()
+      .map((terminal) => ({
+        id: terminal.id,
+        state: terminal.state,
+        command: terminal.command,
+        output: this.shells.get(terminal.id)?.recentOutput() ?? "",
+      }))
+      .filter((snapshot) => snapshot.output);
   }
 
   kill(id: string): void {

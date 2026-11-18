@@ -21,7 +21,7 @@ export interface ShellLaunch {
 const prompt = "printf '\\033]6973;P;%s;%s\\007'";
 
 const bash = `# Phew shell integration for bash: the user's startup files, then marks for Phew.
-if [ -n "$PHEW_BASH_RC" ] && [ -f "$PHEW_BASH_RC" ]; then . "$PHEW_BASH_RC"; elif [ -f "$HOME/.bashrc" ]; then . "$HOME/.bashrc"; fi
+if [ -n "$PHEW_SKIP_RC" ]; then :; elif [ -n "$PHEW_BASH_RC" ] && [ -f "$PHEW_BASH_RC" ]; then . "$PHEW_BASH_RC"; elif [ -f "$HOME/.bashrc" ]; then . "$HOME/.bashrc"; fi
 __phew_prompt() { local s=$?; ${prompt} "$s" "$PWD"; return $s; }
 if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" == "declare -a"* ]]; then
   PROMPT_COMMAND=(__phew_prompt "\${PROMPT_COMMAND[@]}")
@@ -34,23 +34,26 @@ PS0="\${PS0}"$'\\e]6973;C\\a'
 const zshenv = (dir: string) => `# Phew shell integration for zsh: the user's .zshenv first.
 export PHEW_USER_ZDOTDIR="\${PHEW_USER_ZDOTDIR:-$HOME}"
 ZDOTDIR="$PHEW_USER_ZDOTDIR"
-[ -f "$ZDOTDIR/.zshenv" ] && . "$ZDOTDIR/.zshenv"
+[ -z "$PHEW_SKIP_RC" ] && [ -f "$ZDOTDIR/.zshenv" ] && . "$ZDOTDIR/.zshenv"
 PHEW_USER_ZDOTDIR="\${ZDOTDIR:-$HOME}"
 ZDOTDIR="${dir}"
 `;
 
 const zprofile = (dir: string) => `ZDOTDIR="$PHEW_USER_ZDOTDIR"
-[ -f "$ZDOTDIR/.zprofile" ] && . "$ZDOTDIR/.zprofile"
+[ -z "$PHEW_SKIP_RC" ] && [ -f "$ZDOTDIR/.zprofile" ] && . "$ZDOTDIR/.zprofile"
 ZDOTDIR="${dir}"
 `;
 
 const zshrc = `ZDOTDIR="$PHEW_USER_ZDOTDIR"
-[ -f "$ZDOTDIR/.zshrc" ] && . "$ZDOTDIR/.zshrc"
+[ -z "$PHEW_SKIP_RC" ] && [ -f "$ZDOTDIR/.zshrc" ] && . "$ZDOTDIR/.zshrc"
 __phew_precmd() { local s=$?; ${prompt} "$s" "$PWD"; return $s }
 __phew_preexec() { printf '\\033]6973;C\\007' }
 typeset -ga precmd_functions preexec_functions
 precmd_functions=(__phew_precmd $precmd_functions)
 preexec_functions+=(__phew_preexec)
+# Themes such as powerlevel10k rebuild the hook lists; the mark goes first again before each command.
+__phew_keep() { [[ \${precmd_functions[1]} == __phew_precmd ]] || precmd_functions=(__phew_precmd \${precmd_functions:#__phew_precmd}) }
+preexec_functions+=(__phew_keep)
 `;
 
 const fish = `set -g __phew_status 0
@@ -106,7 +109,11 @@ export function userShell(configured: string | undefined): string {
   return "/bin/sh";
 }
 
-export function shellLaunch(shell: string): ShellLaunch {
+/**
+ * How to start a shell. Without the startup files (for heavy prompt themes), the shell starts fast and
+ * plain, and the marks of Phew still work.
+ */
+export function shellLaunch(shell: string, loadStartupFiles = true): ShellLaunch {
   const name = path
     .basename(shell)
     .toLowerCase()
@@ -118,6 +125,7 @@ export function shellLaunch(shell: string): ShellLaunch {
     MANPAGER: "cat",
     GIT_EDITOR: "true",
     TERM_PROGRAM: "phew",
+    ...(loadStartupFiles ? {} : { PHEW_SKIP_RC: "1" }),
   };
   try {
     const folder = scriptsFolder();
@@ -140,11 +148,23 @@ export function shellLaunch(shell: string): ShellLaunch {
       };
     }
     if (name === "fish")
-      return { file: shell, args: ["-i", "--init-command", fish], env, integrated: true, kind: "fish" };
+      return {
+        file: shell,
+        args: [...(loadStartupFiles ? [] : ["--no-config"]), "-i", "--init-command", fish],
+        env,
+        integrated: true,
+        kind: "fish",
+      };
     if (name === "pwsh" || name === "powershell")
       return {
         file: shell,
-        args: ["-NoLogo", "-NoExit", "-Command", `. '${path.join(folder, "pwsh.ps1").replace(/'/g, "''")}'`],
+        args: [
+          "-NoLogo",
+          ...(loadStartupFiles ? [] : ["-NoProfile"]),
+          "-NoExit",
+          "-Command",
+          `. '${path.join(folder, "pwsh.ps1").replace(/'/g, "''")}'`,
+        ],
         env,
         integrated: true,
         kind: "pwsh",
@@ -153,7 +173,11 @@ export function shellLaunch(shell: string): ShellLaunch {
       return {
         file: shell,
         args: ["-i"],
-        env: { ...env, ENV: path.join(folder, "posix.sh"), PHEW_USER_ENV: process.env.ENV ?? "" },
+        env: {
+          ...env,
+          ENV: path.join(folder, "posix.sh"),
+          PHEW_USER_ENV: loadStartupFiles ? (process.env.ENV ?? "") : "",
+        },
         integrated: true,
         kind: "posix",
       };

@@ -214,6 +214,10 @@ export type HostMessage = (
       readonly text: string;
       /** Where the command runs, sent once when it starts. */
       readonly where?: "terminal" | "background";
+      /** Why it runs: the rule that allowed it, or the decision of the user. */
+      readonly approval?: string;
+      /** The terminal of the chat that runs it, for example "2". */
+      readonly terminal?: string;
     }
   | {
       readonly type: "tool";
@@ -228,6 +232,10 @@ export type HostMessage = (
       readonly description?: string;
       /** Where the command ran: the real terminal of the chat or the background. */
       readonly where?: "terminal" | "background";
+      /** Why it ran: the rule that allowed it, or the decision of the user. */
+      readonly approval?: string;
+      /** The terminal of the chat that ran it, for example "2". */
+      readonly terminal?: string;
     }
   | {
       readonly type: "approval";

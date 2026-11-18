@@ -143,6 +143,27 @@ export const changeTools: readonly ToolDefinition[] = [
   },
 ];
 
+/** Reading a terminal that keeps running: a server, a watcher, or ssh. */
+export const terminalTools: readonly ToolDefinition[] = [
+  {
+    name: "read_terminal",
+    description:
+      "Read the new output of a terminal of this chat where a program keeps running (a server, a watcher, a build in the background, ssh), since the last read. " +
+      "With wait_for, wait until the new output contains that text, the program ends, or timeout_seconds pass, for example until a server says that it listens. It does not type anything.",
+    parameters: object(
+      {
+        terminal: { type: "string", description: 'The terminal, for example "2". Default: "1".' },
+        wait_for: {
+          type: "string",
+          description: 'Text to wait for, case-insensitive, for example "listening on" or "compiled successfully".',
+        },
+        timeout_seconds: { type: "number", description: "How long to wait for wait_for. Default 30, at most 600." },
+      },
+      [],
+    ),
+  },
+];
+
 /** Tools to talk with the user and to keep the checklist. Every mode with the read group has them. */
 export const interactionTools: readonly ToolDefinition[] = [
   {
@@ -222,6 +243,7 @@ const groupOf: Readonly<Record<string, ToolGroup>> = {
   edit_file: "edit",
   write_file: "edit",
   run_command: "command",
+  read_terminal: "command",
   remember: "memory",
 };
 
@@ -233,7 +255,7 @@ export function toolGroup(name: string): ToolGroup {
 /** Returns the built-in tools that a mode allows. */
 export function toolsForMode(
   mode: ModeDefinition,
-  options: { memory?: boolean; index?: boolean; skills?: boolean } = {},
+  options: { memory?: boolean; index?: boolean; skills?: boolean; terminals?: boolean } = {},
 ): ToolDefinition[] {
   const tools: ToolDefinition[] = [];
   if (mode.tools.has("read")) {
@@ -242,7 +264,10 @@ export function toolsForMode(
     if (options.skills) tools.push(...skillTools);
   }
   if (mode.tools.has("edit")) tools.push(...changeTools.filter((tool) => tool.name !== "run_command"));
-  if (mode.tools.has("command")) tools.push(...changeTools.filter((tool) => tool.name === "run_command"));
+  if (mode.tools.has("command")) {
+    tools.push(...changeTools.filter((tool) => tool.name === "run_command"));
+    if (options.terminals !== false) tools.push(...terminalTools);
+  }
   if (mode.tools.has("memory") && options.memory !== false) tools.push(...memoryTools);
   return tools;
 }

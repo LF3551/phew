@@ -35,6 +35,7 @@ interface CommandView {
   readonly commandLine: HTMLElement;
   readonly full: HTMLElement;
   readonly actions: HTMLElement;
+  readonly meta: HTMLElement;
   readonly screen: HTMLElement;
   readonly hint: HTMLElement;
   term?: Terminal;
@@ -265,6 +266,8 @@ export function renderCommandTerminal(
     command: string;
     description?: string;
     where?: "terminal" | "background";
+    approval?: string;
+    terminal?: string;
     status: "running" | "done" | "error";
     detail?: string;
     at?: number;
@@ -288,7 +291,9 @@ export function renderCommandTerminal(
     // Like the Copilot agent: the command at the top of the terminal box, with its buttons on the right.
     const top = el("div", "term-top");
     const full = el("pre", "term-full");
-    top.append(full, actions);
+    // Which terminal runs it and why it ran without asking, quiet on the right.
+    const meta = el("span", "term-meta");
+    top.append(full, meta, actions);
     const screen = el("div", "term-screen");
     const hint = el("div", "term-hint", "Waiting for input. Type here or in the terminal.");
     hint.hidden = true;
@@ -300,6 +305,7 @@ export function renderCommandTerminal(
       commandLine,
       full,
       actions,
+      meta,
       screen,
       hint,
       text: "",
@@ -331,6 +337,7 @@ export function renderCommandTerminal(
     current.where = update.where;
     current.root.dataset.where = update.where;
   }
+  renderMeta(current, update.terminal, update.approval);
 
   if (update.status === "running") {
     ticker ??= setInterval(tick, 1000);
@@ -385,13 +392,34 @@ export function renderCommandTerminal(
   return current.root;
 }
 
-/** Marks where a running command runs; a command in the terminal panel can be shown there. */
-export function setCommandWhere(id: string, where: "terminal" | "background"): void {
+/** Marks where a running command runs, which terminal, and why it ran without asking. */
+export function setCommandWhere(
+  id: string,
+  where: "terminal" | "background",
+  details: { approval?: string; terminal?: string } = {},
+): void {
   const view = views.get(id);
   if (!view) return;
   view.where = where;
   view.root.dataset.where = where;
+  renderMeta(view, details.terminal, details.approval);
   view.renderActions();
+}
+
+function renderMeta(view: CommandView, terminal: string | undefined, approval: string | undefined): void {
+  if (terminal) view.meta.dataset.terminal = terminal;
+  if (approval) view.meta.dataset.approval = approval;
+  const parts: string[] = [];
+  const shownTerminal = view.meta.dataset.terminal;
+  if (shownTerminal && shownTerminal !== "1") parts.push(`Terminal ${shownTerminal}`);
+  const why = view.meta.dataset.approval;
+  if (why?.startsWith("Auto-approved: ")) parts.push(`auto: ${why.slice("Auto-approved: ".length)}`);
+  else if (why?.startsWith("Always allowed")) parts.push("always allowed");
+  view.meta.textContent = parts.join(" · ");
+  view.meta.title = [shownTerminal ? `Runs in terminal ${shownTerminal} of this chat.` : "", why ? `${why}.` : ""]
+    .filter(Boolean)
+    .join(" ");
+  view.meta.hidden = parts.length === 0;
 }
 
 /** Adds live output (with colors) to a running command. */

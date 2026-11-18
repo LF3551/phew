@@ -650,6 +650,8 @@ function updateTool(message: Extract<HostMessage, { type: "tool" }>): void {
         command: message.command ?? message.summary.replace(/^run_command\s*/, ""),
         description: message.description,
         where: message.where,
+        approval: message.approval,
+        terminal: message.terminal,
         status: message.status,
         detail: message.detail,
         at: message.at,
@@ -1477,7 +1479,8 @@ function handle(message: HostMessage): void {
       updateTool(message);
       break;
     case "toolOutput": {
-      if (message.where) setCommandWhere(message.id, message.where);
+      if (message.where)
+        setCommandWhere(message.id, message.where, { approval: message.approval, terminal: message.terminal });
       const atEnd = nearBottom();
       if (appendCommandOutput(message.id, message.text)) follow(atEnd);
       break;

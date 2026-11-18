@@ -1130,6 +1130,11 @@
             "default": "open",
             "markdownDescription": "The terminal of the chat: a real shell where the agent runs its commands, like the Copilot agent. The chat shows the same output."
           },
+          "phew.commands.shellStartupFiles": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "Load your startup files (`.bashrc`, `.zshrc`, profiles) in the terminal of the chat, so your aliases, functions, and tools work. Turn it off when a heavy prompt theme makes the terminal slow or unreliable for the agent."
+          },
           "phew.commands.shell": {
             "type": "string",
             "default": "",
