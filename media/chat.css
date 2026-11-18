@@ -488,20 +488,22 @@ summary:focus-visible {
   display: none;
 }
 
+/* The command uses the colors of the theme and the accent of Phew, not fixed terminal colors. */
 .term-full .cmd-name {
-  color: var(--vscode-terminal-ansiYellow, #dcdcaa);
+  color: var(--phew-accent);
+  font-weight: 600;
 }
 
 .term-full .cmd-flag {
-  color: var(--vscode-terminal-ansiCyan, #4ec9b0);
+  color: var(--vscode-debugTokenExpression-name, var(--vscode-descriptionForeground));
 }
 
 .term-full .cmd-string {
-  color: var(--vscode-terminal-ansiGreen, #ce9178);
+  color: var(--vscode-debugTokenExpression-string, var(--vscode-textPreformat-foreground));
 }
 
 .term-full .cmd-var {
-  color: var(--vscode-terminal-ansiMagenta, #c586c0);
+  color: var(--vscode-debugTokenExpression-value, var(--vscode-foreground));
 }
 
 .term-full .cmd-op {
