@@ -69,20 +69,231 @@ export function isCompound(command: string): boolean {
 }
 
 /**
+ * Commands that only read: they run without asking in the default mode, like the default rules of the
+ * Copilot agent. A subcommand with a flag that changes something (for example `find -delete`) is not read-only.
+ */
+const readOnlyCommands = new Set([
+  "ls",
+  "ll",
+  "la",
+  "pwd",
+  "cd",
+  "echo",
+  "printf",
+  "cat",
+  "bat",
+  "head",
+  "tail",
+  "wc",
+  "sort",
+  "uniq",
+  "cut",
+  "tr",
+  "column",
+  "nl",
+  "grep",
+  "egrep",
+  "fgrep",
+  "rg",
+  "ag",
+  "ack",
+  "find",
+  "fd",
+  "tree",
+  "du",
+  "df",
+  "date",
+  "cal",
+  "hostname",
+  "whoami",
+  "id",
+  "groups",
+  "uname",
+  "uptime",
+  "which",
+  "where",
+  "type",
+  "command",
+  "file",
+  "stat",
+  "ps",
+  "pgrep",
+  "lsof",
+  "jq",
+  "yq",
+  "diff",
+  "cmp",
+  "comm",
+  "basename",
+  "dirname",
+  "realpath",
+  "readlink",
+  "sha1sum",
+  "sha256sum",
+  "md5sum",
+  "shasum",
+  "md5",
+  "true",
+  "false",
+  "test",
+  "[",
+  "sleep",
+  "seq",
+  "nproc",
+  "free",
+  "vm_stat",
+  "sw_vers",
+  "lsb_release",
+  "locale",
+  "tty",
+]);
+
+/** Git subcommands that only read. `git branch` and `git tag` only list without a name or a mutating flag. */
+const readOnlyGit = new Set([
+  "status",
+  "log",
+  "diff",
+  "show",
+  "blame",
+  "describe",
+  "rev-parse",
+  "ls-files",
+  "ls-tree",
+  "shortlog",
+  "reflog",
+  "grep",
+  "cat-file",
+  "count-objects",
+  "whatchanged",
+  "name-rev",
+  "merge-base",
+  "config --get",
+]);
+
+/** Flags that turn a read-only command into one that changes files or runs other commands. */
+const writingFlags = /(^|\s)(-delete|-exec(dir)?|-ok(dir)?|-fprint\S*|-fls)(\s|$)/;
+
+/** Splits a command into subcommands at `&&`, `||`, `;`, `|`, `&`, and line breaks, outside quotes. */
+export function splitCommand(command: string): { parts: string[]; substitution: boolean } {
+  const parts: string[] = [];
+  let current = "";
+  let quote: string | undefined;
+  let substitution = false;
+  for (let index = 0; index < command.length; index++) {
+    const character = command[index] ?? "";
+    const next = command[index + 1] ?? "";
+    if (quote) {
+      if (character === "\\" && quote === '"') {
+        current += character + next;
+        index++;
+        continue;
+      }
+      if (quote === '"' && (character === "`" || (character === "$" && next === "("))) substitution = true;
+      if (character === quote) quote = undefined;
+      current += character;
+      continue;
+    }
+    if (character === "'" || character === '"') {
+      quote = character;
+      current += character;
+      continue;
+    }
+    if (character === "`" || (character === "$" && next === "(")) substitution = true;
+    // `2>&1` and `&>` are redirections, not separators.
+    const redirection = character === "&" && (command[index - 1] === ">" || next === ">");
+    if (!redirection && (character === ";" || character === "\n" || character === "|" || character === "&")) {
+      if (current.trim()) parts.push(current.trim());
+      current = "";
+      if ((character === "|" || character === "&") && next === character) index++;
+      continue;
+    }
+    current += character;
+  }
+  if (current.trim()) parts.push(current.trim());
+  return { parts, substitution };
+}
+
+/** Output redirections other than to /dev/null or between streams write a file. */
+function writesFile(part: string): boolean {
+  const withoutHarmless = part.replace(/\d?>>?\s*\/dev\/null|\d?>&\d|&>\s*\/dev\/null/g, "");
+  return /(^|[^<])>/.test(withoutHarmless.replace(/'[^']*'|"[^"]*"/g, ""));
+}
+
+/** Leading `VAR=value` assignments and `env`-less wrappers do not change what a command is. */
+function commandWords(part: string): string[] {
+  const words = part
+    .replace(/'[^']*'|"[^"]*"/g, "S")
+    .split(/\s+/)
+    .filter(Boolean);
+  while (words.length > 0 && /^[A-Za-z_]\w*=/.test(words[0] ?? "")) words.shift();
+  while (words[0] === "time" || words[0] === "nice" || words[0] === "command") words.shift();
+  return words;
+}
+
+/** True when a subcommand only reads: a known read-only program, git that reads, or `--version` and `--help`. */
+export function isReadOnly(part: string): boolean {
+  if (writesFile(part) || writingFlags.test(part)) return false;
+  const words = commandWords(part);
+  const program = (words[0] ?? "").replace(/^.*\//, "");
+  if (!program) return true;
+  if (words.length === 2 && /^(--version|-v|-V|--help|-h|version)$/.test(words[1] ?? "")) return true;
+  if (readOnlyCommands.has(program)) return true;
+  if (program === "git") {
+    const rest = words.slice(1).filter((word) => !/^-C$|^--no-pager$/.test(word));
+    const sub = rest[0] ?? "";
+    if (readOnlyGit.has(sub) || readOnlyGit.has(`${sub} ${rest[1] ?? ""}`.trim())) return true;
+    // Listing branches, tags, remotes, and stashes reads; giving a name creates or deletes.
+    if (["branch", "tag", "remote", "stash"].includes(sub))
+      return (
+        rest.length === 1 || rest.slice(1).every((word) => /^(-a|-r|-v|-vv|--list|-l|--all|list|show)$/.test(word))
+      );
+    return false;
+  }
+  return false;
+}
+
+/** The prefix for "Always allow": two words for tools with subcommands (`npm test`), else the program. */
+export function allowPrefix(command: string): string | undefined {
+  const { parts, substitution } = splitCommand(normalize(command));
+  if (parts.length !== 1 || substitution || findDanger(command)) return undefined;
+  const words = commandWords(parts[0] ?? "");
+  const program = words[0];
+  if (!program) return undefined;
+  const withSubcommand =
+    /^(git|npm|pnpm|yarn|npx|bun|deno|go|cargo|python3?|pip3?|uv|poetry|docker|kubectl|helm|gcloud|aws|az|make|dotnet|mvn|gradle|terraform|gh|swift|rustup|composer|bundle|rails|php|node)$/;
+  const second = words[1];
+  if (withSubcommand.test(program) && second && !second.startsWith("-")) return `${program} ${second}`;
+  return program;
+}
+
+/**
  * Decides whether a command runs, needs a confirmation, or is blocked.
- * Dangerous and compound commands always need a confirmation, even when a prefix is auto-approved.
+ * - `ask` asks for every command.
+ * - `allowlist` runs a command when each part is read-only or in the allowlist, without file writes or `$(…)`.
+ * - `safe` runs every command that is not dangerous, also chains, pipes, and redirections.
+ * Dangerous commands always ask, and denied prefixes never run.
  */
 export function decideCommand(rawCommand: string, settings: CommandPolicySettings): CommandDecision {
   const command = normalize(rawCommand);
   if (command.length === 0) return { kind: "deny", reason: "The command is empty." };
-  const denied = settings.deny.find((prefix) => matchesPrefix(command, prefix));
-  if (denied) return { kind: "deny", reason: `The command matches the blocked prefix "${denied}".` };
+  const { parts, substitution } = splitCommand(command);
+  for (const part of parts.length > 0 ? parts : [command]) {
+    const denied = settings.deny.find((prefix) => matchesPrefix(normalize(part), prefix));
+    if (denied) return { kind: "deny", reason: `The command matches the blocked prefix "${denied}".` };
+  }
   const danger = findDanger(command);
   if (danger) return { kind: "ask", reason: `Dangerous command: ${danger}.` };
-  if (isCompound(command)) return { kind: "ask", reason: "The command chains, pipes, or redirects other commands." };
   const mode = settings.mode ?? "allowlist";
   if (mode === "ask") return { kind: "ask" };
   if (mode === "safe") return { kind: "allow" };
-  if (settings.autoApprove.some((prefix) => matchesPrefix(command, prefix))) return { kind: "allow" };
-  return { kind: "ask" };
+  if (substitution) return { kind: "ask", reason: "The command runs other commands inside $(…) or backticks." };
+  const allowed = (part: string) =>
+    !writesFile(part) &&
+    (isReadOnly(part) || settings.autoApprove.some((prefix) => matchesPrefix(normalize(part), prefix)));
+  const blocked = parts.find((part) => !allowed(part));
+  if (!blocked) return { kind: "allow" };
+  return {
+    kind: "ask",
+    reason: writesFile(blocked) ? "The command writes a file." : undefined,
+  };
 }

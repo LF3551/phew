@@ -206,8 +206,7 @@ export function createApprovalsPanel(options: {
     commandDetail.append(commandInfo[current.commands].detail);
     if (current.commands === "allowlist") {
       const list = el("div", "allowlist");
-      if (state.allowlist.length === 0)
-        list.append(el("span", "allowlist-empty", "The allowlist is empty, so every command asks."));
+      if (state.allowlist.length === 0) list.append(el("span", "allowlist-empty", "Your allowlist is empty."));
       for (const prefix of state.allowlist.slice(0, 4)) list.append(el("code", "allowlist-chip", prefix));
       if (state.allowlist.length > 4) list.append(el("span", "allowlist-more", `+${state.allowlist.length - 4}`));
       const edit = el("button", "link", state.allowlist.length === 0 ? "Add commands…" : "Edit…");

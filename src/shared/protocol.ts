@@ -229,6 +229,8 @@ export type HostMessage = (
       readonly hunks?: readonly HunkView[];
       readonly options?: readonly string[];
       readonly allowText?: boolean;
+      /** For commands: the prefix that "Always allow" adds to the allowlist. */
+      readonly alwaysAllow?: string;
     }
   | { readonly type: "approvalResolved"; readonly id: string; readonly decision: string }
   | { readonly type: "verify"; readonly attempt: number; readonly passed: boolean; readonly output: string }

@@ -11,7 +11,7 @@ import {
   truncateMiddle,
 } from "../core/chat";
 import { formatHits } from "../core/codeIndex";
-import { decideCommand } from "../core/commandPolicy";
+import { allowPrefix, decideCommand } from "../core/commandPolicy";
 import { describeShellResult } from "../core/commandResult";
 import { adjustAgentGitCommand, describeCommitIdentity } from "../core/commit";
 import { detectEol } from "../core/diff";
@@ -433,6 +433,9 @@ export class ToolHost {
     if (decision.kind === "deny") throw new Error(decision.reason);
     const isCommit = notes.length > 0 || /^\s*git\s+(-[Cc]\s+\S+\s+)*commit\b/.test(command);
     if (decision.kind === "ask" || isCommit) {
+      // Dangerous commands always ask, so they get no "Always allow".
+      const always =
+        decision.kind === "ask" && decision.reason?.startsWith("Dangerous") ? undefined : allowPrefix(command);
       const identity = isCommit ? describeCommitIdentity(this.options.settings.commit, await gitIdentity(cwd)) : "";
       const answer = await this.options.broker.request(
         {
@@ -440,12 +443,21 @@ export class ToolHost {
           title: isCommit ? "Commit with Git" : "Run command",
           detail: folder ? `${command}\n(in ${this.options.roots.display(cwd)})` : command,
           reason: [decision.kind === "ask" ? decision.reason : undefined, identity, ...notes].filter(Boolean).join(" "),
+          ...(always && !isCommit ? { alwaysAllow: always } : {}),
         },
         signal,
       );
       if (!answer.allowed) {
         this.options.log.info(`[audit] command denied: ${command}`);
         return { content: `The user did not allow the command: ${command}` };
+      }
+      // "Always allow" adds the prefix to the allowlist in the user settings.
+      if (answer.answer === "always" && always) {
+        const config = vscode.workspace.getConfiguration("phew");
+        const current = config.get<string[]>("commands.autoApprove") ?? [];
+        if (!current.includes(always))
+          await config.update("commands.autoApprove", [...current, always], vscode.ConfigurationTarget.Global);
+        this.options.log.info(`[audit] always allowed: ${always}`);
       }
     }
     this.options.log.info(`[audit] command run: ${command}`);

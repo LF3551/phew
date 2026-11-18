@@ -110,7 +110,7 @@ test("approval levels match the presets and name the differences", async () => {
   expect(approvalLevel(approvalPresets.autopilot)).toBe("autopilot");
   expect(approvalLevel({ review: "editor", commands: "safe", mcp: false })).toBe("custom");
   expect(approvalDifferences({ ...approvalPresets.balanced, commands: "safe" }, approvalPresets.balanced)).toEqual([
-    "Commands: Safe (default: Allowlist)",
+    "Commands: All (default: Smart)",
   ]);
   expect(parseWebviewMessage({ type: "setApprovalLevel", level: "careful" })).toEqual({
     type: "setApprovalLevel",

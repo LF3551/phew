@@ -280,7 +280,9 @@ describe("modes, tools, and command approval", () => {
     expect(decideCommand("git push", { ...base, mode: "safe" }).kind).toBe("ask");
     expect(decideCommand("npm test", { ...base, mode: "ask" }).kind).toBe("ask");
     expect(decideCommand("npm test", { ...base, mode: "allowlist" }).kind).toBe("allow");
-    expect(decideCommand("ls", { ...base, mode: "allowlist" }).kind).toBe("ask");
+    // Smart runs read-only commands without an allowlist entry, and asks for the rest.
+    expect(decideCommand("ls", { ...base, mode: "allowlist" }).kind).toBe("allow");
+    expect(decideCommand("npm install", { ...base, mode: "allowlist" }).kind).toBe("ask");
   });
 });
 

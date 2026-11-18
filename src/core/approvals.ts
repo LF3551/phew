@@ -44,8 +44,11 @@ export const reviewInfo: Readonly<Record<ReviewMode, { label: string; detail: st
 
 export const commandInfo: Readonly<Record<AutoApproveMode, { label: string; detail: string }>> = {
   ask: { label: "Ask", detail: "Asks before every command." },
-  allowlist: { label: "Allowlist", detail: "Runs the commands in your allowlist. Asks for all others." },
-  safe: { label: "Safe", detail: "Runs every command that is not dangerous and not chained." },
+  allowlist: {
+    label: "Smart",
+    detail: "Runs commands that only read (ls, cat, grep, git status…) and your allowlist. Asks for the rest.",
+  },
+  safe: { label: "All", detail: "Runs every command except dangerous ones." },
 };
 
 export const mcpInfo: Readonly<Record<"ask" | "auto", { label: string; detail: string }>> = {

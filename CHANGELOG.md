@@ -9,6 +9,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - A real terminal for the agent, like the Copilot agent. Each chat has a terminal in the panel with your own shell (bash, zsh, fish, PowerShell, or sh), started with your startup files, and the agent types its commands into it. The session stays between commands: `cd`, variables, virtual environments, `ssh` into another machine, and REPLs carry over. You see every command live, in the panel and in a terminal inside the chat, and you can type at any time: answer a prompt, press Ctrl+C, or run your own command. When a program waits for input, Phew notices it, and the agent types the answer or the next command inside ssh; it asks you to type passwords. Servers and watchers can run in the background. In the chat, each command is one line like "Running `npm test`", with the full command in color when it is long, and its live output; a command that worked folds into its line. Phew brings node-pty, prebuilt for Linux, macOS, and Windows on x64 and arm64, so it does not depend on the VS Code version. `phew.commands.shell` sets the shell.
 
+### Changed
+
+- Fewer questions about commands. The default **Smart** mode runs commands that only read (`ls`, `pwd`, `cat`, `grep`, `find` without `-delete` or `-exec`, `git status`, `git log`, `git diff`, `--version`, and more) without asking, also in pipes and chains such as `find . 2>/dev/null | wc -l`; each part of a chain is checked, and quotes are respected. **All** (before: Safe) runs every command except dangerous ones, also chains and redirections. A command request has **Always allow `npm test`**, which runs it and adds it to your allowlist. Dangerous commands still always ask.
+
 ## [0.2.0] - 2026-11-17
 
 ### Added

@@ -888,6 +888,17 @@ function addApproval(message: Extract<HostMessage, { type: "approval" }>): void 
 
   if (message.kind === "edit")
     actions.append(button("Open diff", "secondary", () => vscode.postMessage({ type: "openDiff", id: message.id })));
+  // "Always allow npm test": the command runs now, and such commands stop asking.
+  if (message.kind === "command" && message.alwaysAllow) {
+    const always = element("button", "secondary always-allow");
+    always.type = "button";
+    always.title = `Run it, and add "${message.alwaysAllow}" to your allowlist`;
+    always.append("Always allow ", element("code", undefined, message.alwaysAllow));
+    always.addEventListener("click", () =>
+      vscode.postMessage({ type: "approve", id: message.id, decision: "allow", text: "always" }),
+    );
+    actions.append(always);
+  }
   actions.append(
     button(message.kind === "edit" ? "Reject" : "Deny", "secondary", () =>
       vscode.postMessage({ type: "approve", id: message.id, decision: "deny" }),

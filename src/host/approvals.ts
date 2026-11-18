@@ -9,6 +9,8 @@ export interface ApprovalRequest {
   /** Answers that the user can click, for questions. */
   readonly options?: readonly string[];
   readonly allowText?: boolean;
+  /** For commands: the prefix that "Always allow" adds to the allowlist, for example `npm test`. */
+  readonly alwaysAllow?: string;
   /** Called when the user asks to see the change in the diff editor. */
   readonly openDiff?: () => void;
 }
@@ -56,13 +58,22 @@ export class ApprovalBroker {
         ...(request.hunks ? { hunks: request.hunks } : {}),
         ...(request.options ? { options: request.options } : {}),
         ...(request.allowText !== undefined ? { allowText: request.allowText } : {}),
+        ...(request.alwaysAllow ? { alwaysAllow: request.alwaysAllow } : {}),
       });
     });
   }
 
   answer(id: string, allowed: boolean, hunks?: readonly number[], text?: string): void {
     const label =
-      text !== undefined ? (allowed ? `answered: ${text.slice(0, 80)}` : "skipped") : allowed ? "allowed" : "denied";
+      text === "always"
+        ? "always allowed"
+        : text !== undefined
+          ? allowed
+            ? `answered: ${text.slice(0, 80)}`
+            : "skipped"
+          : allowed
+            ? "allowed"
+            : "denied";
     this.resolve(id, { allowed, hunks, answer: text }, label);
   }
 

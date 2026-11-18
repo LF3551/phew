@@ -59,7 +59,7 @@
 - **Autocomplete and Next Edit.** Inline completions and a predicted next edit, with any model.
 - **Modes.** Ask, Plan, Code, Debug, Review, and your own modes, each with its color. `Shift+Tab` switches the mode.
 - **Any model, one click away.** The model menu opens above the input and shows the provider and the context size of each model.
-- **You decide how far it goes.** **Careful**, **Balanced**, or **Autopilot** in one click, or set edits, commands, and MCP tools one by one. The panel shows the commands of your allowlist and what differs from your defaults.
+- **You decide how far it goes.** **Careful**, **Balanced**, or **Autopilot** in one click, or set edits, commands, and MCP tools one by one. By default, commands that only read (`ls`, `cat`, `grep`, `find`, `git status`, `git diff`…) run without asking, also in pipes and chains; **All** runs everything except dangerous commands; **Always allow** on a request adds a command to your allowlist.
 - **Safe by default.** Phew does not read `.env` files and keys, removes secrets from tool output, and always asks before dangerous commands such as `git push --force`, `terraform apply`, or `kubectl delete`.
 - **Any model.** GitHub Copilot without a key or with a GitHub token, OpenAI, Anthropic, Google Gemini, Azure OpenAI, Mistral, xAI, DeepSeek, Groq, Cerebras, Together AI, Fireworks AI, OpenRouter, LiteLLM, and local models with Ollama, LM Studio, or vLLM.
 - **Know the cost.** Tokens and cost per task, with optional budget limits.
