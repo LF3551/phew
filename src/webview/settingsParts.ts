@@ -17,8 +17,8 @@ function el<K extends keyof HTMLElementTagNameMap>(
 export const groupOrder = ["Models", "Agent", "Safety", "Git and tools", "Look and feel"];
 
 /** The group, the icon, and a short line for each section. */
-export function sectionInfo(title: string): { group: string; icon: string; line?: string } {
-  const info: Record<string, { group: string; icon: string; line?: string }> = {
+export function sectionInfo(title: string): { group: string; icon: string; line?: string; short?: string } {
+  const info: Record<string, { group: string; icon: string; line?: string; short?: string }> = {
     Models: { group: "Models", icon: "sparkle", line: "The models that Phew can use, and how to connect more." },
     "Model Connection": {
       group: "Models",
@@ -33,6 +33,7 @@ export function sectionInfo(title: string): { group: string; icon: string; line?
       group: "Agent",
       icon: "book",
       line: "What the agent remembers, its modes, and its skills.",
+      short: "Memory, Modes, Skills",
     },
     Handoff: { group: "Agent", icon: "export", line: "Notes that let any agent continue the work." },
     Approvals: { group: "Safety", icon: "shield", line: "What runs without asking: edits, commands, and MCP tools." },

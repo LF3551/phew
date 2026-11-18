@@ -36,6 +36,8 @@ const vscode = acquireVsCodeApi();
 const modelsSection = new ModelsSection((message) => vscode.postMessage(message));
 const app = document.getElementById("app") as HTMLElement;
 let filter = "";
+/** The scroll listener of the menu, replaced when the page renders again. */
+let onScroll: (() => void) | undefined;
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -305,13 +307,14 @@ function render(data: Init): void {
   );
   sections.push(["Statistics", statistics]);
 
-  // The menu groups the sections, with an icon for each, and marks the section in view.
+  // The menu groups the sections, with an icon for each. The page shows the sections in the same order.
   const links = new Map<string, HTMLAnchorElement>();
   const byGroup = new Map<string, [string, HTMLElement][]>();
   for (const entry of sections) {
     const group = sectionInfo(entry[0]).group;
     byGroup.set(group, [...(byGroup.get(group) ?? []), entry]);
   }
+  const ordered: [string, HTMLElement][] = [];
   for (const group of [...groupOrder, ...[...byGroup.keys()].filter((name) => !groupOrder.includes(name))]) {
     const entries = byGroup.get(group);
     if (!entries) continue;
@@ -319,27 +322,40 @@ function render(data: Init): void {
     for (const [name, section] of entries) {
       const link = el("a");
       link.href = `#${section.id}`;
-      link.append(iconNode(sectionInfo(name).icon), el("span", undefined, name));
+      link.title = name;
+      link.append(iconNode(sectionInfo(name).icon), el("span", "nav-label", sectionInfo(name).short ?? name));
       link.addEventListener("click", (event) => {
         event.preventDefault();
+        // The clicked section is marked at once, also when the page cannot scroll it to the top.
+        clickedUntil = Date.now() + 1500;
+        markActive(section.id);
         section.scrollIntoView({ behavior: "smooth" });
       });
       links.set(section.id, link);
       nav.append(link);
+      ordered.push([name, section]);
     }
   }
-  for (const [, section] of sections) main.append(section);
-  const observer = new IntersectionObserver(
-    (entries) => {
-      const visible = entries
-        .filter((entry) => entry.isIntersecting)
-        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
-      if (!visible) return;
-      for (const [id, link] of links) link.classList.toggle("active", id === visible.target.id);
-    },
-    { rootMargin: "-80px 0px -60% 0px" },
-  );
-  for (const [, section] of sections) observer.observe(section);
+  for (const [, section] of ordered) main.append(section);
+  let clickedUntil = 0;
+  const markActive = (id: string) => {
+    for (const [sectionId, link] of links) link.classList.toggle("active", sectionId === id);
+  };
+  // The section in view is the last one whose top is above the line under the header.
+  const updateActive = () => {
+    if (Date.now() < clickedUntil) return;
+    const line = 96;
+    let current = ordered[0]?.[1];
+    for (const [, section] of ordered) if (section.getBoundingClientRect().top <= line) current = section;
+    // At the bottom of the page, the last section counts as in view.
+    const bottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4;
+    if (bottom && window.scrollY > 0) current = ordered[ordered.length - 1]?.[1];
+    if (current) markActive(current.id);
+  };
+  if (onScroll) window.removeEventListener("scroll", onScroll);
+  onScroll = () => requestAnimationFrame(updateActive);
+  window.addEventListener("scroll", onScroll, { passive: true });
+  requestAnimationFrame(updateActive);
   const layout = el("div", "layout");
   layout.append(nav, main);
   app.append(layout);

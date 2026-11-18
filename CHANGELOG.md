@@ -31,6 +31,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- The menu of the settings marks the section that you clicked or scrolled to, also the last one, and long names no longer spill out of their row.
 - Test runners and bundlers in watch mode no longer hang a task: the terminal of the agent sets `CI=1`, and a watcher that still starts keeps running in its own terminal.
 - Prompt themes such as powerlevel10k with its instant prompt no longer break the end of a command.
 - A quiet line such as `Installing dependencies:` no longer looks like a question.

@@ -184,6 +184,13 @@ nav a {
   opacity: 0.85;
 }
 
+nav a .nav-label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 nav a .icon {
   flex: none;
   width: 15px;
