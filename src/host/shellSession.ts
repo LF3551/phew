@@ -2,6 +2,7 @@ import { chmodSync, existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import * as vscode from "vscode";
+import { OutputKeeper } from "../core/outputLimit";
 import { lastLine, looksLikePrompt, plainTerminalText, type ShellMark, ShellMarkParser } from "../core/shellMarks";
 import { type ShellLaunch, shellLaunch, userShell } from "./shellScripts";
 
@@ -114,11 +115,18 @@ export class ShellSession implements vscode.Disposable {
   /** The folder of the shell, from its last prompt. */
   cwd: string | undefined;
 
+  /** " (2)" for the second terminal of a chat. */
+  nameSuffix = "";
+  /** The last command that the agent ran, for the list of terminals. */
+  private lastCommand: string | undefined;
+
   constructor(
     private readonly pty$: PtyModule,
     private readonly title: () => string,
     private readonly startFolder: () => string,
     private readonly shellPath: () => string | undefined,
+    /** Called when the state for the list of terminals changes. */
+    private readonly onChange: () => void = () => undefined,
   ) {
     this.disposables.push(
       vscode.window.onDidCloseTerminal((closed) => {
@@ -134,6 +142,34 @@ export class ShellSession implements vscode.Disposable {
 
   get started(): boolean {
     return this.pty !== undefined;
+  }
+
+  /** What the list of terminals in the chat shows. */
+  get info(): {
+    pid?: number;
+    shell: string;
+    cwd?: string;
+    state: "idle" | "running" | "waiting" | "stopped";
+    command?: string;
+  } {
+    const shell = this.launch ? path.basename(this.launch.file).replace(/\.exe$/i, "") : "";
+    if (!this.pty) return { shell, cwd: this.cwd, state: "stopped" };
+    const state = !this.busy ? "idle" : this.agentOwnsForeground && this.tail ? "waiting" : "running";
+    return {
+      pid: this.pty.pid,
+      shell,
+      cwd: this.cwd,
+      state,
+      ...(this.busy && this.lastCommand ? { command: this.lastCommand } : {}),
+    };
+  }
+
+  /** Ends the shell and closes its terminal; the next command starts a new one. */
+  kill(): void {
+    const terminal = this.terminal;
+    this.reset();
+    terminal?.dispose();
+    this.onChange();
   }
 
   private reset(): void {
@@ -170,7 +206,7 @@ export class ShellSession implements vscode.Disposable {
       setDimensions: (dimensions) => this.resize(dimensions.columns, dimensions.rows),
     };
     this.terminal = vscode.window.createTerminal({
-      name: `Phew: ${this.title()}`.slice(0, 50),
+      name: `Phew: ${this.title()}`.slice(0, 44) + this.nameSuffix,
       pty,
       iconPath: new vscode.ThemeIcon("sparkle"),
       isTransient: true,
@@ -209,10 +245,11 @@ export class ShellSession implements vscode.Disposable {
       cols: this.cols,
       rows: this.rows,
       cwd,
-      env: { ...process.env, ...launch.env, COLORTERM: "truecolor" },
+      env: { ...process.env, ...utf8Locale(), ...launch.env, COLORTERM: "truecolor" },
     });
     this.pty = pty;
     this.busy = true;
+    this.onChange();
     pty.onData((data) => {
       if (this.pty !== pty) return;
       for (const piece of this.parser.push(data)) {
@@ -224,6 +261,7 @@ export class ShellSession implements vscode.Disposable {
           this.agentOwnsForeground = false;
           this.tail = undefined;
           if (piece.mark.cwd) this.cwd = piece.mark.cwd;
+          this.onChange();
         }
         for (const listener of this.listeners) listener(piece as { text?: string; mark?: ShellMark });
       }
@@ -235,6 +273,7 @@ export class ShellSession implements vscode.Disposable {
       this.ready = undefined;
       this.busy = false;
       for (const listener of this.listeners) listener({ text: "\u0000closed" });
+      this.onChange();
     });
     this.ready = new Promise<void>((resolve) => {
       let done = false;
@@ -265,6 +304,8 @@ export class ShellSession implements vscode.Disposable {
     if (!this.busy && /\r/.test(data)) {
       this.busy = true;
       this.agentOwnsForeground = false;
+      this.lastCommand = undefined;
+      this.onChange();
     }
     this.pty.write(data);
   }
@@ -313,7 +354,14 @@ export class ShellSession implements vscode.Disposable {
     const useStartMark = (launch.kind === "bash" || launch.kind === "zsh" || launch.kind === "fish") && !insideProgram;
 
     return new Promise<ShellResult>((resolve) => {
-      let raw = "";
+      // A command can print millions of lines: the result keeps the start and the end.
+      const kept = new OutputKeeper();
+      let recent = "";
+      const take = (text: string) => {
+        kept.push(text);
+        recent = (recent + text).slice(-4000);
+        options.onOutput(text);
+      };
       let streaming = false;
       let sinceStart = "";
       let quietTimer: ReturnType<typeof setTimeout> | undefined;
@@ -328,17 +376,17 @@ export class ShellSession implements vscode.Disposable {
         clearTimeout(backgroundTimer);
         clearTimeout(echoTimer);
         options.signal.removeEventListener("abort", onAbort);
-        const output = result.output ?? plainTerminalText(raw).replace(/^\n+/, "").replace(/\s+$/, "");
+        const output = result.output ?? plainTerminalText(kept.text()).replace(/^\n+/, "").replace(/\s+$/, "");
         // The program keeps running: its view in the chat keeps following the terminal.
         if (result.state === "waiting" || result.state === "running") this.tail = options.onOutput;
+        this.onChange();
         resolve({ ...result, output });
       };
 
       // The output starts after the echo of the command: at the start mark, or after the first line break.
       const stream = (text: string) => {
         if (streaming) {
-          raw += text;
-          options.onOutput(text);
+          take(text);
           return;
         }
         sinceStart += text;
@@ -350,8 +398,7 @@ export class ShellSession implements vscode.Disposable {
           const rest = sinceStart.slice(breakAt + 1);
           sinceStart = "";
           if (rest) {
-            raw += rest;
-            options.onOutput(rest);
+            take(rest);
           }
         }
       };
@@ -360,9 +407,10 @@ export class ShellSession implements vscode.Disposable {
         clearTimeout(quietTimer);
         quietTimer = setTimeout(
           () => {
-            const text = raw || sinceStart;
+            const text = recent || sinceStart;
             // A quiet program that shows a prompt or a question waits for input (ssh, a REPL, a password).
-            if (looksLikePrompt(text)) {
+            // A server in the background only reports "running".
+            if (!options.background && looksLikePrompt(text)) {
               this.agentOwnsForeground = true;
               finish({ state: "waiting", prompt: lastLine(text) });
             }
@@ -413,8 +461,7 @@ export class ShellSession implements vscode.Disposable {
               : sinceStart;
             sinceStart = "";
             if (rest) {
-              raw += rest;
-              options.onOutput(rest);
+              take(rest);
             }
           } else streaming = true;
         },
@@ -428,6 +475,8 @@ export class ShellSession implements vscode.Disposable {
 
       this.busy = true;
       this.agentOwnsForeground = true;
+      this.lastCommand = command;
+      this.onChange();
       // Inside a program (ssh, a REPL), the text is input for it.
       const line = command;
       // Several lines go in as one paste, so the shell runs them as one command and prints one prompt.
@@ -448,4 +497,16 @@ export class ShellSession implements vscode.Disposable {
     }
     this.terminal?.dispose();
   }
+}
+
+/**
+ * A UTF-8 locale when the environment has none: a remote VS Code server often starts without LANG, and then
+ * bash shows letters such as ö or я as octal bytes.
+ */
+function utf8Locale(): Record<string, string> {
+  if (process.platform === "win32") return {};
+  const current = process.env.LC_ALL || process.env.LC_CTYPE || process.env.LANG || "";
+  if (/utf-?8/i.test(current)) return {};
+  const locale = process.platform === "darwin" ? "en_US.UTF-8" : "C.UTF-8";
+  return { LANG: locale, LC_CTYPE: locale };
 }

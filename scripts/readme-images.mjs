@@ -166,6 +166,7 @@ function state(overrides = {}) {
     assistant: { name: "Phew", avatar: "", persona: "partner", customPersona: "", userName: "", language: "match" },
     onboarding: false,
     modelId: "claude-sonnet-4.5",
+    terminals: [],
     models: [
       {
         id: "m1",

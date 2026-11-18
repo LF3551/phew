@@ -288,6 +288,9 @@ class ChatController implements ChatViewHandle {
       case "commandInput":
         session?.commandInput(message.id, message.data);
         return;
+      case "terminalAction":
+        session?.terminalAction(message.id, message.action);
+        return;
       case "showTerminal":
         session?.showTerminal();
         return;

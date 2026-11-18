@@ -1,3 +1,5 @@
+import { limitForModel } from "./outputLimit";
+
 /** Reads the result that the host formats as "$ command\n[exit code 0]\noutput". */
 export function parseCommandResult(detail: string): {
   command?: string;
@@ -14,7 +16,7 @@ export function parseCommandResult(detail: string): {
   // A note from the host after the output, such as "The user stopped this command", is not output.
   const output = rest
     .replace(/\nThe user stopped this command\..*$/s, "")
-    .replace(/\n?(The program waits for input|It keeps running in the terminal)[\s\S]*$/, "")
+    .replace(/\n?(The program waits for input|It keeps running in the terminal|Ran in terminal \d+\.)[\s\S]*$/, "")
     .replace(/\n?The shell (is now in|stays in) .*$/, "")
     .replace(/^\(no output\)$/, "");
   return { command: lines[start]?.slice(2), status, exitCode: exit ? Number(exit[1]) : undefined, output };
@@ -30,7 +32,7 @@ export interface ShellOutcome {
 
 /** The result for the model: the same "$ command / [status] / output" shape, and what to do next. */
 export function describeShellResult(command: string, outcome: ShellOutcome, timeoutSeconds: number): string {
-  const output = outcome.output.trim() || "(no output)";
+  const output = limitForModel(outcome.output.trim()) || "(no output)";
   const status =
     outcome.state === "done"
       ? `exit code ${outcome.exitCode ?? 0}`

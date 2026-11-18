@@ -20,6 +20,7 @@ import { CostMeter, formatCost, formatTokens } from "../core/cost";
 import { titleFromText } from "../core/export";
 import { exitCodeOf, type JournalEvent } from "../core/journal";
 import { canChange, findMode, type Mode, type ModeDefinition } from "../core/modes";
+import { limitForChat } from "../core/outputLimit";
 import { personaPrompt } from "../core/persona";
 import { emptyPlan, type Plan, planPrompt } from "../core/plan";
 import { buildSystemPrompt } from "../core/prompts";
@@ -42,7 +43,8 @@ import type { ModelManager } from "./models";
 import type { ReviewManager } from "./reviewManager";
 import { loadRules } from "./rulesLoader";
 import { readSettings, type Settings } from "./settings";
-import { loadPty, ptyLoadError, ShellSession } from "./shellSession";
+import { ShellRegistry, type TerminalInfo } from "./shellRegistry";
+import { ptyLoadError } from "./shellSession";
 import type { SkillStore } from "./skillStore";
 import type { StatsStore } from "./statsStore";
 import type { TerminalWatcher } from "./terminalWatcher";
@@ -729,37 +731,52 @@ export class AgentSession {
   dispose(): void {
     this.stop();
     this.terminal?.dispose();
-    this.shellSession?.dispose();
+    this.shellRegistry?.dispose();
     if (this.shell.envFile) fs.rmSync(this.shell.envFile, { force: true });
   }
 
   private terminal: AgentTerminal | undefined;
   private readonly commandWhere = new Map<string, "terminal" | "background">();
 
-  private shellSession: ShellSession | undefined;
+  private shellRegistry: ShellRegistry | undefined;
   private shellWarned = false;
+  /** The terminal where each command of the chat ran, for keys typed in its view. */
+  private readonly commandTerminals = new Map<string, string>();
 
-  /** The real shell of the chat (a PTY), or undefined when node-pty does not load on this system. */
-  private agentShell(): ShellSession | undefined {
-    if (this.shellSession) return this.shellSession;
-    const extension = vscode.extensions.getExtension("alekseialeinikov.phew");
-    const pty = extension ? loadPty(extension.extensionPath) : undefined;
-    if (!pty) {
-      if (!this.shellWarned) {
-        this.shellWarned = true;
-        this.deps.log.warn(
-          `The terminal of the chat is not available, so commands run in processes: ${ptyLoadError() ?? "no extension path"}`,
-        );
-      }
-      return undefined;
+  /** The terminals of the chat (real shells), or undefined when node-pty does not load on this system. */
+  private agentShells(): ShellRegistry | undefined {
+    if (!this.shellRegistry) {
+      const extension = vscode.extensions.getExtension("alekseialeinikov.phew");
+      this.shellRegistry = new ShellRegistry(
+        extension?.extensionPath,
+        () => this.title,
+        () => this.shell.cwd ?? this.root.uri.fsPath,
+        () => readSettings().commandsShell || undefined,
+        () => this.deps.onChange(this),
+      );
     }
-    this.shellSession = new ShellSession(
-      pty,
-      () => this.title,
-      () => this.shell.cwd ?? this.root.uri.fsPath,
-      () => readSettings().commandsShell || undefined,
-    );
-    return this.shellSession;
+    if (this.shellRegistry.available) return this.shellRegistry;
+    if (!this.shellWarned) {
+      this.shellWarned = true;
+      this.deps.log.warn(
+        `The terminal of the chat is not available, so commands run in processes: ${ptyLoadError() ?? "no extension path"}`,
+      );
+    }
+    return undefined;
+  }
+
+  /** The terminals of the chat for the list in the chat. */
+  get terminals(): TerminalInfo[] {
+    return this.shellRegistry?.list() ?? [];
+  }
+
+  /** Show, Ctrl+C, or close one terminal of the chat. */
+  terminalAction(id: string, action: "show" | "interrupt" | "kill"): void {
+    const registry = this.shellRegistry;
+    if (!registry) return;
+    if (action === "kill") registry.kill(id);
+    else if (action === "interrupt") registry.get(id)?.interrupt();
+    else registry.get(id)?.reveal(false);
   }
 
   private agentTerminal(): AgentTerminal {
@@ -769,7 +786,8 @@ export class AgentSession {
 
   /** Shows the terminal of the chat, where the agent's commands run. */
   showTerminal(): void {
-    if (this.shellSession) this.shellSession.reveal(false);
+    const shell = this.shellRegistry?.main;
+    if (shell) shell.reveal(false);
     else this.agentTerminal().show();
   }
 
@@ -821,8 +839,10 @@ export class AgentSession {
   /** Keys typed in the terminal of a command in the chat. */
   commandInput(toolId: string, data: string): void {
     // The real shell takes keys at any time, also for a program that keeps running after its tool call.
-    if (this.shellSession?.started) {
-      this.shellSession.userInput(data);
+    const terminal = this.commandTerminals.get(toolId);
+    const shell = (terminal ? this.shellRegistry?.get(terminal) : undefined) ?? this.shellRegistry?.main;
+    if (shell?.started) {
+      shell.userInput(data);
       return;
     }
     const callId = this.callIdsByTool.get(toolId);
@@ -834,7 +854,8 @@ export class AgentSession {
     const callId = this.callIdsByTool.get(toolId);
     if (callId && this.activeTools?.stopCommand(callId)) return;
     // A program that keeps running after its tool call (waiting, in the background) stops with Ctrl+C.
-    this.shellSession?.interrupt();
+    const terminal = this.commandTerminals.get(toolId);
+    ((terminal ? this.shellRegistry?.get(terminal) : undefined) ?? this.shellRegistry?.main)?.interrupt();
   }
 
   private bufferOutput(callId: string, text: string): void {
@@ -848,8 +869,9 @@ export class AgentSession {
   private flushOutput(): void {
     if (this.outputTimer) clearTimeout(this.outputTimer);
     this.outputTimer = undefined;
+    // A command that prints faster than the chat can show sends the newest part and a note about the rest.
     for (const [id, text] of this.outputBuffers)
-      this.deps.emit(this, { type: "toolOutput", id, text: text.slice(-20_000) });
+      this.deps.emit(this, { type: "toolOutput", id, text: limitForChat(text) });
     this.outputBuffers.clear();
   }
 
@@ -917,11 +939,12 @@ export class AgentSession {
       onCommandOutput: (callId, text) => this.bufferOutput(callId, text),
       shell: this.shell,
       terminal: vscode.workspace.isTrusted ? this.agentTerminal() : undefined,
-      shellSession: vscode.workspace.isTrusted ? this.agentShell() : undefined,
-      onCommandStart: (callId, where) => {
+      shells: vscode.workspace.isTrusted ? this.agentShells() : undefined,
+      onCommandStart: (callId, where, terminal) => {
         const id = this.toolIdsByCall.get(callId);
         if (!id) return;
         this.commandWhere.set(id, where);
+        if (terminal) this.commandTerminals.set(id, terminal);
         this.deps.emit(this, { type: "toolOutput", id, text: "", where });
       },
     });

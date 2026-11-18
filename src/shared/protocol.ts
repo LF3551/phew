@@ -65,6 +65,16 @@ export interface ViewState {
   readonly onboarding: boolean;
   /** The model id of the active profile, for example gpt-5.1. */
   readonly modelId: string;
+  /** The terminals of the chat, for the list in the chat. */
+  readonly terminals: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly pid?: number;
+    readonly shell: string;
+    readonly cwd?: string;
+    readonly state: "idle" | "running" | "waiting" | "stopped";
+    readonly command?: string;
+  }[];
   /** All model profiles, for the menu under the input. */
   readonly models: readonly ModelOption[];
   /** The name of the model that the current mode always uses, when the mode sets one. */
@@ -293,6 +303,7 @@ export type WebviewMessage =
   | { readonly type: "manageModels" }
   | { readonly type: "stopCommand"; readonly id: string }
   | { readonly type: "showTerminal" }
+  | { readonly type: "terminalAction"; readonly id: string; readonly action: "show" | "interrupt" | "kill" }
   | { readonly type: "commandInput"; readonly id: string; readonly data: string }
   | { readonly type: "copyText"; readonly text: string }
   | { readonly type: "setApproval"; readonly key: "review"; readonly value: ReviewSetting }
@@ -510,6 +521,13 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
       return typeof message.id === "string" && message.id.length > 0 && message.id.length <= 200
         ? { type: "useModel", id: message.id }
         : undefined;
+    case "terminalAction": {
+      const terminal = typeof message.id === "string" && /^\d{1,4}$/.test(message.id) ? message.id : undefined;
+      const action = message.action;
+      return terminal && (action === "show" || action === "interrupt" || action === "kill")
+        ? { type: "terminalAction", id: terminal, action }
+        : undefined;
+    }
     case "commandInput": {
       const value = id("id");
       return value && typeof message.data === "string" && message.data.length > 0 && message.data.length <= 10_000

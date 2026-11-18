@@ -31,7 +31,7 @@ import { git, gitIdentity } from "./git";
 import type { McpManager } from "./mcpManager";
 import type { MemoryStore } from "./memoryStore";
 import type { Settings } from "./settings";
-import type { ShellSession } from "./shellSession";
+import type { ShellRegistry } from "./shellRegistry";
 import type { SkillStore } from "./skillStore";
 
 const maximumToolOutput = 40_000;
@@ -55,10 +55,10 @@ export interface ToolHostOptions {
   readonly broker: ApprovalBroker;
   /** The terminal of the chat, which mirrors the commands while they run (when no real shell is available). */
   readonly terminal?: AgentTerminal;
-  /** The real shell of the chat (a PTY), like the terminal of the Copilot agent. */
-  readonly shellSession?: ShellSession;
+  /** The terminals of the chat (real shells), like the terminals of the Copilot agent. */
+  readonly shells?: ShellRegistry;
   /** Where a command runs, for the chat: a real terminal or the background. */
-  readonly onCommandStart?: (callId: string, where: "terminal" | "background") => void;
+  readonly onCommandStart?: (callId: string, where: "terminal" | "background", terminal?: string) => void;
   /** The folder of the chat's shell. `cd` in one command carries over to the next, like in Claude Code. */
   readonly shell?: { cwd?: string; envFile?: string };
   /** Live output of a running command, by the id of the tool call. */
@@ -401,7 +401,7 @@ export class ToolHost {
 
   /** Keys typed in a terminal of the chat for a running command. */
   commandInput(callId: string, data: string): void {
-    const shellSession = this.options.settings.commandsTerminal !== "off" ? this.options.shellSession : undefined;
+    const shellSession = this.options.settings.commandsTerminal !== "off" ? this.options.shells?.main : undefined;
     if (shellSession) shellSession.userInput(data);
     else this.commandInputs.get(callId)?.feed(data);
   }
@@ -417,11 +417,13 @@ export class ToolHost {
     const requested = (stringArgument(args, "command") as string).trim();
     const interrupt = args.interrupt === true;
     const background = args.background === true;
-    const shellSession = this.options.settings.commandsTerminal !== "off" ? this.options.shellSession : undefined;
+    const shells = this.options.settings.commandsTerminal !== "off" ? this.options.shells : undefined;
+    const picked = shells?.pick(stringArgument(args, "terminal", false));
+    const shellSession = picked?.session;
     if (!requested) {
       if (!interrupt) throw new Error("The command is empty.");
       shellSession?.interrupt();
-      return { content: "Phew pressed Ctrl+C in the terminal of the chat." };
+      return { content: `Phew pressed Ctrl+C in terminal ${picked?.id ?? 1} of the chat.` };
     }
     const folder = stringArgument(args, "cwd", false);
     const shellCwd = this.options.shell?.cwd;
@@ -468,7 +470,7 @@ export class ToolHost {
     if (shellSession) {
       // Like the Copilot agent: the command runs in the real shell of the chat, which the user sees and can type into.
       try {
-        this.options.onCommandStart?.(callId, "terminal");
+        this.options.onCommandStart?.(callId, "terminal", picked?.id);
         if (interrupt) shellSession.interrupt();
         const timeoutSeconds = this.options.settings.commandTimeoutSeconds;
         const line = folder
@@ -493,7 +495,9 @@ export class ToolHost {
           note = `\nThe shell is now in ${this.options.roots.resolve(outcome.cwd) ? this.options.roots.display(outcome.cwd) : outcome.cwd}.`;
         }
         const prefix = notes.length > 0 ? `${notes.join(" ")}\n` : "";
-        return { content: prefix + describeShellResult(command, outcome, timeoutSeconds) + note };
+        // With several terminals the model learns which one ran the command and what the others do.
+        const where = shells && shells.size > 1 ? `\nRan in terminal ${picked?.id}. ${shells.summary()}` : "";
+        return { content: prefix + describeShellResult(command, outcome, timeoutSeconds) + note + where };
       } finally {
         this.runningCommands.delete(callId);
         signal.removeEventListener("abort", onAbort);

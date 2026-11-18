@@ -11,6 +11,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- Several terminals per chat. The agent opens another one when it needs it (`terminal: "new"`), for example for a server while it runs the tests. The **Terminals** button under the input shows how many terminals the chat has, and for each one its state, shell, process id, folder, and running command, with Ctrl+C and Close.
+- Huge output stays fast. The model gets the start and the end of the output with the number of lines left out, the chat skips lines that come faster than it can show and says so, and the terminal keeps everything.
+- The terminal of the chat uses a UTF-8 locale when the system has none, so letters such as я or ö show correctly.
+
 - Fewer questions about commands. The default **Smart** mode runs commands that only read (`ls`, `pwd`, `cat`, `grep`, `find` without `-delete` or `-exec`, `git status`, `git log`, `git diff`, `--version`, and more) without asking, also in pipes and chains such as `find . 2>/dev/null | wc -l`; each part of a chain is checked, and quotes are respected. **All** (before: Safe) runs every command except dangerous ones, also chains and redirections. A command request has **Always allow `npm test`**, which runs it and adds it to your allowlist. Dangerous commands still always ask.
 
 ## [0.2.0] - 2026-11-17

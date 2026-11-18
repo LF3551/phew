@@ -132,6 +132,11 @@ export const changeTools: readonly ToolDefinition[] = [
           type: "boolean",
           description: "Press Ctrl+C before the command, to stop a running program.",
         },
+        terminal: {
+          type: "string",
+          description:
+            'Which terminal of this chat: "1" by default, "new" to open another one (for example for a server while you run tests), or the number of one that you opened before.',
+        },
       },
       ["command"],
     ),

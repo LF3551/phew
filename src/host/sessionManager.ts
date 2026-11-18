@@ -194,6 +194,7 @@ export class SessionManager implements vscode.Disposable {
       })),
       model: profile?.name ?? "No model",
       modelId: profile?.model ?? "",
+      terminals: session?.terminals ?? [],
       models: allProfiles.map((item) => ({
         id: item.id,
         name: item.name,

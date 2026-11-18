@@ -155,6 +155,7 @@ export function renderChatHtml(options: ChatHtmlOptions): string {
       <div class="popover attach-menu" id="attachMenu" role="menu" aria-label="Add context" hidden></div>
       <div class="popover mode-menu" id="modeMenu" role="menu" aria-label="Mode" hidden></div>
       <div class="popover model-menu" id="modelMenu" role="menu" aria-label="Model" hidden></div>
+      <div class="popover terminals-panel" id="terminalsPanel" role="dialog" aria-label="Terminals" hidden></div>
       <div class="popover approvals" id="approvals" role="dialog" aria-label="Auto-approve in this chat" hidden></div>
       <div class="box">
         <div class="chips" id="chips"></div>
@@ -164,6 +165,7 @@ export function renderChatHtml(options: ChatHtmlOptions): string {
           <button type="button" class="pill mode-pill" id="mode" aria-haspopup="menu" aria-expanded="false" aria-controls="modeMenu"></button>
           <button type="button" class="icon-button" id="attachButton" title="Add context" aria-label="Add context" aria-haspopup="menu" aria-expanded="false" aria-controls="attachMenu">${icon("paperclip")}</button>
           <button type="button" class="icon-button" id="approvalsButton" title="Auto-approve settings" aria-label="Auto-approve settings" aria-haspopup="dialog" aria-expanded="false" aria-controls="approvals">${icon("shield")}<span class="dot" id="approvalDot" hidden></span></button>
+          <button type="button" class="icon-button terminals-button" id="terminalsButton" aria-haspopup="dialog" aria-expanded="false" aria-controls="terminalsPanel" hidden></button>
           <input type="file" id="imageInput" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
           <span class="spacer"></span>
           <button type="button" class="context-ring" id="context" hidden title="Context"><span id="contextLabel"></span></button>

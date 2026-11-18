@@ -2536,6 +2536,145 @@ button.pill.model.mode-locked .model-label {
   text-underline-offset: 3px;
 }
 
+/* The terminals of the chat */
+.terminals-button {
+  gap: 3px;
+  width: auto;
+  padding: 0 5px;
+}
+
+.terminals-button .terminals-badge {
+  font-size: 0.8em;
+  font-variant-numeric: tabular-nums;
+}
+
+.terminals-button.busy {
+  color: var(--phew-accent);
+}
+
+.terminals-button.busy .icon {
+  animation: phew-term-pulse 1.6s ease-in-out infinite;
+}
+
+.popover.terminals-panel {
+  gap: 4px;
+  width: min(380px, calc(100vw - 24px));
+  padding: 6px;
+}
+
+.terminals-head {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 2px 6px 4px;
+}
+
+.terminals-head .popover-title {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.8em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.terminals-count {
+  padding: 0 6px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.8em;
+  background: color-mix(in srgb, var(--vscode-foreground) 10%, transparent);
+  border-radius: 8px;
+}
+
+.terminal-row {
+  --row-tone: var(--vscode-descriptionForeground);
+  display: flex;
+  gap: 4px;
+  align-items: flex-start;
+  border-radius: 6px;
+}
+
+.terminal-row[data-state="running"] {
+  --row-tone: var(--phew-accent);
+}
+
+.terminal-row[data-state="waiting"] {
+  --row-tone: var(--phew-warning);
+}
+
+.terminal-row:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.terminal-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding: 6px;
+  color: var(--vscode-foreground);
+  text-align: left;
+  font: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.terminal-title {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.terminal-dot {
+  width: 7px;
+  height: 7px;
+  background: var(--row-tone);
+  border-radius: 50%;
+}
+
+.terminal-row[data-state="running"] .terminal-dot {
+  animation: phew-term-pulse 1.2s ease-in-out infinite;
+}
+
+.terminal-state {
+  color: var(--row-tone);
+  font-size: 0.85em;
+}
+
+.terminal-details {
+  overflow: hidden;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.82em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.terminal-command {
+  overflow: hidden;
+  margin-top: 2px;
+  padding: 1px 5px;
+  font-size: 0.82em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  background: var(--vscode-textCodeBlock-background);
+  border-radius: 4px;
+}
+
+.terminal-actions {
+  display: inline-flex;
+  flex: none;
+  padding-top: 5px;
+}
+
+.terminal-actions .term-action:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.terminals-note {
+  padding: 4px 6px 2px;
+}
+
 button.pill.model::after {
   content: " ⌄";
 }

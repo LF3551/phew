@@ -41,6 +41,7 @@ import {
   showWrapped,
 } from "./persona";
 import { appendCommandOutput, renderCommandTerminal, setCommandWhere } from "./terminalBlock";
+import { createTerminalsPanel } from "./terminalsPanel";
 import { groupSummary, toolLabel } from "./toolLabels";
 
 interface VsCodeApi {
@@ -381,6 +382,7 @@ function applyState(next: ViewState): void {
     ? `${next.model} (${next.provider})${next.modeModel ? ` · set by the ${currentModeName(next)} mode` : ""}. Click to switch.`
     : "Connect a model";
   modelMenu.update(next.models, next.busy, next.modeModel, currentModeName(next));
+  terminalsPanel.update(next.terminals ?? []);
   $("setup").hidden = next.configured;
   stopButton.hidden = !next.busy;
   const send = next.sendWith === "ctrlEnter" ? "Ctrl+Enter" : "Enter";
@@ -1806,6 +1808,13 @@ const approvalsPanel = createApprovalsPanel({
   post: (message) => vscode.postMessage(message),
 });
 
+const terminalsPanel = createTerminalsPanel({
+  button: $<HTMLButtonElement>("terminalsButton"),
+  panel: $("terminalsPanel"),
+  post: (message) => vscode.postMessage(message),
+  closeOthers: closePopovers,
+});
+
 const modelMenu = createModelMenu({
   button: modelButton,
   menu: $("modelMenu"),
@@ -1835,7 +1844,7 @@ document.addEventListener("click", (event) => {
     .some(
       (node) =>
         node instanceof Element &&
-        node.matches(".popover, #attachButton, #approvalsButton, #appearanceButton, #mode, #model"),
+        node.matches(".popover, #attachButton, #approvalsButton, #appearanceButton, #mode, #model, #terminalsButton"),
     );
   if (!inside && !target.closest(".popover")) closePopovers();
 });
