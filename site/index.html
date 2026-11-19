@@ -147,12 +147,13 @@
           <div><dt>Review in the editor</dt><dd>Every change has Keep and Undo right in the file.</dd></div>
           <div><dt>Undo anything</dt><dd>Each request is a checkpoint. Restore it, even after a restart.</dd></div>
           <div><dt>Find, fork, and edit</dt><dd>Search all chats by their messages, fork any message to try another way, or edit it and send again.</dd></div>
-          <div><dt>Parallel agents</dt><dd>Run a second chat in a tab, or an agent on its own branch in a worktree.</dd></div>
+          <div><dt>Parallel agents</dt><dd>Run chats side by side, or agents on their own branches in worktrees, each with its own model. The list shows which one needs you, failed, or is done.</dd></div>
+          <div><dt>Subagents</dt><dd>The agent sends research tasks to helpers that read in parallel, each with the model it needs, and report back.</dd></div>
           <div><dt>Knows your project</dt><dd>Each chat starts with the stack, the commands, and the layout. Rules come with the files they are for, and memory checks itself.</dd></div>
           <div><dt>MCP and Agent Skills</dt><dd>Use your MCP servers, with OAuth sign-in, and <code>SKILL.md</code> skills.</dd></div>
           <div><dt>Autocomplete</dt><dd>Inline completions and the next edit, with any model.</dd></div>
           <div><dt>Commits your way</dt><dd>Commit messages with your style, sign-off, and signing.</dd></div>
-          <div><dt>Never stuck</dt><dd>When the model goes quiet, Retry sends the request again and the task goes on.</dd></div>
+          <div><dt>Never stuck</dt><dd>When the model goes quiet, Retry sends the request again. When its quota runs out, your fallback model goes on with the task.</dd></div>
         </dl>
       </div>
     </section>
@@ -186,7 +187,7 @@
       <div class="wrap two">
         <div>
           <h2>Bring any model</h2>
-          <p>Use the account you already have, sign in through your company with short-lived tokens, or keep everything on your computer with a local model. Phew shows what is ready on your computer when you start. Switch models in the chat at any time.</p>
+          <p>Use the account you already have, sign in through your company with short-lived tokens, or keep everything on your computer with a local model. Phew shows what is ready on your computer when you start. Each chat keeps its own model, so two keys of one provider can work side by side.</p>
         </div>
         <ul class="providers" aria-label="Supported providers">
           <li>GitHub Copilot, without a key</li>
