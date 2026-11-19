@@ -1,3 +1,4 @@
+import { accentButton, readableAccent, safeColor } from "../core/appearance";
 import { renderMarkdown } from "./markdown";
 import { type ModelItem, ModelsSection } from "./modelsSection";
 import { groupOrder, iconNode, sectionHeader, sectionInfo } from "./settingsParts";
@@ -233,7 +234,28 @@ function settingRow(key: string, property: Property, data: Init): HTMLElement {
   return row;
 }
 
+/** The accent color of the chat (Appearance) colors this page too; the default is the cyan of Phew. */
+function applyAccent(data: Init): void {
+  const accent = safeColor(data.values["phew.appearance.accentColor"]);
+  const style = document.body.style;
+  if (accent) {
+    const button = accentButton(accent);
+    style.setProperty("--accent", accent);
+    style.setProperty("--accent-button", button.background);
+    style.setProperty("--on-accent", button.text);
+    // Text in the accent: readable on this theme, mixed with the text color only as far as needed.
+    const page = getComputedStyle(document.body);
+    style.setProperty("--accent-text", readableAccent(accent, page.backgroundColor, page.color));
+  } else {
+    style.removeProperty("--accent-text");
+    style.removeProperty("--accent");
+    style.removeProperty("--accent-button");
+    style.removeProperty("--on-accent");
+  }
+}
+
 function render(data: Init): void {
+  applyAccent(data);
   const focus = app.dataset.focus;
   app.replaceChildren();
   const top = el("header", "top");

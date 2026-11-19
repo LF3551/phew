@@ -1,4 +1,4 @@
-import { accentPresets, defaultAppearance } from "../core/appearance";
+import { accentPresets, defaultAppearance, readableAccent, textOnColor } from "../core/appearance";
 import { type Attachment, isLongPaste, pastedLabel } from "../core/attachments";
 import { chatGroup, chatGroupLabels, chatTime, highlightParts, matchesChat } from "../core/chatList";
 import { lookOf, personaInfo } from "../core/persona";
@@ -477,17 +477,20 @@ function applyState(next: ViewState): void {
   renderReviewList(next);
 }
 
-/** Dark or light text for a background color, from its luminance. Non-hex colors get white text. */
-function textOn(color: string): string {
-  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color.trim())?.[1];
-  if (!hex) return "#fff";
-  const full = hex.length === 3 ? [...hex].map((c) => c + c).join("") : hex;
-  const [r, g, b] = [0, 2, 4].map((i) => {
-    const value = Number.parseInt(full.slice(i, i + 2), 16) / 255;
-    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
-  });
-  // The text color with more contrast (WCAG): dark text above a luminance of about 0.18.
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.179 ? "#10181a" : "#fff";
+/** Your accent as a readable text color on every background of the chat: the panel, the input, and code. */
+function accentText(accent: string): string {
+  const style = getComputedStyle(document.body);
+  const names = [
+    "--vscode-sideBar-background",
+    "--vscode-editor-background",
+    "--vscode-input-background",
+    "--vscode-textCodeBlock-background",
+    "--vscode-editorWidget-background",
+  ];
+  const backgrounds = [style.backgroundColor, ...names.map((name) => style.getPropertyValue(name))]
+    .map((value) => value.trim())
+    .filter((value) => value && value !== "transparent" && value !== "rgba(0, 0, 0, 0)");
+  return readableAccent(accent, backgrounds.length > 0 ? backgrounds : ["#1e1e1e"], style.color);
 }
 
 function applyAppearance(next: ViewState): void {
@@ -510,7 +513,9 @@ function applyAppearance(next: ViewState): void {
     value ? body.style.setProperty(name, value) : body.style.removeProperty(name);
   set("--phew-font-size", next.fontSize ? `${next.fontSize}px` : undefined);
   set("--phew-accent", look.accentColor || undefined);
-  set("--phew-on-accent", look.accentColor ? textOn(look.accentColor) : undefined);
+  set("--phew-on-accent", look.accentColor ? textOnColor(look.accentColor) : undefined);
+  // Text in your accent stays readable on this theme: the accent mixes with the text color only as far as needed.
+  set("--phew-accent-text", look.accentColor ? accentText(look.accentColor) : undefined);
   set("--phew-user-bg", look.userBubbleColor || undefined);
   set("--phew-font-family", look.fontFamily || undefined);
   set("--phew-line-height", look.lineHeight ? String(look.lineHeight) : undefined);

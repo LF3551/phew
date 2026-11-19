@@ -17,6 +17,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- The accent color of Appearance now colors the settings page too, and it changes there at once.
+- Any accent stays readable: text in the accent mixes with the text color of the theme only as far as it needs to reach a contrast of 4.5 on the panel, the input, and code; a button in the accent picks the text color with more contrast, and gets a little darker when neither reads well (a mid violet, for example).
 - Light themes: text in the colors of Phew (diff lines, warnings, the checks, commands, the badges of models, and "No API key" on the settings page) now has a contrast of at least 4.5.
 - High contrast themes: buttons have the border of the theme, so they read as buttons.
 - A narrow side bar: the Send button keeps its round shape, the model shows its badge and arrow, the mode its icon, and the toolbar wraps to a second row instead of going past the edge. The bar of files to review and the find bar fit, and the line of a failed command keeps its description.

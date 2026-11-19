@@ -694,6 +694,18 @@ const states = {
       await page.waitForTimeout(150);
     },
   },
+  // The accents of Appearance: text and buttons in the accent stay readable in every theme.
+  ...Object.fromEntries(
+    ["#8b5cf6", "#f08c2e", "#2fb67c", "#e64980"].map((color) => [
+      `accent-${color.slice(1)}`,
+      {
+        messages: [
+          { type: "state", state: state({ appearance: { ...state().appearance, accentColor: color } }) },
+          ...kitchen.slice(1),
+        ],
+      },
+    ]),
+  ),
   "classic-style": {
     messages: [
       {

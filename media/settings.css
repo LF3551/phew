@@ -9,6 +9,7 @@
 
 body {
   --accent: #22b8cf;
+  --accent-text: var(--accent);
   --line: var(--vscode-widget-border, var(--vscode-panel-border, #8884));
   --soft-line: color-mix(in srgb, var(--vscode-foreground) 10%, transparent);
   --muted: var(--vscode-descriptionForeground);
@@ -213,7 +214,7 @@ nav a.active {
 }
 
 nav a.active .icon {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 nav a.active::before {
@@ -254,7 +255,7 @@ main {
   justify-content: center;
   width: 32px;
   height: 32px;
-  color: var(--accent);
+  color: var(--accent-text);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   border-radius: 9px;
 }
@@ -372,7 +373,7 @@ main {
 
 .badge {
   padding: 0 6px;
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: 11px;
   font-weight: 600;
   background: color-mix(in srgb, var(--accent) 14%, transparent);
@@ -502,12 +503,12 @@ button.small {
 }
 
 .primary {
-  color: #062a30;
-  background: var(--accent);
+  color: var(--on-accent, #062a30);
+  background: var(--accent-button, var(--accent));
 }
 
 body.vscode-light .primary {
-  color: #fff;
+  color: var(--on-accent, #fff);
 }
 
 .primary:hover {
@@ -606,7 +607,7 @@ button .icon {
 }
 
 .tag.accent {
-  color: var(--accent);
+  color: var(--accent-text);
   background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 

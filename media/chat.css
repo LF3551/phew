@@ -265,7 +265,7 @@ summary:focus-visible {
 }
 
 .command-prompt {
-  color: var(--phew-accent);
+  color: var(--phew-accent-text, var(--phew-accent));
   user-select: none;
 }
 
@@ -555,7 +555,7 @@ summary:focus-visible {
 }
 
 .term-action:hover {
-  color: var(--phew-accent);
+  color: var(--phew-accent-text, var(--phew-accent));
   background: color-mix(in srgb, var(--phew-accent) 12%, transparent);
 }
 
@@ -642,7 +642,7 @@ summary:focus-visible {
 }
 
 .term-secret.on {
-  color: var(--phew-accent);
+  color: var(--phew-accent-text, var(--phew-accent));
 }
 
 .term-answer-send {
@@ -735,7 +735,7 @@ summary:focus-visible {
 
 /* The command uses the colors of the theme and the accent of Phew, not fixed terminal colors. */
 .term-full .cmd-name {
-  color: var(--phew-accent);
+  color: var(--phew-accent-text, var(--phew-accent));
   font-weight: 600;
 }
 
@@ -2372,7 +2372,7 @@ select.pill {
   justify-content: center;
   width: 26px;
   height: 26px;
-  color: var(--phew-accent);
+  color: var(--phew-accent-text, var(--phew-accent));
   background: color-mix(in srgb, var(--phew-accent) 14%, transparent);
   border-radius: 7px;
 }
@@ -2416,7 +2416,7 @@ select.pill {
   flex: none;
   justify-content: center;
   min-width: 18px;
-  color: var(--phew-accent);
+  color: var(--phew-accent-text, var(--phew-accent));
 }
 
 .attach-end kbd {
@@ -2480,7 +2480,7 @@ select.pill {
   display: none;
   align-items: center;
   justify-content: center;
-  color: var(--phew-accent);
+  color: var(--phew-accent-text, var(--phew-accent));
   font-weight: 600;
   background: color-mix(
     in srgb,
@@ -2857,7 +2857,7 @@ body.dragging-files .drop-zone {
   flex: none;
   justify-content: center;
   min-width: 18px;
-  color: var(--phew-accent);
+  color: var(--phew-accent-text, var(--phew-accent));
 }
 
 .model-end kbd {
@@ -2935,7 +2935,7 @@ button.pill.model.mode-locked .model-label {
 }
 
 .terminals-button.busy {
-  color: var(--phew-accent);
+  color: var(--phew-accent-text, var(--phew-accent));
 }
 
 .terminals-button.busy .icon {
@@ -4130,7 +4130,7 @@ body.mascot-paused .mascot * {
 }
 
 .dice-button:hover {
-  color: var(--phew-accent);
+  color: var(--phew-accent-text, var(--phew-accent));
   border-color: var(--phew-accent);
 }
 
@@ -4525,7 +4525,7 @@ html body .send.empty:active {
 
 /* While the agent works, the message goes to the queue. */
 html body .send.queue {
-  color: var(--phew-accent);
+  color: var(--phew-accent-text, var(--phew-accent));
   background: color-mix(in srgb, var(--phew-accent) 18%, transparent);
   box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--phew-accent) 55%, transparent);
 }
@@ -4814,7 +4814,7 @@ html body .message.assistant {
 }
 
 .tool-group[data-status="running"] > summary .icon {
-  color: var(--phew-accent);
+  color: var(--phew-accent-text, var(--phew-accent));
 }
 
 .group-body {
@@ -5113,7 +5113,7 @@ body.vscode-light .mascot .m-face {
   flex: none;
   width: 18px;
   height: 18px;
-  color: var(--phew-accent);
+  color: var(--phew-accent-text, var(--phew-accent));
 }
 
 .suggestion-text {
