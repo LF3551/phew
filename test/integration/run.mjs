@@ -13,6 +13,12 @@ mkdirSync(path.join(main, ".vscode"), { recursive: true });
 mkdirSync(path.join(main, ".claude", "skills", "greeting"), { recursive: true });
 mkdirSync(second);
 writeFileSync(path.join(main, "math.js"), "exports.add = (a, b) => a - b;\n");
+// For the project brief: the scripts and the README that the agent sees at the start of each chat.
+writeFileSync(
+  path.join(main, "package.json"),
+  JSON.stringify({ name: "it", private: true, scripts: { test: "node check.js" } }, null, 2),
+);
+writeFileSync(path.join(main, "README.md"), "# Integration workspace\n\nA tiny project where Phew fixes math.js.\n");
 writeFileSync(
   path.join(main, "check.js"),
   'const { add } = require("./math");\nif (add(2, 3) !== 5) { console.error("add(2, 3) should be 5"); process.exit(1); }\nconsole.log("ok");\n',

@@ -241,6 +241,11 @@ async function run() {
     }
     assert.match(first.messages[0].content, /greeting: Greets the user/, "skills are in the system prompt");
     assert.match(first.messages[0].content, /second\//, "both folders are in the system prompt");
+    assert.match(
+      first.messages[0].content,
+      /Project overview[\s\S]*About: Integration workspace: A tiny project where Phew fixes math\.js\.[\s\S]*`npm test` → node check\.js/,
+      "the agent gets the project brief at the start",
+    );
     assert.deepEqual(
       api.reviews.pendingFiles.map((uri) => path.basename(uri.fsPath)),
       ["math.js"],

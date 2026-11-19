@@ -14,6 +14,8 @@ export interface PromptContext {
   readonly mcpTools?: readonly string[];
   /** Facts from the project memory. */
   readonly memory?: string;
+  /** The project overview that Phew gathered: stack, commands, layout. */
+  readonly brief?: string;
 }
 
 /** Builds the system prompt of the agent. */
@@ -25,6 +27,7 @@ export function buildSystemPrompt(context: PromptContext): string {
       `Workspace: ${context.workspaceName}. Platform: ${context.platform}. Shell: ${context.shell}. Date: ${context.date}.`,
       "All paths are relative to the workspace root.",
     ].join("\n"),
+    context.brief ?? "",
     context.mode.instructions || `You are in ${context.mode.name} mode.`,
     [
       "Safety rules:",
@@ -58,7 +61,7 @@ export function buildSystemPrompt(context: PromptContext): string {
       `Project rules from the workspace. Follow them unless they conflict with the safety rules:\n\n${context.rules}`,
     );
   }
-  return sections.join("\n\n");
+  return sections.filter(Boolean).join("\n\n");
 }
 
 export interface ProblemContext {

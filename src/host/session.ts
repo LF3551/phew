@@ -24,6 +24,7 @@ import { canChange, findMode, type Mode, type ModeDefinition } from "../core/mod
 import { limitForChat, limitForModel } from "../core/outputLimit";
 import { personaPrompt } from "../core/persona";
 import { emptyPlan, type Plan, planPrompt } from "../core/plan";
+import { initRequest } from "../core/projectBrief";
 import { buildSystemPrompt } from "../core/prompts";
 import { RootSet } from "../core/roots";
 import { skillsPrompt } from "../core/skills";
@@ -41,6 +42,7 @@ import type { HandoffService } from "./handoffs";
 import type { McpManager } from "./mcpManager";
 import type { MemoryStore } from "./memoryStore";
 import type { ModelManager } from "./models";
+import { projectBrief } from "./projectBrief";
 import type { ReviewManager } from "./reviewManager";
 import { loadRules } from "./rulesLoader";
 import { readSettings, type Settings } from "./settings";
@@ -453,7 +455,7 @@ export class AgentSession {
    * compacts the history. While a task runs, other messages wait in the queue and reach the agent at its next step.
    */
   async submit(text: string, attachments: readonly Attachment[] = [], interrupt = false): Promise<void> {
-    const command = /^\/(btw|goal|compact|handoff|continue)\b\s*([\s\S]*)$/i.exec(text.trim());
+    const command = /^\/(btw|goal|compact|handoff|continue|init)\b\s*([\s\S]*)$/i.exec(text.trim());
     if (command) {
       const [, name, rest] = command;
       const lower = name.toLowerCase();
@@ -461,6 +463,7 @@ export class AgentSession {
       else if (lower === "goal") this.setGoal(rest.trim());
       else if (lower === "handoff") await this.writeHandoff(true);
       else if (lower === "continue") await this.continueFrom(rest.trim() || undefined);
+      else if (lower === "init") await this.init(rest.trim());
       else await this.compactNow();
       return;
     }
@@ -476,6 +479,24 @@ export class AgentSession {
       return;
     }
     await this.run({ text, kind: "chat", attachments });
+  }
+
+  /** /init: the agent writes or improves AGENTS.md from what the project shows; the user reviews it. */
+  private async init(extra: string): Promise<void> {
+    let existing = false;
+    try {
+      await vscode.workspace.fs.stat(vscode.Uri.joinPath(this.root.uri, "AGENTS.md"));
+      existing = true;
+    } catch {
+      existing = false;
+    }
+    await this.run({
+      text: [initRequest(existing), extra ? `\nAlso: ${extra}` : ""].join(""),
+      kind: "chat",
+      display: extra ? `/init ${extra}` : "/init",
+      mode: "code",
+      ...(this.history.length === 0 ? { title: existing ? "Improve AGENTS.md" : "Write AGENTS.md" } : {}),
+    });
   }
 
   setGoal(goal: string): void {
@@ -1155,6 +1176,7 @@ export class AgentSession {
       verifyCommand: settings.verifyCommand || undefined,
       mcpTools: tools.mcpToolNames,
       memory: memory.map((note) => `- ${note}`).join("\n"),
+      brief: await projectBrief(this.root.uri),
     });
     const extra = [
       personaPrompt(settings.assistant),
