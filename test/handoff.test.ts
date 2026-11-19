@@ -184,3 +184,33 @@ describe("handoff notes", () => {
     expect(parseWebviewMessage({ type: "continueHandoff", path: "../../etc/passwd" })).toBeUndefined();
   });
 });
+
+test("the prompt lists the unfinished work of other sessions, the latest note of each, at most three", async () => {
+  const { unfinishedWork } = await import("../src/core/handoff");
+  const note = (session: string, title: string, status: string, day: string) => ({
+    path: `.phew/handoff/${day}-${session}.md`,
+    title,
+    status,
+    created: `2026-11-${day}T10:00:00Z`,
+    session,
+  });
+  const text = unfinishedWork(
+    [
+      note("a", "Fix login", "in-progress", "10"),
+      note("a", "Fix login, part 2", "blocked", "12"),
+      note("b", "Add export", "done", "13"),
+      note("c", "Speed up tests", "in-progress", "11"),
+      note("d", "Current chat", "in-progress", "14"),
+      note("e", "Old idea", "in-progress", "01"),
+      note("f", "Older idea", "in-progress", "02"),
+    ],
+    "d",
+  );
+  expect(text).toContain('"Fix login, part 2" (blocked, 2026-11-12)');
+  expect(text).not.toContain('"Fix login" (');
+  expect(text).not.toContain("Add export");
+  expect(text).not.toContain("Current chat");
+  expect(text).toContain("Speed up tests");
+  expect(text.split("\n").filter((line) => line.startsWith("- "))).toHaveLength(3);
+  expect(unfinishedWork([note("b", "Done", "done", "13")], "x")).toBe("");
+});

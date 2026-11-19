@@ -167,7 +167,11 @@ class ChatController implements ChatViewHandle {
       case "mentionQuery": {
         const root = session?.root.uri;
         if (!root) return;
-        const items = await this.mentions.suggest(root, message.query, readSettings());
+        const files = await this.mentions.suggest(root, message.query, readSettings());
+        // Earlier chats come after @problems, @git, and @terminal, before the files.
+        const chats = await this.sessions.chatMentions(message.query, session?.id);
+        const specials = files.filter((item) => item.label.startsWith("@"));
+        const items = [...specials, ...chats, ...files.filter((item) => !item.label.startsWith("@"))];
         this.post({ type: "mentions", query: message.query, items });
         return;
       }

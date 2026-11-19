@@ -4,14 +4,14 @@ import * as vscode from "vscode";
 import { achievementList, wrapped } from "../core/achievements";
 import type { ActivityCounts } from "../core/activity";
 import { type ApprovalLevel, approvalPresets } from "../core/approvals";
-import { chatPreview, contentSnippet } from "../core/chatList";
+import { chatPreview, contentSnippet, matchesChat } from "../core/chatList";
 import { conversationToMarkdown } from "../core/export";
 import { builtInModes, type ModeDefinition, parseCustomModes } from "../core/modes";
 import { type Assistant, defaultAssistant, parseAssistant } from "../core/persona";
 import { type SetupOption, setupOptions } from "../core/setupOptions";
 import { type WhatsNew, whatsNewFor } from "../core/whatsNew";
 import { branchName, isValidBranch, worktreeFolder } from "../core/worktree";
-import type { HostMessage, SessionSummary, ViewState } from "../shared/protocol";
+import type { HostMessage, MentionItem, SessionSummary, ViewState } from "../shared/protocol";
 import { ConversationStore, type StoredConversation } from "./conversationStore";
 import { git, gitOrThrow, repositoryRoot } from "./git";
 import { providerNames } from "./models";
@@ -201,6 +201,56 @@ export class SessionManager implements vscode.Disposable {
 
   /** The texts of saved chats by id, kept while they do not change, so a search reads each file once. */
   private readonly searchTexts = new Map<string, { updatedAt: number; texts: string[] }>();
+
+  /**
+   * An earlier chat for @chat: its title and a short transcript of what was asked, answered, and changed,
+   * from an open chat or from the history.
+   */
+  async chatDigest(id: string): Promise<{ title: string; text: string } | undefined> {
+    const open = this.sessions.get(id);
+    const stored = open ? undefined : await this.store.load(id);
+    if (!open && !stored) return undefined;
+    const title = open?.title ?? stored?.title ?? "Chat";
+    const items = open ? open.transcript.all() : (stored?.transcript ?? []);
+    const lines: string[] = [];
+    for (const item of items) {
+      if (item.type === "user") lines.push(`User: ${item.text}`);
+      else if (item.type === "assistantEnd" && item.text.trim()) lines.push(`Assistant: ${item.text}`);
+      else if (item.type === "summary" && item.files.length > 0)
+        lines.push(`Changed: ${item.files.map((file) => `${file.path} +${file.added} -${file.removed}`).join(", ")}`);
+    }
+    return { title, text: lines.join("\n\n") || "The chat has no messages." };
+  }
+
+  /** Earlier chats for @ mentions: the most recent ones, or the ones whose title matches the words. */
+  async chatMentions(query: string, exceptId: string | undefined): Promise<MentionItem[]> {
+    const words = query
+      .toLowerCase()
+      .replace(/^chat:?/, "")
+      .trim();
+    const rows = [
+      ...[...this.sessions.values()].map((session) => ({
+        id: session.id,
+        title: session.title,
+        updatedAt: session.updatedAt,
+      })),
+      ...(await this.store.list()).map((item) => ({ id: item.id, title: item.title, updatedAt: item.updatedAt })),
+    ];
+    const seen = new Set<string>();
+    return rows
+      .filter((row) => {
+        if (row.id === exceptId || seen.has(row.id) || row.title === "New chat") return false;
+        seen.add(row.id);
+        return !words || matchesChat(words, row.title);
+      })
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, words ? 5 : 3)
+      .map((row) => ({
+        label: `Chat: ${row.title}`,
+        detail: new Date(row.updatedAt).toLocaleDateString(),
+        attachment: { kind: "chat" as const, id: row.id, title: row.title },
+      }));
+  }
 
   /** Full-text search in all chats of the workspace: your messages and the answers. */
   async searchHistory(query: string): Promise<{ id: string; snippet: string }[]> {
@@ -802,6 +852,7 @@ export class SessionManager implements vscode.Disposable {
         emit: (source, message) => this.route(source, message),
         onChange: (source) => this.changed(source),
         persist: (source) => this.persist(source),
+        chatDigest: (chatId) => this.chatDigest(chatId),
         notify: (source, event, seconds) => this.notify(source, event, seconds),
         claims: {
           claim: (sessionId, path) => this.fileClaims.set(path, sessionId),

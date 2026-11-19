@@ -333,3 +333,26 @@ export function handoffFileName(date: Date, title: string, session: string): str
       .slice(0, 40) || "task";
   return `${day}-${slug}-${session.replace(/[^A-Za-z0-9]/g, "").slice(-6)}.md`;
 }
+
+/**
+ * The unfinished work of other sessions, for the system prompt: the latest note of each session that is not
+ * done, newest first, at most three.
+ */
+export function unfinishedWork(
+  notes: readonly { path: string; title: string; status: string; created: string; session?: string }[],
+  currentSession: string,
+): string {
+  const latest = new Map<string, (typeof notes)[number]>();
+  for (const note of [...notes].sort((a, b) => b.created.localeCompare(a.created))) {
+    const key = note.session ?? note.path;
+    if (!latest.has(key)) latest.set(key, note);
+  }
+  const open = [...latest.values()]
+    .filter((note) => note.status !== "done" && note.session !== currentSession)
+    .slice(0, 3);
+  if (open.length === 0) return "";
+  return [
+    "Unfinished work from earlier sessions, with handoff notes. If the request of the user continues one of them, read that note first and check it against the code:",
+    ...open.map((note) => `- \`${note.path}\`: "${note.title}" (${note.status}, ${note.created.slice(0, 10)})`),
+  ].join("\n");
+}

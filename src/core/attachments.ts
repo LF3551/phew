@@ -12,6 +12,8 @@ export type Attachment =
   | { readonly kind: "terminal"; readonly command?: string; readonly output: string }
   | { readonly kind: "problems"; readonly path?: string }
   | { readonly kind: "git" }
+  /** An earlier chat of this workspace: the agent gets what was asked, answered, and changed there. */
+  | { readonly kind: "chat"; readonly id: string; readonly title: string }
   /** A long text that you pasted: it waits as a chip instead of filling the input. */
   | { readonly kind: "text"; readonly name: string; readonly text: string }
   | { readonly kind: "image"; readonly name: string; readonly mimeType: string; readonly data: string };
@@ -49,6 +51,12 @@ export function parseAttachment(value: unknown): Attachment | undefined {
       return { kind: "problems", path: text(item.path, 1000) };
     case "git":
       return { kind: "git" };
+    case "chat": {
+      const id = text(item.id, 80);
+      return id && /^[A-Za-z0-9_-]+$/.test(id)
+        ? { kind: "chat", id, title: text(item.title, 200) ?? "Chat" }
+        : undefined;
+    }
     case "text": {
       const body = text(item.text, 500_000);
       return body === undefined ? undefined : { kind: "text", name: text(item.name, 100) ?? "Pasted text", text: body };
@@ -90,6 +98,8 @@ export function attachmentLabel(attachment: Attachment): string {
       return "Git changes";
     case "text":
       return pastedLabel(attachment.text);
+    case "chat":
+      return `Chat: ${attachment.title}`;
     case "image":
       return attachment.name;
   }

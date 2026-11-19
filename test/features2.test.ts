@@ -578,3 +578,11 @@ test("a long paste becomes a chip with the number of lines, and the host accepts
   if (parsed) expect(attachmentLabel(parsed)).toBe("Pasted text · 120 lines");
   expect(parseAttachment({ kind: "text", text: "x".repeat(500_001) })).toBeUndefined();
 });
+
+test("an earlier chat can be attached by its id", async () => {
+  const { parseAttachment, attachmentLabel } = await import("../src/core/attachments");
+  const chat = parseAttachment({ kind: "chat", id: "c_m3abc_1", title: "Fix login" });
+  expect(chat).toEqual({ kind: "chat", id: "c_m3abc_1", title: "Fix login" });
+  if (chat) expect(attachmentLabel(chat)).toBe("Chat: Fix login");
+  expect(parseAttachment({ kind: "chat", id: "../../etc", title: "x" })).toBeUndefined();
+});

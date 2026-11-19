@@ -19,6 +19,7 @@ import {
 } from "../core/compaction";
 import { CostMeter, formatCost, formatTokens } from "../core/cost";
 import { titleFromText } from "../core/export";
+import { unfinishedWork } from "../core/handoff";
 import { exitCodeOf, type JournalEvent } from "../core/journal";
 import { learnRequest, memoryPrompt } from "../core/memory";
 import { canChange, findMode, type Mode, type ModeDefinition } from "../core/modes";
@@ -86,6 +87,8 @@ export interface SessionDependencies {
   readonly memory: MemoryStore;
   readonly skills: SkillStore;
   readonly terminal: TerminalWatcher;
+  /** The text of another chat of the workspace, for @chat. */
+  readonly chatDigest?: (id: string) => Promise<{ title: string; text: string } | undefined>;
   readonly modes: () => readonly ModeDefinition[];
   readonly claims: FileClaimRegistry;
   readonly handoffs: HandoffService;
@@ -713,11 +716,9 @@ export class AgentSession {
     return changes;
   }
 
-  private handoffHint(settings: Settings): string {
+  private async handoffHint(settings: Settings): Promise<string> {
     if (!settings.handoff.enabled) return "";
-    const latest = this.deps.handoffs.latest(this.root.uri.fsPath);
-    if (!latest || latest.status === "done" || latest.session === this.id) return "";
-    return `An earlier session left a handoff note: \`${latest.path}\` ("${latest.title}", ${latest.status}, ${latest.created.slice(0, 10)}). If the request of the user continues that work, read the note first and check it against the code.`;
+    return unfinishedWork(await this.deps.handoffs.list(this.root.uri.fsPath), this.id);
   }
 
   private journal(event: JournalEvent): void {
@@ -940,7 +941,13 @@ export class AgentSession {
     display?: string,
     queued = false,
   ): Promise<void> {
-    const resolved = await resolveAttachments(attachments, this.root.uri, settings, this.deps.terminal);
+    const resolved = await resolveAttachments(
+      attachments,
+      this.root.uri,
+      settings,
+      this.deps.terminal,
+      this.deps.chatDigest,
+    );
     for (const warning of resolved.warnings) this.notice("warning", warning);
     this.emit({
       type: "user",
@@ -1191,7 +1198,7 @@ export class AgentSession {
     });
     const extra = [
       personaPrompt(settings.assistant),
-      this.handoffHint(settings),
+      await this.handoffHint(settings),
       roots.multi ? roots.describe() : "",
       skillsPrompt(skills),
       planPrompt(this.currentPlan),

@@ -514,6 +514,29 @@ async function run() {
     assert.equal(original.toStored().history.length, 0, "Edit takes the chat back to before the message");
     assert.ok(!original.transcript.all().some((item) => item.type === "user"));
 
+    // @chat: an earlier chat comes to the agent with what was asked and answered there.
+    const mentions = await sessions.chatMentions("", undefined);
+    const earlier = mentions.find((item) => item.attachment.kind === "chat" && item.attachment.id === forked.id);
+    assert.ok(earlier, "@ offers the recent chats");
+    assert.ok(
+      (await sessions.chatMentions(forked.title.split(" ")[0], undefined)).some(
+        (item) => item.attachment.id === forked.id,
+      ),
+      "@ finds a chat by a word of its title",
+    );
+    const beforeChat = requests.length;
+    sessions.newSession();
+    await api.run({ text: "What did we do there?", mode: "ask", attachments: [earlier.attachment] });
+    const withChat = requests
+      .slice(beforeChat)
+      .flatMap((request) => request.messages)
+      .find((message) => message.role === "user" && message.content.includes("What did we do there?"));
+    assert.match(
+      withChat.content,
+      /Earlier chat "[^"]*"[\s\S]*User: First question\./,
+      "the agent gets the earlier chat",
+    );
+
     const found = await sessions.searchHistory("check.js pass");
     assert.ok(
       found.some((match) => match.snippet.includes("check.js pass")),

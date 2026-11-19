@@ -29,6 +29,8 @@ export async function resolveAttachments(
   root: vscode.Uri,
   settings: Settings,
   terminal: TerminalWatcher,
+  /** The text of an earlier chat, for @chat. */
+  chatDigest?: (id: string) => Promise<{ title: string; text: string } | undefined>,
 ): Promise<ResolvedAttachments> {
   const blocks: ContextBlock[] = [];
   const images: ImagePart[] = [];
@@ -108,6 +110,18 @@ export async function resolveAttachments(
       case "text":
         blocks.push({ title: attachment.name, body: truncateMiddle(attachment.text, 100_000) });
         break;
+      case "chat": {
+        const digest = chatDigest ? await chatDigest(attachment.id) : undefined;
+        if (!digest) {
+          warnings.push(`The chat "${attachment.title}" is no longer available.`);
+          break;
+        }
+        blocks.push({
+          title: `Earlier chat "${digest.title}": what was asked, answered, and changed there`,
+          body: truncateMiddle(digest.text, 15_000),
+        });
+        break;
+      }
       case "git": {
         const result = await git(root.fsPath, ["diff", "HEAD", "--no-color", "--no-ext-diff"]);
         blocks.push({
