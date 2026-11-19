@@ -37,6 +37,20 @@ export class ReviewManager implements vscode.CodeLensProvider, vscode.Disposable
     return [...this.reviews.values()].map((review) => review.uri);
   }
 
+  /** Each file with changes to review: its lines added and removed, for the list above the input. */
+  summary(): { uri: vscode.Uri; added: number; removed: number }[] {
+    return [...this.reviews.values()].map((review) => {
+      const document = vscode.workspace.textDocuments.find((item) => item.uri.toString() === review.uri.toString());
+      if (!document) return { uri: review.uri, added: 0, removed: 0 };
+      const hunks = reviewHunks({ original: review.original, current: document.getText() });
+      return {
+        uri: review.uri,
+        added: hunks.reduce((sum, hunk) => sum + hunk.newLines.length, 0),
+        removed: hunks.reduce((sum, hunk) => sum + hunk.oldLength, 0),
+      };
+    });
+  }
+
   /** Starts or continues the review of a file. The first original content wins. */
   track(uri: vscode.Uri, original: string): void {
     const key = uri.toString();

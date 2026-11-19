@@ -200,6 +200,21 @@ class ChatController implements ChatViewHandle {
       case "saveAssistant":
         await sessions.introduceAssistant(message);
         return;
+      case "reviewFile": {
+        // Only a file that is under review: the webview cannot name any other file.
+        const uri = sessions.reviewUri(message.uri);
+        if (!uri) return;
+        if (message.action === "open") await vscode.window.showTextDocument(uri, { preview: false });
+        else
+          await vscode.commands.executeCommand(
+            message.action === "keep" ? "phew.review.keepFile" : "phew.review.undoFile",
+            uri,
+          );
+        return;
+      }
+      case "reviewAll":
+        await vscode.commands.executeCommand(message.action === "keep" ? "phew.review.keepAll" : "phew.review.undoAll");
+        return;
       case "taskAction":
         await sessions.taskAction(session, message.action, message.checkpointId);
         return;

@@ -469,8 +469,7 @@ function applyState(next: ViewState): void {
   $("contextLabel").textContent = `${percent}%`;
   context.title = `${next.contextLabel}${percent >= 50 && !next.busy ? ". Click to compact the chat." : ""}${next.tokens !== "0" ? `\nThis chat: ${next.tokens} tokens${next.cost ? `, ${next.cost}` : ""}` : ""}`;
   updateReviewBanner();
-  $("reviewText").textContent =
-    `${next.reviewFiles} ${next.reviewFiles === 1 ? "file has" : "files have"} changes to keep or undo.`;
+  renderReviewList(next);
 }
 
 /** Dark or light text for a background color, from its luminance. Non-hex colors get white text. */
@@ -744,6 +743,50 @@ const cardObserver = new IntersectionObserver((entries) => {
   cardVisible = entries.some((entry) => entry.isIntersecting);
   updateReviewBanner();
 });
+
+/**
+ * The changes to review, above the input: how many files, the lines added and removed, Keep all and Undo all,
+ * and a list with Keep and Undo for each file. A click on a name opens the file.
+ */
+function renderReviewList(next: ViewState): void {
+  const files = next.reviewList ?? [];
+  const added = files.reduce((sum, file) => sum + file.added, 0);
+  const removed = files.reduce((sum, file) => sum + file.removed, 0);
+  $("reviewText").textContent = `${next.reviewFiles} ${next.reviewFiles === 1 ? "file" : "files"} to review`;
+  const stats = $("reviewStats");
+  stats.replaceChildren();
+  if (added) stats.append(element("ins", undefined, `+${added}`));
+  if (removed) stats.append(element("del", undefined, `−${removed}`));
+  const list = $("reviewList");
+  list.replaceChildren(
+    ...files.map((file) => {
+      const row = element("li", "review-file");
+      const name = element("button", "review-name");
+      name.type = "button";
+      const slash = file.path.lastIndexOf("/");
+      name.append(
+        element("span", "review-base", file.path.slice(slash + 1)),
+        element("span", "review-dir", slash > 0 ? file.path.slice(0, slash) : ""),
+      );
+      name.title = `Open ${file.path}`;
+      name.addEventListener("click", () => vscode.postMessage({ type: "reviewFile", uri: file.uri, action: "open" }));
+      const counts = element("span", "review-stats");
+      if (file.added) counts.append(element("ins", undefined, `+${file.added}`));
+      if (file.removed) counts.append(element("del", undefined, `−${file.removed}`));
+      row.append(
+        name,
+        counts,
+        iconButton("close", `Undo the changes in ${file.path}`, () =>
+          vscode.postMessage({ type: "reviewFile", uri: file.uri, action: "undo" }),
+        ),
+        iconButton("check", `Keep the changes in ${file.path}`, () =>
+          vscode.postMessage({ type: "reviewFile", uri: file.uri, action: "keep" }),
+        ),
+      );
+      return row;
+    }),
+  );
+}
 
 function updateReviewBanner(): void {
   const pending = state?.reviewFiles ?? 0;
@@ -2164,6 +2207,14 @@ $("stallRetry").addEventListener("click", () => {
 });
 $("guide").addEventListener("click", () => vscode.postMessage({ type: "openWalkthrough" }));
 $("reviewNext").addEventListener("click", () => vscode.postMessage({ type: "reviewNext" }));
+$("reviewKeepAll").addEventListener("click", () => vscode.postMessage({ type: "reviewAll", action: "keep" }));
+$("reviewUndoAll").addEventListener("click", () => vscode.postMessage({ type: "reviewAll", action: "undo" }));
+$("reviewToggle").addEventListener("click", () => {
+  const list = $("reviewList");
+  list.hidden = !list.hidden;
+  $("reviewToggle").setAttribute("aria-expanded", String(!list.hidden));
+  $("reviewBanner").classList.toggle("open", !list.hidden);
+});
 $("context").addEventListener("click", () => {
   if (Number.parseInt($("contextLabel").textContent ?? "0", 10) >= 50 && !state?.busy)
     vscode.postMessage({ type: "compact" });

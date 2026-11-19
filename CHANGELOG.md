@@ -7,6 +7,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- **Changes to review, above the input**: how many files, the lines added and removed, **Review**, **Undo all**, and **Keep all**. A click opens the list with **Keep** and **Undo** for each file; a click on a name opens the file.
 - **New in Phew**: after an update to a new minor version, the chat shows a short card with what changed and a link to all changes. A fresh install shows nothing.
 - **Signed build provenance** for each release: `gh attestation verify phew-x.y.z.vsix --repo LF3551/phew` proves that this repository built the file. SECURITY.md explains how to check that you have the real Phew.
 - **Retry when the model goes quiet.** When no answer comes for 30 seconds while no command runs and no question waits, the status line says so and offers **Retry**: Phew sends the same request again, removes the unfinished text, and the task goes on. **Stop** still ends the task.

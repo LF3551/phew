@@ -1608,13 +1608,124 @@ button[data-copy-state="failed"][data-copy-state] {
 }
 
 .review-banner {
+  padding: 5px 10px;
+  background: color-mix(
+    in srgb,
+    var(--phew-accent) 7%,
+    var(--vscode-sideBar-background, var(--vscode-editor-background))
+  );
+  border-top: 1px solid var(--vscode-panel-border, transparent);
+}
+
+.review-banner[hidden] {
+  display: none;
+}
+
+.review-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
-  padding: 6px 10px;
-  background: var(--vscode-editorInfo-background, #3794ff22);
-  border-top: 1px solid var(--vscode-panel-border, transparent);
+}
+
+.review-toggle {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 2px 0;
+  color: var(--vscode-foreground);
+  font: inherit;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.review-toggle .icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--vscode-descriptionForeground);
+  transform: rotate(-90deg);
+  transition: transform 0.12s;
+}
+
+.review-banner.open .review-toggle .icon {
+  transform: none;
+}
+
+.review-stats {
+  display: inline-flex;
+  gap: 6px;
+  font-size: 0.88em;
+  font-variant-numeric: tabular-nums;
+}
+
+.review-stats ins {
+  color: var(--phew-success);
+  text-decoration: none;
+}
+
+.review-stats del {
+  color: var(--phew-error);
+  text-decoration: none;
+}
+
+.review-list {
+  max-height: 180px;
+  margin: 4px 0 2px;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.review-list[hidden] {
+  display: none;
+}
+
+.review-file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 0 1px 20px;
+}
+
+.review-name {
+  display: flex;
+  flex: 1;
+  gap: 6px;
+  align-items: baseline;
+  min-width: 0;
+  padding: 2px 0;
+  color: var(--vscode-foreground);
+  font: inherit;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.review-name:hover .review-base {
+  text-decoration: underline;
+}
+
+.review-base {
+  flex: none;
+}
+
+.review-dir {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.88em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.review-file .action .icon {
+  width: 14px;
+  height: 14px;
 }
 
 /* Footer */

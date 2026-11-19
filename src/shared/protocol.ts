@@ -49,6 +49,13 @@ export interface ViewState {
     readonly allowlist: readonly string[];
   };
   readonly reviewFiles: number;
+  /** The files with changes to keep or undo, for the list above the input (at most 30). */
+  readonly reviewList?: readonly {
+    readonly uri: string;
+    readonly path: string;
+    readonly added: number;
+    readonly removed: number;
+  }[];
   readonly runningSessions: number;
   /** Share of the context window that the last request used, from 0 to 1. */
   readonly context: number;
@@ -337,6 +344,8 @@ export type WebviewMessage =
   | { readonly type: "pinChat"; readonly id: string; readonly pinned: boolean }
   | { readonly type: "exportChat"; readonly id?: string }
   | { readonly type: "reviewNext" }
+  | { readonly type: "reviewFile"; readonly uri: string; readonly action: "keep" | "undo" | "open" }
+  | { readonly type: "reviewAll"; readonly action: "keep" | "undo" }
   | { readonly type: "newWorktreeAgent" }
   | { readonly type: "openWalkthrough" }
   | { readonly type: "removeQueued"; readonly id: string }
@@ -555,6 +564,16 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
         return { type: "setAppearance", key, value };
       return undefined;
     }
+    case "reviewFile":
+      return typeof message.uri === "string" &&
+        message.uri.length <= 4000 &&
+        (message.action === "keep" || message.action === "undo" || message.action === "open")
+        ? { type: "reviewFile", uri: message.uri, action: message.action }
+        : undefined;
+    case "reviewAll":
+      return message.action === "keep" || message.action === "undo"
+        ? { type: "reviewAll", action: message.action }
+        : undefined;
     case "connectProvider": {
       const provider = id("id");
       return provider ? { type: "connectProvider", id: provider } : undefined;

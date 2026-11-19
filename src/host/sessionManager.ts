@@ -158,6 +158,11 @@ export class SessionManager implements vscode.Disposable {
     return this.whatsNewState.value;
   }
 
+  /** A file under review, by its URI from the chat; undefined for any other file. */
+  reviewUri(value: string): vscode.Uri | undefined {
+    return this.deps.reviews.pendingFiles.find((uri) => uri.toString() === value);
+  }
+
   /** Closes "New in Phew" until the next minor version. */
   async dismissWhatsNew(): Promise<void> {
     this.whatsNewState = { value: undefined };
@@ -254,6 +259,18 @@ export class SessionManager implements vscode.Disposable {
         allowlist: effective.commands.autoApprove.slice(0, 50),
       },
       reviewFiles: this.deps.reviews.pendingFiles.length,
+      reviewList: this.deps.reviews
+        .summary()
+        .slice(0, 30)
+        .map((file) => ({
+          uri: file.uri.toString(),
+          path: vscode.workspace.asRelativePath(
+            file.uri,
+            vscode.workspace.workspaceFolders !== undefined && vscode.workspace.workspaceFolders.length > 1,
+          ),
+          added: file.added,
+          removed: file.removed,
+        })),
       runningSessions: this.runningCount,
       context: context.share,
       contextLabel: context.label,

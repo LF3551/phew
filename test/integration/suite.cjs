@@ -245,6 +245,12 @@ async function run() {
       api.reviews.pendingFiles.map((uri) => path.basename(uri.fsPath)),
       ["math.js"],
     );
+    assert.deepEqual(
+      sessions.state().reviewList.map((file) => `${file.path} +${file.added} -${file.removed}`),
+      ["main/math.js +1 -1"],
+      "the list above the input shows the file to review with its lines",
+    );
+    assert.equal(sessions.reviewUri("file:///etc/passwd"), undefined, "the chat can only name files under review");
     const message = await vscode.commands.executeCommand("phew.generateCommitMessage");
     assert.match(message, /Signed-off-by: Test User <test@example.com>$/);
     assert.doesNotMatch(message, /Co-authored-by/);

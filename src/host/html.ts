@@ -149,8 +149,13 @@ export function renderChatHtml(options: ChatHtmlOptions): string {
   </main>
   <button type="button" class="jump" id="jump" hidden>↓ New</button>
   <div class="review-banner" id="reviewBanner" hidden>
-    <span id="reviewText"></span>
-    <button type="button" class="link" id="reviewNext">Review</button>
+    <div class="review-row">
+      <button type="button" class="review-toggle" id="reviewToggle" aria-expanded="false" aria-controls="reviewList">${icon("chevron")}<span id="reviewText"></span><span class="review-stats" id="reviewStats"></span></button>
+      <button type="button" class="link" id="reviewNext" title="Go to the next change in the editor">Review</button>
+      <button type="button" class="secondary small-button" id="reviewUndoAll">Undo all</button>
+      <button type="button" class="primary small-button" id="reviewKeepAll">Keep all</button>
+    </div>
+    <ul class="review-list" id="reviewList" hidden></ul>
   </div>
   <footer class="footer">
     <div class="status-line" id="statusLine" role="status" aria-live="polite" hidden><span class="status-mascot" id="statusMascot"></span><span class="status-text" id="statusText"></span><span class="status-time" id="statusTime"></span><span class="status-stall" id="statusStall" hidden><button type="button" class="link" id="stallRetry" title="Send the request to the model again; the task goes on. To use another model, press Stop and choose it.">Retry</button></span></div>
