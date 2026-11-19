@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-19
+
 ### Added
 
 - **Long pastes become a chip**: a pasted text of more than 30 lines or 3000 characters waits as "Pasted text · 120 lines" instead of filling the input. A click shows it to read or change, or puts it into the message.
@@ -199,7 +201,8 @@ The first public preview of Phew.
 - Phew Wrapped: a weekly or monthly card with bugs fixed, time saved, tasks, and the streak, which you can save as an image, and eight local achievements.
 - A getting started walkthrough and a settings page.
 
-[Unreleased]: https://github.com/LF3551/phew/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/LF3551/phew/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/LF3551/phew/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/LF3551/phew/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/LF3551/phew/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/LF3551/phew/compare/v0.1.4...v0.2.0
