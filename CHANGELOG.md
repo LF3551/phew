@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-19
+
 ### Added
 
 - **Rate Phew**: now and then, a small card under a task that went well asks you to rate Phew or send feedback, side by side: after 5 tasks on 3 different days, at most once a month and three times in total, never again after you rate it or choose **Don't ask again**, and never during work. It opens the Visual Studio Marketplace in VS Code and Open VSX in other editors. **Phew: Rate Phew** works at any time, and `phew.ui.askForRating` turns the card off.
@@ -231,7 +233,8 @@ The first public preview of Phew.
 - Phew Wrapped: a weekly or monthly card with bugs fixed, time saved, tasks, and the streak, which you can save as an image, and eight local achievements.
 - A getting started walkthrough and a settings page.
 
-[Unreleased]: https://github.com/LF3551/phew/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/LF3551/phew/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/LF3551/phew/compare/v0.5.0...v1.0.0
 [0.5.0]: https://github.com/LF3551/phew/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/LF3551/phew/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/LF3551/phew/compare/v0.2.0...v0.3.0
