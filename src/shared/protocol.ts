@@ -4,6 +4,7 @@ import { type ApprovalLevel, approvalLevels } from "../core/approvals";
 import { type Attachment, attachmentLabel, maximumAttachments, parseAttachment } from "../core/attachments";
 import { isModeId, type Mode } from "../core/modes";
 import { type Persona, personas } from "../core/persona";
+import type { SetupOption } from "../core/setupOptions";
 import type { FileChange } from "../core/summary";
 
 export interface ModeView {
@@ -172,6 +173,7 @@ export type ApprovalKind = "command" | "edit" | "mcp" | "question";
 
 export type HostMessage = (
   | { readonly type: "state"; readonly state: ViewState }
+  | { readonly type: "setupOptions"; readonly options: readonly SetupOption[] }
   | {
       readonly type: "user";
       readonly id: string;
@@ -300,6 +302,8 @@ export type WebviewMessage =
   | { readonly type: "openDiff"; readonly id: string }
   | { readonly type: "restoreCheckpoint"; readonly checkpointId: string }
   | { readonly type: "configureModel" }
+  | { readonly type: "setupOptions" }
+  | { readonly type: "connectProvider"; readonly id: string }
   | { readonly type: "openSettings" }
   | { readonly type: "editModes" }
   | { readonly type: "showStats" }
@@ -375,6 +379,7 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
     case "stop":
     case "newChat":
     case "configureModel":
+    case "setupOptions":
     case "openSettings":
     case "editModes":
     case "editAllowlist":
@@ -538,6 +543,10 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
       if (key === "fontSize" && (value === null || (typeof value === "number" && value >= 8 && value <= 32)))
         return { type: "setAppearance", key, value };
       return undefined;
+    }
+    case "connectProvider": {
+      const provider = id("id");
+      return provider ? { type: "connectProvider", id: provider } : undefined;
     }
     case "useModel":
       return typeof message.id === "string" && message.id.length > 0 && message.id.length <= 200

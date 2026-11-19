@@ -9,6 +9,7 @@ import {
   type ModelInfo,
   testConnection,
 } from "../providers/factory";
+import { KeyCommand, keyedFetch } from "../providers/keyCommand";
 import { apiKeySecretName, type ProviderPreset, providerPresets, validateBaseUrl } from "../providers/presets";
 import {
   type ModelProfile,
@@ -17,6 +18,7 @@ import {
   serializeProfile,
   uniqueId,
 } from "../providers/profile";
+import { runKeyCommand } from "./keyCommandRunner";
 import { readSettings } from "./settings";
 import { listVsCodeModels, VsCodeLanguageModelClient } from "./vscodeLmClient";
 
@@ -67,6 +69,8 @@ export const providerNames: Readonly<Record<ModelProfile["provider"], string>> =
 /** Keeps the model profiles, their API keys, and the active model. */
 export class ModelManager {
   private reportedErrors = "";
+  /** The key commands of the profiles, by profile id and command, so a changed command starts fresh. */
+  private readonly keyCommands = new Map<string, KeyCommand>();
 
   constructor(
     private readonly secrets: vscode.SecretStorage,
@@ -94,6 +98,8 @@ export class ModelManager {
   }
 
   async apiKey(profile: ModelProfile): Promise<string | undefined> {
+    const command = this.keyCommand(profile);
+    if (command) return command.get();
     const stored = await this.secrets.get(apiKeySecretName(profile.id));
     if (stored) return stored;
     return profile.apiKeyEnv ? process.env[profile.apiKeyEnv] : undefined;
@@ -101,7 +107,29 @@ export class ModelManager {
 
   async client(profile: ModelProfile): Promise<ModelClient> {
     if (profile.provider === "vscode") return new VsCodeLanguageModelClient(profile.model);
+    const command = this.keyCommand(profile);
+    // With a key command, each request gets the current key, and a 401 gets a new one.
+    if (command)
+      return createHttpClient(profile, undefined, keyedFetch(profile.auth, command), readSettings().maxRetries);
     return createHttpClient(profile, await this.apiKey(profile), fetch, readSettings().maxRetries);
+  }
+
+  /** The key command of a profile, if it has one. */
+  private keyCommand(profile: ModelProfile): KeyCommand | undefined {
+    const command = profile.apiKeyCommand;
+    if (!command || profile.provider === "vscode") return undefined;
+    const id = `${profile.id}\n${command}`;
+    let keyCommand = this.keyCommands.get(id);
+    if (!keyCommand) {
+      keyCommand = new KeyCommand(async () => {
+        const output = await runKeyCommand(command, profile.name);
+        this.log.info(`Ran the key command of ${profile.name}.`);
+        return output;
+      });
+      for (const key of this.keyCommands.keys()) if (key.startsWith(`${profile.id}\n`)) this.keyCommands.delete(key);
+      this.keyCommands.set(id, keyCommand);
+    }
+    return keyCommand;
   }
 
   // A programmatic API for the settings page. It never shows quick picks or input boxes.
@@ -246,7 +274,8 @@ export class ModelManager {
     }
   }
 
-  async hasKey(profile: ModelProfile): Promise<"saved" | "env" | "none"> {
+  async hasKey(profile: ModelProfile): Promise<"saved" | "env" | "command" | "none"> {
+    if (profile.apiKeyCommand) return "command";
     if (await this.secrets.get(apiKeySecretName(profile.id))) return "saved";
     return profile.apiKeyEnv && process.env[profile.apiKeyEnv] ? "env" : "none";
   }
@@ -471,6 +500,11 @@ export class ModelManager {
               description: profile.apiKeyEnv ?? "Not set",
               field: "apiKeyEnv",
             },
+            {
+              label: "API key from a command",
+              description: profile.apiKeyCommand ?? "Not set: for short-lived tokens",
+              field: "apiKeyCommand",
+            },
             { label: "Auth style", description: profile.auth, field: "auth" },
             {
               label: "Temperature",
@@ -525,6 +559,17 @@ export class ModelManager {
             input === "" || /^[A-Za-z_][A-Za-z0-9_]*$/.test(input) ? undefined : "Use a valid variable name.",
         });
         if (value !== undefined) next = { ...profile, apiKeyEnv: value || undefined };
+        break;
+      }
+      case "apiKeyCommand": {
+        const value = await vscode.window.showInputBox({
+          title: "Command that prints the API key",
+          prompt:
+            "For short-lived tokens, for example gcloud auth print-access-token. It runs in your home folder before the key expires and after a 401. Leave empty to remove.",
+          placeHolder: "gcloud auth print-access-token",
+          value: profile.apiKeyCommand ?? "",
+        });
+        if (value !== undefined) next = { ...profile, apiKeyCommand: value.trim() || undefined };
         break;
       }
       case "auth": {

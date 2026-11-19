@@ -26,7 +26,7 @@ export interface ModelItem {
   baseUrl: string;
   active: boolean;
   needsKey: boolean;
-  key: "saved" | "env" | "none";
+  key: "saved" | "env" | "command" | "none";
   keyEnv?: string;
   temperature: number | null;
   maxTokens: number | null;
@@ -109,6 +109,9 @@ function testLine(result: TestResult | "running" | undefined): HTMLElement {
   return el("span", "status error", `✕ ${result.message}`);
 }
 
+/** Models that cannot chat: they are not chosen by default when the suggested model is missing. */
+const notForChat = /embed|tts|audio|transcri|whisper|dall-e|imagen|image-|veo|moderation|rerank|aqa|-live/i;
+
 export class ModelsSection {
   readonly root = el("section", "card models-section");
   private providers: ProviderItem[] = [];
@@ -116,6 +119,8 @@ export class ModelsSection {
   private tests = new Map<string, TestResult | "running">();
   private open = new Set<string>();
   private selected: ProviderItem | undefined;
+  /** A provider to select as soon as the list of providers arrives. */
+  private wanted: string | undefined;
   private form = {
     apiKey: "",
     useEnv: true,
@@ -148,6 +153,10 @@ export class ModelsSection {
       case "providers":
         this.providers = message.items as ProviderItem[];
         this.render();
+        if (this.wanted) this.selectProvider(this.wanted);
+        return true;
+      case "selectProvider":
+        if (typeof message.id === "string") this.selectProvider(message.id);
         return true;
       case "models":
         if (message.requestId !== this.pending) return true;
@@ -158,7 +167,9 @@ export class ModelsSection {
           this.error = this.loaded.length === 0 ? "The provider returned no models. Type the model name below." : "";
           if (!this.form.model && this.loaded.length > 0) {
             this.form.model =
-              this.loaded.find((model) => model.id === this.selected?.modelHint)?.id ?? this.loaded[0].id;
+              this.loaded.find((model) => model.id === this.selected?.modelHint)?.id ??
+              this.loaded.find((model) => !notForChat.test(model.id))?.id ??
+              this.loaded[0].id;
           }
         } else {
           this.loaded = [];
@@ -246,7 +257,9 @@ export class ModelsSection {
           ? el("span", "tag ok", "Key saved")
           : model.key === "env"
             ? el("span", "tag ok", `Key from $${model.keyEnv}`)
-            : el("span", "tag error", "No API key"),
+            : model.key === "command"
+              ? el("span", "tag ok", "Key from a command")
+              : el("span", "tag error", "No API key"),
       );
     }
     title.append(nameRow, facts);
@@ -428,6 +441,18 @@ export class ModelsSection {
       wrapper.append(grid);
     }
     return wrapper;
+  }
+
+  /** Selects a provider for setup, for example from the first-run card of the chat. */
+  selectProvider(id: string): void {
+    const provider = this.providers?.find((item) => item.id === id);
+    if (!provider) {
+      this.wanted = id;
+      return;
+    }
+    this.wanted = undefined;
+    if (this.selected?.id !== id) this.select(provider);
+    this.root.querySelector(".setup")?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
   private select(provider: ProviderItem): void {

@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
+const os = require("node:os");
 const vscode = require("vscode");
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -114,6 +115,8 @@ async function script(data) {
 
 function startServer() {
   const requests = [];
+  // The keys that requests to /keyed/ carried: the server accepts only the second key of the key command.
+  const keyedAuth = [];
   let mcpSession = 0;
   const server = http.createServer((request, response) => {
     let body = "";
@@ -152,6 +155,14 @@ function startServer() {
         response.end(JSON.stringify({ jsonrpc: "2.0", id: message.id, result }));
         return;
       }
+      if (request.url.startsWith("/keyed/")) {
+        keyedAuth.push(request.headers.authorization);
+        if (request.headers.authorization !== "Bearer tok-2") {
+          response.writeHead(401, { "Content-Type": "application/json" });
+          response.end(JSON.stringify({ error: { message: "The token expired." } }));
+          return;
+        }
+      }
       const data = JSON.parse(body);
       requests.push(data);
       const delta = await script(data);
@@ -163,7 +174,7 @@ function startServer() {
       response.end("data: [DONE]\n\n");
     });
   });
-  return new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve({ server, requests })));
+  return new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve({ server, requests, keyedAuth })));
 }
 
 function lastAssistant(session) {
@@ -180,7 +191,7 @@ async function run() {
     assert.ok(commands.includes(command), `${command} is registered`);
   }
 
-  const { server, requests } = await startServer();
+  const { server, requests, keyedAuth } = await startServer();
   const port = server.address().port;
   const config = vscode.workspace.getConfiguration("phew");
   await config.update(
@@ -436,8 +447,40 @@ async function run() {
       /<!-- phew:handoff:begin -->[\s\S]*\.phew\/handoff\/LATEST\.md[\s\S]*<!-- phew:handoff:end -->/,
     );
 
+    if (process.platform !== "win32") {
+      console.log("[it] key command");
+      // A short-lived token from a command: the first one has expired, so Phew runs the command again.
+      const counter = path.join(os.tmpdir(), `phew-key-${process.pid}`);
+      fs.rmSync(counter, { force: true });
+      await config.update(
+        "models",
+        [
+          ...config.get("models"),
+          {
+            id: "keyed",
+            name: "Keyed",
+            provider: "openai",
+            baseUrl: `http://127.0.0.1:${port}/keyed/v1`,
+            model: "fake-model",
+            apiKeyCommand: `n=$(cat '${counter}' 2>/dev/null || echo 0); n=$((n+1)); echo $n > '${counter}'; echo tok-$n`,
+          },
+        ],
+        vscode.ConfigurationTarget.Global,
+      );
+      await config.update("activeModel", "keyed", vscode.ConfigurationTarget.Global);
+      await api.run({ text: "Say hello with the keyed model.", mode: "ask" });
+      assert.equal(lastAssistant(sessions.active), "Done.", "the task finished with a renewed key");
+      assert.deepEqual(keyedAuth.slice(0, 2), ["Bearer tok-1", "Bearer tok-2"], "Phew renewed the key after the 401");
+      assert.ok(
+        keyedAuth.slice(2).every((auth) => auth === "Bearer tok-2"),
+        "later requests reuse the renewed key without running the command again",
+      );
+      await config.update("activeModel", "fake", vscode.ConfigurationTarget.Global);
+      fs.rmSync(counter, { force: true });
+    }
+
     console.log(
-      "PHEW_INTEGRATION_OK: fix, review, commit, checkpoint, ask_user, skills, MCP HTTP, multi-root, plan, queue, btw, parallel chats, rename, approvals, context, Phew it!, handoff, summary, suggestions",
+      "PHEW_INTEGRATION_OK: fix, review, commit, checkpoint, ask_user, skills, MCP HTTP, multi-root, plan, queue, btw, parallel chats, rename, approvals, context, Phew it!, handoff, summary, suggestions, key command",
     );
   } finally {
     server.close();

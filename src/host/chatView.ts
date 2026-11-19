@@ -286,6 +286,12 @@ class ChatController implements ChatViewHandle {
       case "openWalkthrough":
         await vscode.commands.executeCommand("phew.openWalkthrough");
         return;
+      case "setupOptions":
+        this.post({ type: "setupOptions", options: await this.sessions.setupOptions() });
+        return;
+      case "connectProvider":
+        await vscode.commands.executeCommand("phew.addModel", message.id);
+        return;
       case "configureModel":
         // The menu under the input switches models; this message only connects a new one.
         await vscode.commands.executeCommand("phew.addModel");

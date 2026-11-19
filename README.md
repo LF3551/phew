@@ -110,11 +110,36 @@
 ## Get started
 
 1. Open the **Phew** view in the activity bar, or press `Ctrl+Alt+P` (`Cmd+Alt+P` on macOS).
-2. Choose **Connect a model**. Click a provider, paste the key (or use the key from your environment), click **Load models**, pick a model, and click **Connect and test**.
+2. The chat shows what is **ready on this computer** (GitHub Copilot in VS Code, a key in your environment such as `OPENAI_API_KEY`, or a running Ollama or LM Studio), what is **free to start**, and the **private** option. Click one: the setup opens with that provider, paste the key if it needs one, pick a model, and click **Connect and test**. Phew never downloads a model by itself.
+   - **GitHub Copilot**: sign in to GitHub in VS Code; the free Copilot plan is enough to start, with no key.
+   - **Google Gemini**: a free key from [Google AI Studio](https://aistudio.google.com/apikey), with no card. On the free tier, Google may use your requests to improve its products.
+   - **OpenRouter**: free models with a free key, 50 requests a day: enough to try Phew, not for daily work.
+   - **Ollama** or **LM Studio**: models on your computer, so your code stays there. Models for code take a few GB.
 3. Ask a question or describe a change. Type `@` to attach context.
 4. Optional: set **Checks → Verify command**, for example `npm test`, in **Phew: Open Settings**.
 
 **Phew: Get Started** opens a short guide.
+
+<p align="center">
+  <img src="docs/images/connect.png" alt="The first-run card: an OpenAI key found in the environment, the free options GitHub Copilot, Google Gemini, and OpenRouter, and Ollama as the private option" width="800">
+</p>
+
+### Company sign-in and short-lived tokens
+
+For Google Vertex AI, Azure with Microsoft Entra ID, or a company gateway with single sign-on, give the model a command that prints the token: **Phew: Manage Models → Edit → API key from a command**, or `apiKeyCommand` in the profile:
+
+```jsonc
+{
+  "id": "vertex",
+  "name": "Gemini on Vertex AI",
+  "provider": "openai",
+  "baseUrl": "https://aiplatform.googleapis.com/v1/projects/MY-PROJECT/locations/global/endpoints/openapi",
+  "model": "google/gemini-3.8-flash",
+  "apiKeyCommand": "gcloud auth print-access-token"
+}
+```
+
+Phew runs the command in your home folder, keeps the token in memory, runs it again before the token expires (the command may print JSON with `expires_in` or `expires_on`, like `az account get-access-token`) and when the server answers 401, and never logs the token. Only your user settings can set the command, not a workspace.
 
 ## Modes
 
@@ -170,7 +195,7 @@ Every setting is also available in the VS Code settings under **Phew**.
   Use a local model if your code must not leave your computer.
 - In Restricted Mode, Phew only answers questions.
   It does not change files, run commands, start MCP servers, or read project rules, memory, or modes.
-- Model profiles come only from the user settings, so a workspace cannot send your API keys to another server.
+- Model profiles come only from the user settings, so a workspace cannot send your API keys to another server or set a key command.
 - Commands that change something ask first in the default **Smart** mode; dangerous commands such as `git push`, `rm -rf`, `sudo`, or `terraform apply` always ask, and `phew.commands.deny` blocks commands for good.
 - The agent's terminal is yours: you see every command, and passwords go from you to the program, never to the model.
   Closing a terminal or a chat ends every process that it started.

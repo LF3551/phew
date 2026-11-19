@@ -196,6 +196,47 @@ const testOutput =
 
 /** Each scene: the card text, the chat title, and what the fake host sends. */
 const scenes = {
+  connect: {
+    title: "Start in a minute",
+    text: "Phew shows what is ready on your computer and what is free to start. One click opens the setup with your choice.",
+    chatTitle: "New chat",
+    alt: "The first-run card: an OpenAI key found in the environment, the free options GitHub Copilot, Google Gemini, and OpenRouter, and Ollama as the private option",
+    messages: [
+      { type: "state", state: state({ configured: false, model: "", provider: "", models: [] }) },
+      {
+        type: "setupOptions",
+        options: [
+          { id: "openai", label: "OpenAI", detail: "Key found in $OPENAI_API_KEY.", kind: "ready" },
+          {
+            id: "copilot",
+            label: "GitHub Copilot",
+            detail: "Sign in to GitHub in VS Code. The free Copilot plan is enough to start, with no key.",
+            kind: "free",
+          },
+          {
+            id: "gemini",
+            label: "Google Gemini",
+            detail:
+              "A free key from Google AI Studio, with no card. On the free tier, Google may use your requests to improve its products.",
+            kind: "free",
+          },
+          {
+            id: "openrouter",
+            label: "OpenRouter",
+            detail: "Free models with a free key: 50 requests a day, enough to try Phew.",
+            kind: "free",
+          },
+          {
+            id: "ollama",
+            label: "Ollama",
+            detail: "Runs on your computer, so your code stays there. Install Ollama and a model of a few GB.",
+            kind: "private",
+          },
+        ],
+      },
+    ],
+    after: (page) => page.evaluate(() => document.getElementById("setupCard")?.scrollIntoView({ block: "start" })),
+  },
   terminal: {
     title: "A real terminal, shared",
     text: "The agent works in your shell: ssh, venvs, and REPLs carry over. Watch it live, answer a prompt, and fix a failure in one click.",

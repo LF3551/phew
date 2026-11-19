@@ -8,6 +8,7 @@ import { chatPreview } from "../core/chatList";
 import { conversationToMarkdown } from "../core/export";
 import { builtInModes, type ModeDefinition, parseCustomModes } from "../core/modes";
 import { type Assistant, defaultAssistant, parseAssistant } from "../core/persona";
+import { type SetupOption, setupOptions } from "../core/setupOptions";
 import { branchName, isValidBranch, worktreeFolder } from "../core/worktree";
 import type { HostMessage, SessionSummary, ViewState } from "../shared/protocol";
 import { ConversationStore, type StoredConversation } from "./conversationStore";
@@ -140,6 +141,13 @@ export class SessionManager implements vscode.Disposable {
     if (this.unseen.size === 0) return;
     this.unseen.clear();
     this.onBusyChange(this.runningCount);
+  }
+
+  /** The options of the first-run card: ready providers, free ones, and the private one. */
+  async setupOptions(): Promise<SetupOption[]> {
+    // GitHub Copilot comes only to VS Code itself, not to editors that are based on it.
+    const copilotPossible = /visual studio code/i.test(vscode.env.appName);
+    return setupOptions(await this.deps.models.detectProviders(), copilotPossible);
   }
 
   modes(): ModeDefinition[] {

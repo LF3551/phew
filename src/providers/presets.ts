@@ -95,7 +95,7 @@ export const providerPresets: readonly ProviderPreset[] = [
     needsKey: true,
     keyEnv: "GEMINI_API_KEY",
     keyUrl: "https://aistudio.google.com/apikey",
-    modelHint: "gemini-2.5-flash",
+    modelHint: "gemini-3.8-flash",
     description: "Gemini models through the native Gemini API.",
   },
   {

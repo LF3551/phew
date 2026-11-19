@@ -52,6 +52,7 @@ Pure TypeScript without the `vscode` module, so unit tests run in Node.js.
 
 `openaiCompatible.ts` streams chat completions with tool calls from any OpenAI-compatible API.
 `presets.ts` lists common providers and validates base URLs.
+`keyCommand.ts` gets short-lived keys from a command (`apiKeyCommand`): it parses a plain key or JSON with an expiry, keeps the key until shortly before it expires, and wraps `fetch` so that each request carries the current key and a 401 renews it once. The host runs the command in `host/keyCommandRunner.ts`.
 
 ## `src/host`
 

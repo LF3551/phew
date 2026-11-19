@@ -40,6 +40,7 @@ import {
   showAssistantCard,
   showWrapped,
 } from "./persona";
+import { createSetupCard } from "./setupCard";
 import { appendCommandOutput, renderCommandTerminal, setCommandWhere, setTerminalLook } from "./terminalBlock";
 import { createTerminalsPanel } from "./terminalsPanel";
 import { groupSummary, toolLabel } from "./toolLabels";
@@ -384,7 +385,10 @@ function applyState(next: ViewState): void {
     : "Connect a model";
   modelMenu.update(next.models, next.busy, next.modeModel, currentModeName(next));
   terminalsPanel.update(next.terminals ?? []);
-  $("setup").hidden = next.configured;
+  setupCard.update(next.configured);
+  // Without a model, the welcome makes room for the setup card; suggested tasks need a model.
+  $("welcome").classList.toggle("needs-model", !next.configured);
+  $("setup").hidden = next.configured || !$("setupCard").hidden;
   stopButton.hidden = !next.busy;
   const send = next.sendWith === "ctrlEnter" ? "Ctrl+Enter" : "Enter";
   updateSendButton();
@@ -1574,6 +1578,10 @@ function handle(message: HostMessage): void {
       history = [...message.history];
       if (!panel.hidden) renderPanel();
       break;
+    case "setupOptions":
+      setupCard.receive(message.options);
+      $("setup").hidden = true;
+      break;
     case "contextOptions":
       attachMenu.setOptions(message.options);
       break;
@@ -1812,6 +1820,7 @@ const approvalsPanel = createApprovalsPanel({
   post: (message) => vscode.postMessage(message),
 });
 
+const setupCard = createSetupCard($("setupCard"), (message) => vscode.postMessage(message));
 const terminalsPanel = createTerminalsPanel({
   button: $<HTMLButtonElement>("terminalsButton"),
   panel: $("terminalsPanel"),

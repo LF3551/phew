@@ -388,3 +388,4 @@ window.addEventListener("message", (event: MessageEvent) => {
 });
 vscode.postMessage({ type: "ready" });
 vscode.postMessage({ type: "providers" });
+if (app.dataset.provider) modelsSection.selectProvider(app.dataset.provider);

@@ -4988,3 +4988,104 @@ html body.style-bubbles .message.user > .message-actions {
   right: 0;
   margin-top: 2px;
 }
+
+/* The first-run card: ready providers, free ones, and the private one. */
+
+.setup-card {
+  max-width: 440px;
+  margin: 18px auto 14px;
+  padding: 14px 14px 10px;
+  text-align: left;
+  background: var(--vscode-editorWidget-background, color-mix(in srgb, var(--vscode-foreground) 4%, transparent));
+  border: 1px solid var(--vscode-widget-border, color-mix(in srgb, var(--vscode-foreground) 14%, transparent));
+  border-radius: 10px;
+}
+
+.setup-card[hidden] {
+  display: none;
+}
+
+.setup-title {
+  margin: 0;
+  font-size: 1.08em;
+  font-weight: 600;
+}
+
+.setup-lead {
+  margin: 2px 0 10px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.92em;
+}
+
+.setup-group + .setup-group {
+  margin-top: 8px;
+}
+
+.setup-group-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 2px;
+  font-size: 0.85em;
+  font-weight: 600;
+  color: var(--vscode-descriptionForeground);
+}
+
+.setup-group-title svg {
+  width: 13px;
+  height: 13px;
+}
+
+.setup-group.ready .setup-group-title {
+  color: var(--phew-success);
+}
+
+.setup-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid color-mix(in srgb, var(--vscode-foreground) 8%, transparent);
+}
+
+.setup-group-title + .setup-row {
+  border-top: none;
+}
+
+.setup-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.setup-text span {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.88em;
+  line-height: 1.4;
+}
+
+.setup-row button {
+  flex: none;
+}
+
+.setup-more {
+  display: block;
+  margin: 6px auto 0;
+}
+
+.welcome.needs-model {
+  margin-top: 4vh;
+}
+
+.welcome.needs-model .logo {
+  transform: scale(0.75);
+  margin-bottom: -10px;
+}
+
+.welcome.needs-model .suggestions,
+.welcome.needs-model .resume-card,
+.welcome.needs-model .welcome-hint {
+  display: none;
+}

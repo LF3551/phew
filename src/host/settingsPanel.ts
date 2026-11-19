@@ -66,10 +66,13 @@ export class SettingsPanel implements vscode.Disposable {
     this.panel?.dispose();
   }
 
-  async show(focus?: string): Promise<void> {
+  /** Opens the settings at a section, and with `provider`, with that provider selected for setup. */
+  async show(focus?: string, provider?: string): Promise<void> {
+    const preset = providerPresets.find((item) => item.id === provider)?.id;
     if (this.panel) {
       this.panel.reveal();
       if (focus) void this.panel.webview.postMessage({ type: "focus", section: focus });
+      if (preset) void this.panel.webview.postMessage({ type: "selectProvider", id: preset });
       return;
     }
     const media = vscode.Uri.joinPath(this.context.extensionUri, "media");
@@ -86,7 +89,7 @@ export class SettingsPanel implements vscode.Disposable {
 <meta http-equiv="Content-Security-Policy" content="${escapeHtml(csp)}">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="stylesheet" href="${escapeHtml(panel.webview.asWebviewUri(vscode.Uri.joinPath(media, "settings.css")).toString())}">
-<title>Phew Settings</title></head><body data-icon="${escapeHtml(panel.webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, "resources", "icon.png")).toString())}"><div id="app" data-focus="${escapeHtml(focus ?? "")}"></div>
+<title>Phew Settings</title></head><body data-icon="${escapeHtml(panel.webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, "resources", "icon.png")).toString())}"><div id="app" data-focus="${escapeHtml(focus ?? "")}" data-provider="${escapeHtml(preset ?? "")}"></div>
 <script nonce="${nonce}" src="${escapeHtml(panel.webview.asWebviewUri(vscode.Uri.joinPath(dist, "settings.js")).toString())}"></script>
 </body></html>`;
     panel.webview.onDidReceiveMessage((message: unknown) => void this.handle(message));

@@ -7,6 +7,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- **A first-run card in the chat.** Until a model is connected, the chat shows what is ready on this computer (GitHub Copilot in VS Code, a key in the environment, a running Ollama or LM Studio), what is free to start (the free Copilot plan, a free Google AI Studio key, free OpenRouter models), and the private option, with honest limits. A click opens the setup with that provider selected. Nothing is downloaded or connected by itself.
+- **Keys from a command** for short-lived tokens: Google Vertex AI (`gcloud auth print-access-token`), Azure with Microsoft Entra ID, and company sign-in. Phew keeps the token in memory, renews it before it expires and after a 401, and never logs it. Only the user settings can set the command.
 - A website at <https://lf3551.github.io/phew/>: the task from the error to the green tests, the features with pictures, how to start, the providers, privacy, and answers to common questions.
 - Phew is on Open VSX, for VSCodium and other editors that use it.
 
@@ -14,6 +16,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - Phew installs in VS Code 1.95 and newer (it needed 1.100), so it also runs in editors that are based on an older VS Code. The integration tests pass in VS Code 1.95.
 - Better search words in the Marketplace and Open VSX.
+- When the suggested model of a provider is missing, the setup chooses a chat model, not an embedding or speech model. The suggested Gemini model is `gemini-3.8-flash`.
 
 ## [0.4.0] - 2026-11-18
 

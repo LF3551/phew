@@ -22,6 +22,11 @@ export interface ModelProfile {
   readonly auth: AuthStyle;
   /** Environment variable with the API key. The secret storage wins when both exist. */
   readonly apiKeyEnv?: string;
+  /**
+   * A command that prints the key, for short-lived tokens (`gcloud auth print-access-token`).
+   * It wins over the secret storage and the environment variable. Only the user settings can set it.
+   */
+  readonly apiKeyCommand?: string;
   /** Extra HTTP headers. Do not put secrets here; settings are plain text. */
   readonly headers: Readonly<Record<string, string>>;
   /** Extra URL query parameters, for example `api-version` for Azure. */
@@ -110,6 +115,10 @@ export function parseProfile(value: unknown): ModelProfile | string {
     model,
     auth,
     apiKeyEnv: typeof raw.apiKeyEnv === "string" && raw.apiKeyEnv.trim() ? raw.apiKeyEnv.trim() : undefined,
+    apiKeyCommand:
+      typeof raw.apiKeyCommand === "string" && raw.apiKeyCommand.trim()
+        ? raw.apiKeyCommand.trim().slice(0, 2000)
+        : undefined,
     headers: stringRecord(raw.headers),
     query: stringRecord(raw.query),
     extraBody: record(raw.extraBody),
@@ -154,6 +163,7 @@ export function serializeProfile(profile: ModelProfile): Record<string, unknown>
   if (profile.baseUrl) result.baseUrl = profile.baseUrl;
   if (profile.auth !== defaultAuth[profile.provider]) result.auth = profile.auth;
   if (profile.apiKeyEnv) result.apiKeyEnv = profile.apiKeyEnv;
+  if (profile.apiKeyCommand) result.apiKeyCommand = profile.apiKeyCommand;
   if (Object.keys(profile.headers).length > 0) result.headers = profile.headers;
   if (Object.keys(profile.query).length > 0) result.query = profile.query;
   if (Object.keys(profile.extraBody).length > 0) result.extraBody = profile.extraBody;
