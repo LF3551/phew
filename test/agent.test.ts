@@ -199,3 +199,68 @@ test("stops reminding after the limit", async () => {
   });
   expect(result).toMatchObject({ status: "done", filesChanged: false, steps: 2 });
 });
+
+/** A model that says a few words and then never answers, until the request is stopped. */
+function hangsFirst(): ModelClient & { calls: number } {
+  const client = {
+    calls: 0,
+    async complete(request: { signal: AbortSignal }, onText: (delta: string) => void): Promise<CompletionResult> {
+      client.calls++;
+      if (client.calls === 1) {
+        onText("Partial");
+        return new Promise((_resolve, reject) =>
+          request.signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError"))),
+        );
+      }
+      onText("Done.");
+      return { content: "Done.", toolCalls: [] };
+    },
+  };
+  return client;
+}
+
+test("Retry sends a quiet model request again, and the task goes on", async () => {
+  const client = hangsFirst();
+  const control: { retry?: () => void } = {};
+  const events: string[] = [];
+  const running = runAgent({
+    client,
+    systemPrompt: "system",
+    history: [{ role: "user", content: "hi" }],
+    tools: [],
+    executeTool: async () => ({ content: "" }),
+    maxSteps: 5,
+    meter: meter(),
+    signal: new AbortController().signal,
+    requestControl: control,
+    events: { onText: (delta) => events.push(delta), onRequestRestart: () => events.push("restart") },
+  });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  expect(control.retry).toBeTypeOf("function");
+  control.retry?.();
+  const result = await running;
+  expect(result.status).toBe("done");
+  expect(client.calls).toBe(2);
+  expect(events).toEqual(["Partial", "restart", "Done."]);
+  expect(control.retry).toBeUndefined();
+});
+
+test("Stop still ends the task while a request hangs", async () => {
+  const client = hangsFirst();
+  const controller = new AbortController();
+  const running = runAgent({
+    client,
+    systemPrompt: "system",
+    history: [{ role: "user", content: "hi" }],
+    tools: [],
+    executeTool: async () => ({ content: "" }),
+    maxSteps: 5,
+    meter: meter(),
+    signal: controller.signal,
+    requestControl: {},
+  });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  controller.abort();
+  await expect(running).rejects.toThrow();
+  expect(client.calls).toBe(1);
+});

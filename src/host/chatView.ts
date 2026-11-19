@@ -114,6 +114,10 @@ class ChatController implements ChatViewHandle {
       case "stop":
         session?.stop();
         return;
+      case "retryRequest":
+        if (!session?.retryRequest())
+          this.post({ type: "notice", level: "info", text: "No model request is running." });
+        return;
       case "setMode":
         session?.setMode(message.mode);
         return;

@@ -184,6 +184,8 @@ export type HostMessage = (
   | { readonly type: "assistantStart"; readonly id: string; readonly variant?: "btw" }
   | { readonly type: "assistantDelta"; readonly id: string; readonly text: string }
   | { readonly type: "assistantEnd"; readonly id: string; readonly text: string; readonly variant?: "btw" }
+  /** The text of a model request that started again (Retry) is void: the chat removes it. */
+  | { readonly type: "assistantDiscard"; readonly id: string }
   | { readonly type: "reasoningDelta"; readonly id: string; readonly text: string }
   | { readonly type: "reasoningEnd"; readonly id: string; readonly text: string }
   | { readonly type: "plan"; readonly plan: PlanView }
@@ -303,6 +305,7 @@ export type WebviewMessage =
   | { readonly type: "restoreCheckpoint"; readonly checkpointId: string }
   | { readonly type: "configureModel" }
   | { readonly type: "setupOptions" }
+  | { readonly type: "retryRequest" }
   | { readonly type: "connectProvider"; readonly id: string }
   | { readonly type: "openSettings" }
   | { readonly type: "editModes" }
@@ -380,6 +383,7 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
     case "newChat":
     case "configureModel":
     case "setupOptions":
+    case "retryRequest":
     case "openSettings":
     case "editModes":
     case "editAllowlist":

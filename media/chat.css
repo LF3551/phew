@@ -792,10 +792,9 @@ summary:focus-visible {
 }
 
 .term-screen pre.term-text {
-  max-height: 300px;
   margin: 0;
   padding: 0;
-  overflow: auto;
+  overflow-x: auto;
   color: var(--vscode-terminal-foreground, var(--vscode-foreground));
   font-family: var(--vscode-editor-font-family);
   font-size: var(--vscode-editor-font-size);
@@ -5169,4 +5168,24 @@ html body.style-bubbles .message.user > .message-actions {
 .welcome.needs-model .resume-card,
 .welcome.needs-model .welcome-hint {
   display: none;
+}
+
+/* The model is quiet for long while nothing else runs: the status says so and offers Retry. */
+.status-stall {
+  display: inline-flex;
+  flex: none;
+  gap: 10px;
+  margin-left: 8px;
+}
+
+.status-stall[hidden] {
+  display: none;
+}
+
+.status-stall .link {
+  font-size: 0.92em;
+}
+
+.status-line.stalled .status-text {
+  color: var(--phew-warning);
 }

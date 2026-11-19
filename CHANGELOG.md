@@ -7,6 +7,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- **Retry when the model goes quiet.** When no answer comes for 30 seconds while no command runs and no question waits, the status line says so and offers **Retry**: Phew sends the same request again, removes the unfinished text, and the task goes on. **Stop** still ends the task.
 - **A calmer chat.** A command reads as plain words ("Print current working directory") with its state on the right ("Failed · exit 1 · 2.3 s"), not "Ran Print…". A short result folds into one line with the output next to it (`→ /home/agent`). After a command ends, the mascot settles into a check or a cross, so only the running command moves. A long output shows its end with **Show all N lines** instead of a scroll inside the scroll.
 - **The badge of the model shows its maker**: a Claude model through GitHub Copilot shows the Anthropic badge, with "via GitHub Copilot" in its tooltip.
 - **Clock** in **Aa** and `phew.appearance.clock`: message times follow the language of VS Code, or always 24 or 12 hours.
@@ -20,6 +21,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - Phew installs in VS Code 1.95 and newer (it needed 1.100), so it also runs in editors that are based on an older VS Code. The integration tests pass in VS Code 1.95.
 - Better search words in the Marketplace and Open VSX.
+- **Long chats open about 15 times faster** (300 turns with 150 commands: 1.9 s → 0.13 s). Commands of a reopened chat show their output as text instead of starting a terminal each, the colors of the terminal theme are read once per theme, and the chat measures its scroll position once per frame.
 - The **↓ New** button sits at the right edge, small, and no longer covers the output. Less space between a message and the next step.
 - When the suggested model of a provider is missing, the setup chooses a chat model, not an embedding or speech model. The suggested Gemini model is `gemini-3.8-flash`.
 

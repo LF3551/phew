@@ -139,13 +139,20 @@ function copyIconButton(title: string, text: () => string, what: string): HTMLBu
 }
 
 /** "13:47" or "01:47 PM", by the clock in Appearance. */
+const clockFormats = new Map<string, Intl.DateTimeFormat>();
+
 function clockTime(date: Date): string {
   const clock = state?.appearance.clock ?? "auto";
-  return date.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    ...(clock === "auto" ? {} : { hour12: clock === "12h" }),
-  });
+  let format = clockFormats.get(clock);
+  if (!format) {
+    format = new Intl.DateTimeFormat([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      ...(clock === "auto" ? {} : { hour12: clock === "12h" }),
+    });
+    clockFormats.set(clock, format);
+  }
+  return format.format(date);
 }
 
 function time(at: number | undefined): HTMLElement {
@@ -170,11 +177,26 @@ function follow(atBottom: boolean): void {
   else jump.hidden = false;
 }
 
+let followFrame = 0;
+let followAtBottom = true;
+
+/**
+ * Remembers whether the reader is at the end before the changes of this frame, and follows after them.
+ * It measures once per frame, so a chat with hundreds of messages opens without a layout for each one.
+ */
+function keepFollowing(): void {
+  if (followFrame) return;
+  followAtBottom = nearBottom();
+  followFrame = requestAnimationFrame(() => {
+    followFrame = 0;
+    follow(followAtBottom);
+  });
+}
+
 function append(node: HTMLElement): void {
   welcome.hidden = true;
-  const atBottom = nearBottom();
+  keepFollowing();
   transcript.append(node);
-  follow(atBottom);
 }
 
 // Clickable file references such as src/app.ts:42 or package.json.
@@ -558,7 +580,7 @@ function assistantEntry(id: string, variant?: "btw") {
 function renderAssistant(id: string, text: string, done: boolean, at?: number, variant?: "btw"): void {
   const entry = assistantEntry(id, variant);
   entry.text = text;
-  const atEnd = nearBottom();
+  keepFollowing();
   if (done) {
     entry.element.classList.remove("streaming");
     if (text.trim() === "") {
@@ -578,7 +600,6 @@ function renderAssistant(id: string, text: string, done: boolean, at?: number, v
     setActivity("Writing…");
     setMascotAct("write");
   }
-  follow(atEnd);
 }
 
 function renderThought(id: string, delta: string, done: boolean, full?: string): void {
@@ -593,7 +614,7 @@ function renderThought(id: string, delta: string, done: boolean, full?: string):
     thoughts.set(id, entry);
     append(node);
   }
-  const atEnd = nearBottom();
+  keepFollowing();
   entry.text = full ?? entry.text + delta;
   entry.body.textContent = entry.text;
   if (!done) {
@@ -606,7 +627,6 @@ function renderThought(id: string, delta: string, done: boolean, full?: string):
     if (summary) summary.textContent = full !== undefined && !delta ? "Thought" : `Thought for ${seconds} s`;
     entry.element.open = false;
   }
-  follow(atEnd);
 }
 
 /** Consecutive tool calls share one quiet line: "Read 3 files and edited 1 file". The details open on click. */
@@ -646,11 +666,10 @@ function updateTool(message: Extract<HostMessage, { type: "tool" }>): void {
   if (!node) {
     node = element("details", "tool");
     tools.set(message.id, node);
-    const atEnd = nearBottom();
+    keepFollowing();
     // A command stands on its own in the chat; other tools share a quiet group line.
     if (message.name === "run_command") append(node);
     else toolGroup().querySelector(".group-body")?.append(node);
-    follow(atEnd);
   }
   node.dataset.status = message.status;
   node.dataset.name = message.name;
@@ -805,6 +824,10 @@ function renderSuggestions(items: readonly Suggestion[]): void {
 
 let activity: string | undefined;
 let busySince = 0;
+/** When the last sign of life came from the model: text, thinking, a tool call, or output. */
+let lastSignAt = 0;
+/** After this long without a sign while nothing else runs, the chat offers Retry and Switch model. */
+const quietModelMs = 30_000;
 let activityTimer: ReturnType<typeof setInterval> | undefined;
 
 function setActivity(text: string | undefined): void {
@@ -824,9 +847,21 @@ function renderStatus(): void {
     return;
   }
   if (!busySince) busySince = Date.now();
+  if (!lastSignAt || lastSignAt < busySince) lastSignAt = busySince;
   if (!activityTimer) activityTimer = setInterval(renderStatus, 1000);
-  $("statusText").textContent = activity ?? "Working…";
+  // Silence is normal while a command runs or a question waits for you; otherwise the model is slow or stuck.
+  const quiet = Date.now() - lastSignAt;
+  const othersRun =
+    document.querySelector('.tool[data-status="running"]') !== null ||
+    document.querySelector(".approval:not(.resolved)") !== null;
+  const stalled = !othersRun && quiet >= quietModelMs;
+  $("statusStall").hidden = !stalled;
+  line.classList.toggle("stalled", stalled);
+  $("statusText").textContent = stalled
+    ? `No answer from the model for ${Math.floor(quiet / 1000)} s`
+    : (activity ?? "Working…");
   const seconds = Math.floor((Date.now() - busySince) / 1000);
+  $("statusTime").hidden = stalled;
   $("statusTime").textContent =
     seconds >= 3 ? (seconds < 60 ? `${seconds} s` : `${Math.floor(seconds / 60)} min ${seconds % 60} s`) : "";
 }
@@ -1471,7 +1506,21 @@ function togglePanel(show: boolean = panel.hidden !== false): void {
 
 // Messages from the extension
 
+const signsOfLife = new Set<HostMessage["type"]>([
+  "assistantStart",
+  "assistantDelta",
+  "assistantEnd",
+  "reasoningDelta",
+  "reasoningEnd",
+  "tool",
+  "toolOutput",
+  "approval",
+  "approvalResolved",
+  "notice",
+]);
+
 function handle(message: HostMessage): void {
+  if (signsOfLife.has(message.type)) lastSignAt = Date.now();
   switch (message.type) {
     case "state":
       applyState(message.state);
@@ -1488,6 +1537,15 @@ function handle(message: HostMessage): void {
     case "assistantEnd":
       renderAssistant(message.id, message.text, true, message.at, message.variant);
       break;
+    case "assistantDiscard": {
+      // Retry: the unfinished answer or thinking of the stopped request goes away.
+      assistants.get(message.id)?.element.remove();
+      assistants.delete(message.id);
+      thoughts.get(message.id)?.element.remove();
+      thoughts.delete(message.id);
+      lastSignAt = Date.now();
+      break;
+    }
     case "reasoningDelta":
       if (state?.showThinking !== false) renderThought(message.id, message.text, false);
       break;
@@ -1500,8 +1558,8 @@ function handle(message: HostMessage): void {
     case "toolOutput": {
       if (message.where)
         setCommandWhere(message.id, message.where, { approval: message.approval, terminal: message.terminal });
-      const atEnd = nearBottom();
-      if (appendCommandOutput(message.id, message.text)) follow(atEnd);
+      keepFollowing();
+      appendCommandOutput(message.id, message.text);
       break;
     }
     case "approval":
@@ -2073,6 +2131,11 @@ document.addEventListener("mousedown", (event) => {
   if (!panel.hidden && !target.closest("#panel, #rowMenu, #undoToast, #historyButton, #title")) togglePanel(false);
 });
 $("setup").addEventListener("click", () => vscode.postMessage({ type: "configureModel" }));
+$("stallRetry").addEventListener("click", () => {
+  lastSignAt = Date.now();
+  renderStatus();
+  vscode.postMessage({ type: "retryRequest" });
+});
 $("guide").addEventListener("click", () => vscode.postMessage({ type: "openWalkthrough" }));
 $("reviewNext").addEventListener("click", () => vscode.postMessage({ type: "reviewNext" }));
 $("context").addEventListener("click", () => {

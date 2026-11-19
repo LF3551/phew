@@ -1,4 +1,4 @@
-import type { ChatMessage, ModelClient, RetryInfo, ToolCall, ToolDefinition } from "./chat";
+import type { ChatMessage, CompletionResult, ModelClient, RetryInfo, ToolCall, ToolDefinition } from "./chat";
 import { truncateMiddle } from "./chat";
 import type { CostMeter } from "./cost";
 
@@ -14,6 +14,8 @@ export interface VerificationResult {
 }
 
 export interface AgentEvents {
+  /** The current model request starts again (Retry): the text of the stopped attempt is void. */
+  onRequestRestart?(): void;
   onText?(delta: string): void;
   onReasoning?(delta: string): void;
   onRetry?(info: RetryInfo): void;
@@ -48,6 +50,11 @@ export interface AgentOptions {
   readonly beforeStep?: () => Promise<void>;
   readonly meter: CostMeter;
   readonly signal: AbortSignal;
+  /**
+   * Lets the host send the current model request again, for example when the model stopped answering.
+   * The agent puts a function here while a request runs; calling it stops only that request.
+   */
+  readonly requestControl?: { retry?: () => void };
   readonly events?: AgentEvents;
 }
 
@@ -73,7 +80,7 @@ async function hasQueuedInput(options: AgentOptions): Promise<boolean> {
 
 /** Runs the model and its tool calls until the task is complete or a limit is reached. */
 export async function runAgent(options: AgentOptions): Promise<AgentResult> {
-  const { client, history, events, meter, signal } = options;
+  const { history, events, meter, signal } = options;
   const maxVerifyAttempts = options.maxVerifyAttempts ?? 3;
   const maxNudges = options.maxNudges ?? 2;
   let verifyAttempts = 0;
@@ -97,16 +104,7 @@ export async function runAgent(options: AgentOptions): Promise<AgentResult> {
     if (options.beforeStep) await options.beforeStep();
     if (signal.aborted) return finish("aborted");
 
-    const result = await client.complete(
-      {
-        messages: [{ role: "system", content: options.systemPrompt }, ...history],
-        tools: options.tools,
-        signal,
-        onReasoning: (delta) => events?.onReasoning?.(delta),
-        onRetry: (info) => events?.onRetry?.(info),
-      },
-      (delta) => events?.onText?.(delta),
-    );
+    const result = await completeStep(options, history);
     if (result.usage) meter.add(result.usage);
     events?.onUsage?.(meter);
     history.push({
@@ -174,4 +172,41 @@ export async function runAgent(options: AgentOptions): Promise<AgentResult> {
     }
   }
   return finish("max-steps", `The task stopped after ${options.maxSteps} steps.`);
+}
+
+/**
+ * One model request of a step. Retry from the host stops only this request and sends it again with the same
+ * messages; Stop (the task signal) still ends the task.
+ */
+async function completeStep(options: AgentOptions, history: readonly ChatMessage[]): Promise<CompletionResult> {
+  const { client, signal, events } = options;
+  for (;;) {
+    const attempt = new AbortController();
+    const stop = () => attempt.abort();
+    signal.addEventListener("abort", stop, { once: true });
+    let restarted = false;
+    if (options.requestControl)
+      options.requestControl.retry = () => {
+        restarted = true;
+        attempt.abort();
+      };
+    try {
+      return await client.complete(
+        {
+          messages: [{ role: "system", content: options.systemPrompt }, ...history],
+          tools: options.tools,
+          signal: attempt.signal,
+          onReasoning: (delta) => events?.onReasoning?.(delta),
+          onRetry: (info) => events?.onRetry?.(info),
+        },
+        (delta) => events?.onText?.(delta),
+      );
+    } catch (error) {
+      if (!restarted || signal.aborted) throw error;
+      events?.onRequestRestart?.();
+    } finally {
+      signal.removeEventListener("abort", stop);
+      if (options.requestControl) options.requestControl.retry = undefined;
+    }
+  }
 }

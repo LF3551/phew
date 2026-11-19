@@ -572,6 +572,17 @@ for (const [name, scene] of Object.entries(scenes)) {
     });
     await page.waitForTimeout(300);
   }
+  if (process.env.DEBUG_TERM)
+    console.log(
+      await page.evaluate(() =>
+        [...document.querySelectorAll(".term")].map((node) => ({
+          classes: node.className,
+          peek: node.querySelector(".term-peek")?.textContent,
+          text: node.querySelector(".term-text")?.textContent?.slice(0, 40),
+          screenHidden: node.querySelector(".term-screen")?.hidden,
+        })),
+      ),
+    );
   // MEASURE=1 prints the height of each part of the chat and the space above it, to tune the spacing.
   if (process.env.MEASURE)
     console.log(

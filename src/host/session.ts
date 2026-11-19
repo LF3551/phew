@@ -130,6 +130,16 @@ export class Transcript {
     const stamped: HostMessage = message.at ? message : { ...message, at: Date.now() };
     const transient = ["state", "sessions", "mentions", "addAttachment", "focusInput", "openPanel", "queue", "sound"];
     if (transient.includes(stamped.type)) return stamped;
+    if (stamped.type === "assistantDiscard") {
+      this.items = this.items.filter(
+        (item) =>
+          !(
+            (item.type === "assistantDelta" || item.type === "assistantStart" || item.type === "reasoningDelta") &&
+            item.id === stamped.id
+          ),
+      );
+      return stamped;
+    }
     if (stamped.type === "cleared") {
       this.items = [];
       return stamped;
@@ -177,6 +187,8 @@ export class AgentSession {
   private history: ChatMessage[];
   private modeId: Mode;
   private controller: AbortController | undefined;
+  /** Retry of the current model request, while one runs. */
+  private readonly requestControl: { retry?: () => void } = {};
   private readonly side = new Set<AbortController>();
   private counter = 0;
   /** The folder of the chat's shell, kept between commands and turns. */
@@ -351,6 +363,14 @@ export class AgentSession {
       plan: this.currentPlan,
       overrides: this.overrides,
     };
+  }
+
+  /** Sends the current model request again, when the model stopped answering. False when no request runs. */
+  retryRequest(): boolean {
+    const retry = this.requestControl.retry;
+    if (!retry) return false;
+    retry();
+    return true;
   }
 
   stop(): void {
@@ -1102,6 +1122,7 @@ export class AgentSession {
       maxSteps: settings.maxSteps,
       meter,
       signal,
+      requestControl: this.requestControl,
       beforeStep: async () => {
         for (const item of this.queue.splice(0)) {
           await this.pushUser(
@@ -1124,6 +1145,14 @@ export class AgentSession {
         }
       },
       events: {
+        onRequestRestart: () => {
+          if (assistantId) this.emit({ type: "assistantDiscard", id: assistantId });
+          if (reasoningId) this.emit({ type: "assistantDiscard", id: reasoningId });
+          assistantId = undefined;
+          reasoningId = undefined;
+          reasoningText = "";
+          this.notice("info", `Sent the request to ${profile.name} again.`);
+        },
         onReasoning: (delta) => {
           if (!settings.showThinking) return;
           if (!reasoningId) reasoningId = `r_${++this.counter}_${Date.now().toString(36)}`;

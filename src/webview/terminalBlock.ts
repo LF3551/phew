@@ -130,8 +130,20 @@ function seconds(ms: number): string {
   return `${Math.floor(total / 60)} min ${Math.round(total % 60)} s`;
 }
 
-/** The colors of the VS Code terminal theme, so the chat terminal looks like the one in the panel. */
+let themeCache: ITheme | undefined;
+// VS Code changes the classes of the body when the theme changes; the colors are read again then.
+new MutationObserver(() => {
+  themeCache = undefined;
+}).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+
+/** The colors of the VS Code terminal theme, read once per theme. */
 function terminalTheme(): ITheme {
+  themeCache ??= readTerminalTheme();
+  return themeCache;
+}
+
+/** The colors of the VS Code terminal theme, so the chat terminal looks like the one in the panel. */
+function readTerminalTheme(): ITheme {
   const style = getComputedStyle(document.body);
   const color = (name: string, fallback?: string) =>
     style.getPropertyValue(`--vscode-terminal-${name}`).trim() || fallback;
@@ -367,9 +379,15 @@ function toText(view: CommandView): void {
   view.term?.dispose();
   view.term = undefined;
   view.fit = undefined;
-  const pre = el("pre", "term-text", view.text.replace(/\s+$/, ""));
+  const text = view.text.replace(/\s+$/, "");
+  const lines = text ? text.split("\n") : [];
+  // Like the terminal: the end of a long output, and one click shows all of it.
+  const cut = lines.length > view.rows && view.rows < expandedRows;
+  const pre = el("pre", "term-text", cut ? lines.slice(-view.rows).join("\n") : text);
   view.screen.replaceChildren(pre);
-  view.more.hidden = true;
+  view.more.hidden = !cut;
+  if (cut)
+    view.more.textContent = `Show all ${lines.length.toLocaleString("en-US")} lines (${(lines.length - view.rows).toLocaleString("en-US")} above)`;
   view.screen.hidden = !view.text.trim();
 }
 
@@ -553,7 +571,8 @@ export function renderCommandTerminal(
     more.addEventListener("click", () => {
       created.rows = expandedRows;
       created.touched = true;
-      resize(created);
+      if (created.term) resize(created);
+      else toText(created);
     });
     toggle.addEventListener("click", () => {
       created.touched = true;
@@ -594,11 +613,12 @@ export function renderCommandTerminal(
   } else {
     current.finished ??= update.at ?? Date.now();
     const parsed = parseCommandResult(update.detail ?? "");
-    // A chat that opens later has no live output: the result fills the terminal.
+    // A command that arrives finished (a chat that opens again) has no live output and no colors: its
+    // result shows as text, without a terminal, so a long chat opens fast.
+    // A terminal that is open already (the output came only with the result) shows it there.
     if (!current.text.trim() && parsed.output.trim()) {
-      if (!current.term && current.root.isConnected) createTerminal(current, id, post);
-      write(current, parsed.output.replace(/\r?\n/g, "\r\n"));
-      if (!current.term) current.text = parsed.output;
+      if (current.term) write(current, parsed.output.replace(/\r?\n/g, "\r\n"));
+      else current.text = parsed.output;
     }
     const status = parsed.status ?? "";
     current.live =
@@ -626,16 +646,7 @@ export function renderCommandTerminal(
       current.term.options.cursorBlink = false;
       current.term.options.disableStdin = true;
       current.term.write("\x1b[?25l", () => resize(current));
-    } else if (!current.term && !current.root.isConnected) {
-      // The view is not in the chat yet; it shows the text when it arrives.
-      requestAnimationFrame(() => {
-        if (!current.term && current.text.trim()) {
-          createTerminal(current, id, post);
-          const term = (current as { term?: Terminal }).term;
-          term?.write(`${current.text.replace(/\r?\n/g, "\r\n")}\x1b[?25l`, () => resize(current));
-        } else resize(current);
-      });
-    }
+    } else if (!current.term) toText(current);
   }
   current.root.dataset.status = current.result?.tone ?? "running";
   current.renderActions = () => renderActions(current, id, update.command, post);

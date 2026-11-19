@@ -152,7 +152,7 @@ export function renderChatHtml(options: ChatHtmlOptions): string {
     <button type="button" class="link" id="reviewNext">Review</button>
   </div>
   <footer class="footer">
-    <div class="status-line" id="statusLine" role="status" aria-live="polite" hidden><span class="status-mascot" id="statusMascot"></span><span class="status-text" id="statusText"></span><span class="status-time" id="statusTime"></span></div>
+    <div class="status-line" id="statusLine" role="status" aria-live="polite" hidden><span class="status-mascot" id="statusMascot"></span><span class="status-text" id="statusText"></span><span class="status-time" id="statusTime"></span><span class="status-stall" id="statusStall" hidden><button type="button" class="link" id="stallRetry" title="Send the request to the model again; the task goes on. To use another model, press Stop and choose it.">Retry</button></span></div>
     <section class="plan" id="plan" hidden>
       <button type="button" class="plan-header" id="planToggle" aria-expanded="true"><span id="planTitle">Plan</span><span class="plan-progress" id="planProgress"></span></button>
       <ul class="plan-items" id="planItems"></ul>

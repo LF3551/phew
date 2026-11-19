@@ -117,6 +117,8 @@ function startServer() {
   const requests = [];
   // The keys that requests to /keyed/ carried: the server accepts only the second key of the key command.
   const keyedAuth = [];
+  // "Hang once" gets no answer on its first request, until Phew stops that request (Retry).
+  let hangs = 0;
   let mcpSession = 0;
   const server = http.createServer((request, response) => {
     let body = "";
@@ -164,6 +166,12 @@ function startServer() {
         }
       }
       const data = JSON.parse(body);
+      const lastUser = [...(data.messages ?? [])].reverse().find((message) => message.role === "user");
+      if (typeof lastUser?.content === "string" && lastUser.content.includes("Hang once") && hangs++ === 0) {
+        response.writeHead(200, { "Content-Type": "text/event-stream" });
+        response.write(`data: ${JSON.stringify({ choices: [{ delta: { content: "Partial" } }] })}\n\n`);
+        return;
+      }
       requests.push(data);
       const delta = await script(data);
       response.writeHead(200, { "Content-Type": "text/event-stream" });
@@ -447,6 +455,19 @@ async function run() {
       /<!-- phew:handoff:begin -->[\s\S]*\.phew\/handoff\/LATEST\.md[\s\S]*<!-- phew:handoff:end -->/,
     );
 
+    console.log("[it] retry");
+    // The model says one word and goes quiet; Retry sends the request again, and the task finishes.
+    sessions.newSession();
+    const hanging = api.run({ text: "Hang once, then answer.", mode: "ask" });
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    assert.equal(sessions.active.retryRequest(), true, "a model request runs");
+    await hanging;
+    assert.equal(lastAssistant(sessions.active), "Done.", "the task finished after Retry");
+    assert.ok(
+      !sessions.active.transcript.all().some((item) => item.type === "assistantDelta" && item.text === "Partial"),
+      "the text of the stopped request is gone",
+    );
+
     if (process.platform !== "win32") {
       console.log("[it] key command");
       // A short-lived token from a command: the first one has expired, so Phew runs the command again.
@@ -483,7 +504,7 @@ async function run() {
     }
 
     console.log(
-      "PHEW_INTEGRATION_OK: fix, review, commit, checkpoint, ask_user, skills, MCP HTTP, multi-root, plan, queue, btw, parallel chats, rename, approvals, context, Phew it!, handoff, summary, suggestions, key command",
+      "PHEW_INTEGRATION_OK: fix, review, commit, checkpoint, ask_user, skills, MCP HTTP, multi-root, plan, queue, btw, parallel chats, rename, approvals, context, Phew it!, handoff, summary, suggestions, retry, key command",
     );
   } finally {
     server.close();
