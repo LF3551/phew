@@ -22,6 +22,8 @@ export interface StoredConversation {
   readonly cost: number;
   readonly plan?: Plan;
   readonly overrides?: { readonly review?: ReviewSetting; readonly commands?: CommandSetting; readonly mcp?: boolean };
+  /** The id of the model of this chat. Older chats have none and use the default model. */
+  readonly model?: string;
 }
 
 const idPattern = /^[A-Za-z0-9_-]{1,64}$/;

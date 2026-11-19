@@ -183,6 +183,13 @@ export class SettingsPanel implements vscode.Disposable {
           if (field === "contextWindow") changes = { contextWindow: number(1000, 100_000_000) };
           if (field === "api" && (value === "chat" || value === "responses"))
             changes = { api: value === "responses" ? "responses" : undefined };
+          if (field === "fallback" && (value === null || typeof value === "string")) {
+            const target = typeof value === "string" ? value.trim() : "";
+            const valid =
+              target === "" ||
+              (target !== profile.id && this.models.profiles().profiles.some((item) => item.id === target));
+            changes = valid ? { fallback: target || undefined } : undefined;
+          }
           if (field === "price" && (value === null || (typeof value === "object" && value !== null))) {
             const price = value as { input?: unknown; output?: unknown } | null;
             changes = {
@@ -325,6 +332,7 @@ export class SettingsPanel implements vscode.Disposable {
           contextWindow: profile.contextWindow ?? null,
           price: profile.price ?? null,
           api: profile.provider === "openai" ? (profile.api ?? "chat") : null,
+          fallback: profile.fallback ?? null,
         })),
       ),
       identity: folder

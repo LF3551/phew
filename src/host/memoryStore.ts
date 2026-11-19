@@ -9,8 +9,13 @@ import {
   renderMemory,
   type SourceState,
 } from "../core/memory";
+import { withFileLock } from "./fileLock";
 
 export const memoryPath = ".phew/memory.md";
+
+/** Changes a memory file while no other chat or window changes it. Files outside the disk need no lock. */
+const locked = <T>(uri: vscode.Uri, task: () => Promise<T>): Promise<T> =>
+  uri.scheme === "file" ? withFileLock(uri.fsPath, task) : task();
 
 const read = async (uri: vscode.Uri): Promise<string> => {
   try {
@@ -69,24 +74,30 @@ export class MemoryStore {
   ): Promise<{ added: boolean; replaced: boolean }> {
     const scope = options.scope ?? "project";
     const uri = this.uri(root, scope);
-    const result = addNote(await read(uri), note, {
-      ...options,
-      scope,
-      added: new Date().toISOString().slice(0, 10),
+    // Read and write under one lock, so a note of another chat or window between them is not lost.
+    return locked(uri, async () => {
+      const result = addNote(await read(uri), note, {
+        ...options,
+        scope,
+        added: new Date().toISOString().slice(0, 10),
+      });
+      await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(uri, ".."));
+      await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode(result.content));
+      return { added: result.added, replaced: result.replaced };
     });
-    await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(uri, ".."));
-    await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode(result.content));
-    return { added: result.added, replaced: result.replaced };
   }
 
   /** Removes a note from the project memory or, when it is not there, from the personal memory. */
   async forget(root: vscode.Uri, note: string): Promise<MemoryScope | undefined> {
     for (const scope of ["project", "personal"] as const) {
       const uri = this.uri(root, scope);
-      const next = forgetNote(await read(uri), note, scope);
-      if (next === undefined) continue;
-      await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode(next));
-      return scope;
+      const forgotten = await locked(uri, async () => {
+        const next = forgetNote(await read(uri), note, scope);
+        if (next === undefined) return false;
+        await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode(next));
+        return true;
+      });
+      if (forgotten) return scope;
     }
     return undefined;
   }

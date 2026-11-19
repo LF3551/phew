@@ -40,7 +40,9 @@ Pure TypeScript without the `vscode` module, so unit tests run in Node.js.
 | `checkpoints.ts` | Original file content per request and restore planning. |
 | `commandPolicy.ts` | Dangerous command detection and auto-approve and deny lists. |
 | `secrets.ts` | Sensitive file detection and secret redaction. |
-| `cost.ts` | Token and cost tracking and budget limits. |
+| `cost.ts` | Token and cost tracking and budget limits, with a new price after a switch to a fallback model. |
+| `fallback.ts` | Failure kinds of providers, the fallback chain of a model, and the client that moves to the fallback when the quota ends or a rate limit lasts. |
+| `modelChoice.ts` | Which model answers in a chat: the model of the mode, of the chat, or the default. |
 | `rules.ts` | Rules: the files and folders of Phew and other agents, their front matter (`applyTo`, `paths`, `globs`, `alwaysApply`, `trigger`, `inclusion`), path patterns, and how each rule reaches the agent (always, with a matching file, by description, or only when attached). |
 | `projectBrief.ts` | The project overview for the start of each chat (stack, commands, layout, README, branch) and the request of `/init`. |
 | `memory.ts` | Memory notes with their source and day, personal and project scope, corrections, the memory part of the prompt, and the request of `/learn`. |
@@ -74,7 +76,8 @@ Pure TypeScript without the `vscode` module, so unit tests run in Node.js.
 | `completions.ts` | Inline completions and next edit prediction. |
 | `memoryStore.ts`, `attachments.ts` | Project memory and attachment resolution with the `@` menu. |
 | `handoffs.ts` | Writes journals and notes in `.phew/`, keeps `.phew/.gitignore`, reads Git state and file fingerprints, and asks before it changes `AGENTS.md`. |
-| `models.ts`, `vscodeLmClient.ts` | Model profiles, setup, tests, and VS Code language models. |
+| `models.ts`, `vscodeLmClient.ts` | Model profiles, setup, tests, the default model, and VS Code language models. |
+| `fileLock.ts` | One writer at a time for shared files such as the memory: a queue in the window and a lock directory between windows. |
 | `settingsPanel.ts` | The settings page, generated from the configuration schema. |
 | `toolHost.ts` | Executes tools inside the workspace with path, secret, trust, and command checks. |
 | `changes.ts` | Shows changes as hunks, applies the selected hunks, records checkpoints, and serves the diff editor. |

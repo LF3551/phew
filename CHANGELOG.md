@@ -5,6 +5,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- **Each chat has its own model.** The menu under the input changes the model of this chat only, so two chats, or two windows, can work at the same time with different models or with two keys of one provider, such as **Claude (work)** and **Claude (personal)**. The last choice is the default for new chats. A chat keeps its model when it is saved, and an older chat takes the default at its next task. **Phew: Switch Model**, a new model, and **Use** on the settings page change the chat in front and the default.
+- **Fallback model.** On the settings page, a model can name a fallback (⋯ → **Fallback model**, or `fallback` in `phew.models`). When the model runs out of quota or credit, or stays rate limited or overloaded after all retries, the fallback goes on with the same task, and the chat says which model took over and why. A chain can have up to three models, loops are ignored, and a wrong key never falls back. The cost of the task counts each model with its own price. Removing a model also removes it as a fallback.
+
+### Fixed
+
+- Anthropic says "Your credit balance is too low" with HTTP 400. Phew now reads that as a missing quota, says so, and does not advise checking the model name.
+- Notes that several chats or windows save at the same moment are no longer lost: the project and personal memory files are changed under a lock, in the window and between windows.
+
 ## [1.0.0] - 2026-11-19
 
 ### Added

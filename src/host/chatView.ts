@@ -344,7 +344,7 @@ class ChatController implements ChatViewHandle {
         await vscode.commands.executeCommand("phew.openSettings");
         return;
       case "useModel":
-        await this.sessions.useModel(message.id);
+        await this.sessions.useModel(message.id, this);
         return;
       case "manageModels":
         await vscode.commands.executeCommand("phew.manageModels");

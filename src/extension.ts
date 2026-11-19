@@ -37,6 +37,10 @@ export interface PhewTestApi {
   index: CodeIndexManager;
   /** The global state of the extension, to set up statistics and the rating state in tests. */
   globalState: vscode.Memento;
+  /** The models, to test fallbacks and removing a model. */
+  models: ModelManager;
+  /** The memory files, to test writes from several chats at once. */
+  memory: MemoryStore;
 }
 
 let disposeAll: (() => void) | undefined;
@@ -64,7 +68,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<PhewTe
   });
   const updateStatus = () => {
     const running = sessions?.runningCount ?? 0;
-    const model = models.active();
+    const model = sessions?.active?.currentProfile ?? models.active();
     const pending = reviews.pendingFiles.length;
     status.text =
       running > 0
@@ -501,6 +505,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<PhewTe
     reviews,
     index,
     globalState: context.globalState,
+    models,
+    memory: memory,
   };
 }
 

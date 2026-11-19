@@ -6,6 +6,7 @@ import type { ActivityCounts } from "../core/activity";
 import { type ApprovalLevel, approvalPresets } from "../core/approvals";
 import { chatPreview, contentSnippet, matchesChat } from "../core/chatList";
 import { conversationToMarkdown } from "../core/export";
+import { chooseModelId } from "../core/modelChoice";
 import { builtInModes, type ModeDefinition, parseCustomModes } from "../core/modes";
 import { type Assistant, defaultAssistant, parseAssistant } from "../core/persona";
 import { type SetupOption, setupOptions } from "../core/setupOptions";
@@ -50,6 +51,7 @@ export class SessionManager implements vscode.Disposable {
     const storage = deps.context.storageUri ?? vscode.Uri.joinPath(deps.context.globalStorageUri, "no-workspace");
     this.store = new ConversationStore(vscode.Uri.joinPath(storage, "chats"), () => readSettings().historyLimit);
     this.reloadModes();
+    deps.context.subscriptions.push(deps.models.onDidChoose((id) => this.active?.setModel(id)));
   }
 
   /** Connects a chat view. Returns a function that disconnects it. */
@@ -338,12 +340,18 @@ export class SessionManager implements vscode.Disposable {
     const settings = readSettings();
     const effective = session?.effectiveSettings() ?? settings;
     const context = session?.contextState() ?? { share: 0, label: "" };
-    const active = this.deps.models.active();
     const allProfiles = this.deps.models.profiles().profiles;
+    // Each chat has its own model; a chat without one yet shows the default.
+    const chatModelId = chooseModelId({
+      available: allProfiles.map((item) => item.id),
+      chatModel: session?.chatModelId,
+      defaultModel: this.deps.models.active()?.id,
+    });
+    const chatProfile = allProfiles.find((item) => item.id === chatModelId);
     // A mode can name its own model; then that model answers, whatever the menu says.
     const modeModelId = session?.mode.model;
     const modeProfile = modeModelId ? allProfiles.find((item) => item.id === modeModelId) : undefined;
-    const profile = modeProfile ?? active;
+    const profile = modeProfile ?? chatProfile;
     return {
       sessionId: session?.id ?? "",
       title: session?.title ?? "New chat",
@@ -365,7 +373,7 @@ export class SessionManager implements vscode.Disposable {
         provider: item.provider,
         model: item.model,
         ...(item.contextWindow ? { contextWindow: item.contextWindow } : {}),
-        active: item.id === active?.id,
+        active: item.id === chatProfile?.id,
       })),
       ...(modeProfile ? { modeModel: modeProfile.name } : {}),
       provider: profile ? providerNames[profile.provider] : "Not configured",
@@ -607,7 +615,7 @@ export class SessionManager implements vscode.Disposable {
     }
     const markdown = conversationToMarkdown(session.conversation, {
       title: session.title,
-      model: this.deps.models.active()?.name,
+      model: session.currentProfile?.name,
       mode: session.mode.name,
       date: new Date(session.createdAt),
     });
@@ -756,9 +764,15 @@ export class SessionManager implements vscode.Disposable {
   }
 
   /** Makes a model profile the active model, from the menu under the input. */
-  async useModel(id: string): Promise<void> {
+  /**
+   * Chooses the model of a chat. Other chats, also in other windows, keep theirs.
+   * The choice also becomes the default, so the next new chat starts with it.
+   */
+  async useModel(id: string, view?: ChatViewHandle): Promise<void> {
     if (!this.deps.models.profiles().profiles.some((profile) => profile.id === id)) return;
-    await this.deps.models.setActive(id);
+    const session = view ? this.sessionFor(view) : this.active;
+    session?.setModel(id);
+    await this.deps.models.setActive(id, false);
     this.postState();
   }
 

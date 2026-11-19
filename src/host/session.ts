@@ -19,9 +19,11 @@ import {
 } from "../core/compaction";
 import { CostMeter, formatCost, formatTokens } from "../core/cost";
 import { titleFromText } from "../core/export";
+import { FallbackClient, fallbackChain, fallbackReason } from "../core/fallback";
 import { unfinishedWork } from "../core/handoff";
 import { exitCodeOf, type JournalEvent } from "../core/journal";
 import { learnRequest, memoryPrompt } from "../core/memory";
+import { chooseModelId, pinnedModelId } from "../core/modelChoice";
 import { canChange, findMode, type Mode, type ModeDefinition } from "../core/modes";
 import { limitForChat, limitForModel } from "../core/outputLimit";
 import { personaPrompt } from "../core/persona";
@@ -228,6 +230,8 @@ export class AgentSession {
   private sessionTokens: number;
   private sessionCost: number;
   private lastInputTokens = 0;
+  /** The model of this chat; older chats get one at their next task. */
+  private modelId: string | undefined;
   private verifyAttempts = 0;
   private queue: QueuedMessage[] = [];
   private currentPlan: Plan;
@@ -274,6 +278,7 @@ export class AgentSession {
     this.sessionCost = restored?.cost ?? 0;
     this.currentPlan = restored?.plan ?? emptyPlan;
     this.overrides = restored?.overrides ?? {};
+    this.modelId = restored?.model;
   }
 
   get busy(): boolean {
@@ -382,6 +387,7 @@ export class AgentSession {
       cost: this.sessionCost,
       plan: this.currentPlan,
       overrides: this.overrides,
+      ...(this.modelId ? { model: this.modelId } : {}),
     };
   }
 
@@ -535,6 +541,7 @@ export class AgentSession {
       return;
     }
     const settings = this.effectiveSettings();
+    this.pinModel();
     const profile = this.profile();
     if (!profile) {
       this.notice("info", "Add a model first.");
@@ -940,10 +947,43 @@ export class AgentSession {
     else this.agentTerminal().show();
   }
 
+  /** The model that answers in this chat now: the model of the mode, of the chat, or the default. */
   private profile(): ModelProfile | undefined {
-    const modeModel = this.mode.model;
     const profiles = this.deps.models.profiles().profiles;
-    return (modeModel && profiles.find((profile) => profile.id === modeModel)) || this.deps.models.active();
+    const id = chooseModelId({
+      available: profiles.map((profile) => profile.id),
+      modeModel: this.mode.model,
+      chatModel: this.modelId,
+      defaultModel: this.deps.models.active()?.id,
+    });
+    return profiles.find((profile) => profile.id === id);
+  }
+
+  /** The model that answers in this chat now, for the chat view. */
+  get currentProfile(): ModelProfile | undefined {
+    return this.profile();
+  }
+
+  /** The id of the model of this chat itself, without the model of the mode. */
+  get chatModelId(): string | undefined {
+    return this.modelId;
+  }
+
+  /** Chooses the model of this chat. Other chats keep theirs. */
+  setModel(id: string): void {
+    if (this.modelId === id) return;
+    this.modelId = id;
+    this.deps.onChange(this);
+    void this.deps.persist(this);
+  }
+
+  /** Pins the default model to a chat without its own, so a choice in another chat or window does not move it. */
+  private pinModel(): void {
+    if (this.modelId) return;
+    this.modelId = pinnedModelId({
+      available: this.deps.models.profiles().profiles.map((profile) => profile.id),
+      defaultModel: this.deps.models.active()?.id,
+    });
   }
 
   private async pushUser(
@@ -1145,7 +1185,7 @@ export class AgentSession {
     meter: CostMeter,
     signal: AbortSignal,
   ): Promise<AgentResult> {
-    const client = await this.deps.models.client(profile);
+    const primary = await this.deps.models.client(profile);
     const roots = this.roots;
     const ruleSet = await loadRuleSet(this.root.uri);
     const deliveredRules = new Set<string>();
@@ -1223,6 +1263,38 @@ export class AgentSession {
     let reasoningId: string | undefined;
     let reasoningText = "";
     const toolIds = new Map<string, string>();
+    /** Removes the part of an answer that a failed request left, before the request goes out again. */
+    const discardPartial = () => {
+      if (assistantId) this.emit({ type: "assistantDiscard", id: assistantId });
+      if (reasoningId) this.emit({ type: "assistantDiscard", id: reasoningId });
+      assistantId = undefined;
+      reasoningId = undefined;
+      reasoningText = "";
+    };
+    // The model of the chat, then its fallback models, when the user chose any.
+    const profiles = this.deps.models.profiles().profiles;
+    const steps = [
+      profile,
+      ...fallbackChain(profile.id, profiles)
+        .slice(1)
+        .flatMap((id) => profiles.filter((item) => item.id === id)),
+    ];
+    let answering = profile;
+    const client = new FallbackClient(
+      steps.map((step, index) => ({
+        name: step.name,
+        client: () => (index === 0 ? Promise.resolve(primary) : this.deps.models.client(step)),
+      })),
+      (from, to, error) => {
+        const failed = steps[from] as ModelProfile;
+        answering = steps[to] as ModelProfile;
+        discardPartial();
+        meter.usePrice(answering.price);
+        const message = error instanceof Error ? error.message : String(error);
+        this.deps.log.warn(`${failed.name} failed, ${answering.name} takes over: ${message}`);
+        this.notice("warning", `${failed.name} ${fallbackReason(error)}. ${answering.name} goes on with the task.`);
+      },
+    );
     const verify = mode.tools.has("edit") && settings.verifyCommand ? () => this.verify(settings, signal) : undefined;
     const endReasoning = () => {
       if (reasoningId) this.emit({ type: "reasoningEnd", id: reasoningId, text: reasoningText });
@@ -1266,12 +1338,8 @@ export class AgentSession {
       },
       events: {
         onRequestRestart: () => {
-          if (assistantId) this.emit({ type: "assistantDiscard", id: assistantId });
-          if (reasoningId) this.emit({ type: "assistantDiscard", id: reasoningId });
-          assistantId = undefined;
-          reasoningId = undefined;
-          reasoningText = "";
-          this.notice("info", `Sent the request to ${profile.name} again.`);
+          discardPartial();
+          this.notice("info", `Sent the request to ${answering.name} again.`);
         },
         onReasoning: (delta) => {
           if (!settings.showThinking) return;
@@ -1295,7 +1363,7 @@ export class AgentSession {
         onRetry: (info) =>
           this.notice(
             "warning",
-            `${profile.name}: ${info.reason}. Retrying in ${Math.ceil(info.delayMs / 1000)} s (attempt ${info.attempt} of ${info.maxAttempts}).`,
+            `${answering.name}: ${info.reason}. Retrying in ${Math.ceil(info.delayMs / 1000)} s (attempt ${info.attempt} of ${info.maxAttempts}).`,
           ),
         onToolStart: (call) => {
           const id = `t_${++this.counter}_${Date.now().toString(36)}`;

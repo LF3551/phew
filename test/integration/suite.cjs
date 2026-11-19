@@ -117,6 +117,8 @@ function startServer() {
   const requests = [];
   // The keys that requests to /keyed/ carried: the server accepts only the second key of the key command.
   const keyedAuth = [];
+  // Which model got each request, by the first part of its path: "v1" (Fake), "work", or "personal".
+  const routed = [];
   // "Hang once" gets no answer on its first request, until Phew stops that request (Retry).
   let hangs = 0;
   let mcpSession = 0;
@@ -167,6 +169,25 @@ function startServer() {
       }
       const data = JSON.parse(body);
       const lastUser = [...(data.messages ?? [])].reverse().find((message) => message.role === "user");
+      const route = request.url.split("/")[1];
+      // The first message of a chat can come in parts, with the context of the project.
+      const userText = (data.messages ?? [])
+        .filter((message) => message.role === "user")
+        .map((message) =>
+          typeof message.content === "string"
+            ? message.content
+            : (message.content ?? []).map((part) => part.text ?? "").join("\n"),
+        )
+        .join("\n");
+      routed.push({ route, text: userText });
+      if (route === "work") {
+        // The work key has no quota left, the way OpenAI says it.
+        response.writeHead(429, { "Content-Type": "application/json" });
+        response.end(
+          JSON.stringify({ error: { type: "insufficient_quota", message: "You exceeded your current quota." } }),
+        );
+        return;
+      }
       if (typeof lastUser?.content === "string" && lastUser.content.includes("Hang once") && hangs++ === 0) {
         response.writeHead(200, { "Content-Type": "text/event-stream" });
         response.write(`data: ${JSON.stringify({ choices: [{ delta: { content: "Partial" } }] })}\n\n`);
@@ -182,7 +203,9 @@ function startServer() {
       response.end("data: [DONE]\n\n");
     });
   });
-  return new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve({ server, requests, keyedAuth })));
+  return new Promise((resolve) =>
+    server.listen(0, "127.0.0.1", () => resolve({ server, requests, keyedAuth, routed })),
+  );
 }
 
 function lastAssistant(session) {
@@ -199,7 +222,7 @@ async function run() {
     assert.ok(commands.includes(command), `${command} is registered`);
   }
 
-  const { server, requests, keyedAuth } = await startServer();
+  const { server, requests, keyedAuth, routed } = await startServer();
   const port = server.address().port;
   const config = vscode.workspace.getConfiguration("phew");
   await config.update(
@@ -614,6 +637,128 @@ async function run() {
       "the text of the stopped request is gone",
     );
 
+    console.log("[it] models of chats");
+    // Two keys of one provider are two models. Each chat keeps its own model, so chats and windows work in
+    // parallel with different keys, and a choice in one never moves another.
+    const global = vscode.ConfigurationTarget.Global;
+    // A configuration object is a snapshot, so each read takes a fresh one.
+    const current = (key) => vscode.workspace.getConfiguration("phew").get(key);
+    const baseModels = current("models").filter((model) => model.id !== "work" && model.id !== "personal");
+    const setModels = (workFallback) =>
+      config.update(
+        "models",
+        [
+          ...baseModels,
+          {
+            id: "work",
+            name: "Claude (work)",
+            provider: "openai",
+            baseUrl: `http://127.0.0.1:${port}/work/v1`,
+            model: "fake-model",
+            auth: "none",
+            ...(workFallback ? { fallback: workFallback } : {}),
+          },
+          {
+            id: "personal",
+            name: "Claude (personal)",
+            provider: "openai",
+            baseUrl: `http://127.0.0.1:${port}/personal/v1`,
+            model: "fake-model",
+            auth: "none",
+          },
+        ],
+        global,
+      );
+    const routesOf = (text) => routed.filter((item) => item.text.includes(text)).map((item) => item.route);
+    const notices = (session) =>
+      session.transcript
+        .all()
+        .filter((item) => item.type === "notice")
+        .map((item) => item.text);
+    await setModels(undefined);
+    sessions.newSession();
+    const chatA = sessions.active;
+    await sessions.useModel("personal");
+    // A new chat reuses an empty one, so chat A says something first.
+    await chatA.run({ text: "Chat A starts", kind: "chat", mode: "ask" });
+    sessions.newSession();
+    const chatB = sessions.active;
+    assert.notEqual(chatB, chatA, "chat B is a chat of its own");
+    await sessions.useModel("fake");
+    assert.equal(chatA.chatModelId, "personal", "the menu chose the model of chat A");
+    assert.equal(chatB.chatModelId, "fake", "and of chat B, without changing chat A");
+    assert.equal(current("activeModel"), "fake", "the last choice is the default for new chats");
+    assert.equal(sessions.state().model, "Fake", "the chat shows its own model");
+    assert.equal(sessions.state().models.find((model) => model.active)?.id, "fake", "and marks it in the menu");
+    await Promise.all([
+      chatA.run({ text: "Chat A at work", kind: "chat", mode: "ask" }),
+      chatB.run({ text: "Chat B at home", kind: "chat", mode: "ask" }),
+    ]);
+    assert.deepEqual([...new Set(routesOf("Chat A at work"))], ["personal"], "chat A asked its own model");
+    assert.deepEqual([...new Set(routesOf("Chat B at home"))], ["v1"], "chat B asked its own model at the same time");
+    // Another window chooses another model: that changes the default, not this chat.
+    await config.update("activeModel", "work", global);
+    await chatA.run({ text: "Chat A again", kind: "chat", mode: "ask" });
+    assert.deepEqual([...new Set(routesOf("Chat A again"))], ["personal"], "chat A keeps its model");
+    assert.equal(chatA.toStored().model, "personal", "the model is saved with the chat");
+    // A chat without its own model takes the default at its first task, and keeps it.
+    await config.update("activeModel", "personal", global);
+    sessions.newSession();
+    const chatC = sessions.active;
+    assert.equal(chatC.chatModelId, undefined, "a new chat has no model of its own yet");
+    await chatC.run({ text: "Chat C pins", kind: "chat", mode: "ask" });
+    assert.equal(chatC.chatModelId, "personal", "its first task pinned the default");
+    await config.update("activeModel", "fake", global);
+    assert.equal(chatC.currentProfile?.id, "personal", "a later default does not move it");
+
+    console.log("[it] fallback model");
+    // Without a fallback, a key without quota stops the task with a clear message.
+    sessions.newSession();
+    const broke = sessions.active;
+    await sessions.useModel("work");
+    await broke.run({ text: "No credit left", kind: "chat", mode: "ask" });
+    assert.deepEqual(routesOf("No credit left"), ["work"], "Phew does not retry a missing quota");
+    assert.ok(
+      notices(broke).some((text) => /no quota or credit left/.test(text)),
+      "the chat says that the quota is gone",
+    );
+    // With a fallback, the second key goes on with the same task.
+    await setModels("personal");
+    sessions.newSession();
+    const rescued = sessions.active;
+    await sessions.useModel("work");
+    await rescued.run({ text: "Fallback please", kind: "chat", mode: "ask" });
+    assert.deepEqual(routesOf("Fallback please"), ["work", "personal"], "the fallback got the same request");
+    assert.equal(lastAssistant(rescued), "Done.", "the task finished with the fallback model");
+    assert.ok(
+      notices(rescued).includes("Claude (work) has no quota or credit left. Claude (personal) goes on with the task."),
+      "the chat says which model took over and why",
+    );
+    assert.equal(rescued.chatModelId, "work", "the chat keeps its model and tries it again next time");
+    // Removing a model also removes it as a fallback.
+    await api.models.delete("personal");
+    const afterDelete = current("models");
+    assert.ok(!afterDelete.some((model) => model.id === "personal"), "the model is gone");
+    assert.equal(afterDelete.find((model) => model.id === "work").fallback, undefined, "and so is the fallback to it");
+    assert.equal(chatA.currentProfile?.id, current("activeModel"), "a chat whose model was removed uses the default");
+
+    console.log("[it] memory from many chats");
+    // Many chats save notes at the same moment; none is lost, and no lock stays behind.
+    const root = vscode.Uri.file(mainFolder);
+    const facts = Array.from(
+      { length: 20 },
+      (_, index) => `Parallel fact ${index}: service ${index} listens on ${8000 + index}`,
+    );
+    await Promise.all(facts.map((fact) => api.memory.add(root, fact)));
+    const remembered = await api.memory.read(root);
+    for (const fact of facts) assert.ok(remembered.includes(fact), `the memory kept "${fact}"`);
+    await Promise.all(facts.map((fact) => api.memory.forget(root, fact)));
+    const left = await api.memory.read(root);
+    assert.ok(!facts.some((fact) => left.includes(fact)), "and forgot each of them");
+    assert.ok(!fs.existsSync(path.join(mainFolder, ".phew", "memory.md.lock")), "no lock stays behind");
+    await config.update("models", baseModels, global);
+    await config.update("activeModel", "fake", global);
+
     if (process.platform !== "win32") {
       console.log("[it] key command");
       // A short-lived token from a command: the first one has expired, so Phew runs the command again.
@@ -650,7 +795,7 @@ async function run() {
     }
 
     console.log(
-      "PHEW_INTEGRATION_OK: fix, review, commit, checkpoint, ask_user, skills, MCP HTTP, multi-root, plan, queue, btw, parallel chats, rename, approvals, context, Phew it!, handoff, summary, suggestions, fork and edit, rating, retry, key command",
+      "PHEW_INTEGRATION_OK: fix, review, commit, checkpoint, ask_user, skills, MCP HTTP, multi-root, plan, queue, btw, parallel chats, rename, approvals, context, Phew it!, handoff, summary, suggestions, fork and edit, rating, retry, models of chats, fallback, memory from many chats, key command",
     );
   } finally {
     server.close();

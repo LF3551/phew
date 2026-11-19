@@ -293,11 +293,28 @@ export class ModelManager {
 
   async delete(id: string): Promise<void> {
     await this.secrets.delete(apiKeySecretName(id));
-    await this.save(this.profiles().profiles.filter((item) => item.id !== id));
+    // Other models that fell back to this one now have no fallback.
+    await this.save(
+      this.profiles()
+        .profiles.filter((item) => item.id !== id)
+        .map((item) => (item.fallback === id ? { ...item, fallback: undefined } : item)),
+    );
   }
 
-  async setActive(id: string): Promise<void> {
+  private readonly chosen = new vscode.EventEmitter<string>();
+  /**
+   * Fires when the user chooses a model outside a chat: Switch Model, a new model, Use in the settings, or Manage
+   * Models. The chat in front then takes it. The event stays in this window, so other windows keep their models.
+   */
+  readonly onDidChoose = this.chosen.event;
+
+  /**
+   * Makes a model the default for new chats. With `announce`, the chat in front takes it too; the menu of a chat
+   * sets the model of its own chat and does not announce.
+   */
+  async setActive(id: string, announce = true): Promise<void> {
     await vscode.workspace.getConfiguration(section).update("activeModel", id, vscode.ConfigurationTarget.Global);
+    if (announce) this.chosen.fire(id);
   }
 
   /** Quick switch from the chat view and the command palette. */

@@ -21,18 +21,44 @@ export interface BudgetLimits {
 export class CostMeter {
   private input = 0;
   private output = 0;
+  /** Tokens since the last change of the price. */
+  private segmentInput = 0;
+  private segmentOutput = 0;
+  /** The cost of the tokens before the last change of the price. */
+  private settled = 0;
+  /** True when some tokens were used by a model without a price, so the total is not known. */
+  private unpriced = false;
   /** Input tokens of the last request, which shows how full the context window is. */
   lastInputTokens = 0;
 
   constructor(
-    private readonly price: ModelPrice | undefined,
+    private price: ModelPrice | undefined,
     private readonly limits: BudgetLimits,
   ) {}
 
   add(usage: Usage): void {
-    this.lastInputTokens = Math.max(0, usage.inputTokens);
-    this.input += Math.max(0, usage.inputTokens);
-    this.output += Math.max(0, usage.outputTokens);
+    const input = Math.max(0, usage.inputTokens);
+    const output = Math.max(0, usage.outputTokens);
+    this.lastInputTokens = input;
+    this.input += input;
+    this.output += output;
+    this.segmentInput += input;
+    this.segmentOutput += output;
+  }
+
+  /** Counts the next tokens with another price, for example after a switch to a fallback model. */
+  usePrice(price: ModelPrice | undefined): void {
+    if (this.segmentInput + this.segmentOutput > 0) {
+      if (this.price) this.settled += this.priceOf(this.price);
+      else this.unpriced = true;
+    }
+    this.segmentInput = 0;
+    this.segmentOutput = 0;
+    this.price = price;
+  }
+
+  private priceOf(price: ModelPrice): number {
+    return (this.segmentInput * price.input + this.segmentOutput * price.output) / 1_000_000;
   }
 
   get tokens(): number {
@@ -49,8 +75,9 @@ export class CostMeter {
 
   /** Cost in US dollars, or undefined when the model price is not configured. */
   get cost(): number | undefined {
-    if (!this.price) return undefined;
-    return (this.input * this.price.input + this.output * this.price.output) / 1_000_000;
+    if (this.unpriced) return undefined;
+    if (!this.price) return this.segmentInput + this.segmentOutput > 0 || this.settled === 0 ? undefined : this.settled;
+    return this.settled + this.priceOf(this.price);
   }
 
   /** Returns a reason when the task is over budget. */

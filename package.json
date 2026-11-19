@@ -722,6 +722,10 @@
                   "type": "string",
                   "description": "Environment variable with the API key. A key in the secret storage wins."
                 },
+                "fallback": {
+                  "type": "string",
+                  "description": "The id of another model that takes over a task when this model runs out of quota or credit, or stays rate limited or overloaded after all retries. A wrong key does not fall back."
+                },
                 "apiKeyCommand": {
                   "type": "string",
                   "description": "A command that prints the key, for short-lived tokens, for example `gcloud auth print-access-token`. It may also print JSON with the key and its expiry. Phew runs it in your home folder, keeps the key in memory, and runs it again before the key expires or when the server answers 401. It wins over a saved key and apiKeyEnv. Only your user settings can set it."

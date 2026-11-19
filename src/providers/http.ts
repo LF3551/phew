@@ -1,4 +1,5 @@
 import type { RetryInfo } from "../core/chat";
+import { type FailureKind, ProviderError } from "../core/fallback";
 import { redactSecrets } from "../core/secrets";
 import { SseParser } from "../core/sse";
 
@@ -38,7 +39,19 @@ export function httpError(providerName: string, status: number, body: string): E
             : status >= 500
               ? "The provider has a problem. Try again later."
               : "";
-  return new Error(`${providerName} returned HTTP ${status}: ${message}${hint ? ` ${hint}` : ""}`);
+  const kind: FailureKind =
+    status === 401 || status === 403
+      ? "auth"
+      : status === 429
+        ? "rate"
+        : status === 529 || status === 503
+          ? "overloaded"
+          : "other";
+  return new ProviderError(
+    `${providerName} returned HTTP ${status}: ${message}${hint ? ` ${hint}` : ""}`,
+    kind,
+    status,
+  );
 }
 
 /** Turns a network failure into an error that names the likely cause. */
@@ -71,9 +84,12 @@ const retryStatuses = new Set([408, 425, 429, 500, 502, 503, 504, 520, 522, 524,
 const quotaPattern =
   /insufficient_quota|exceeded your current quota|credit balance|out of credits|billing|payment required|quota exceeded|RESOURCE_EXHAUSTED.*(billing|plan)|monthly limit/i;
 
-/** True when the account has no quota or credit left. Retries do not help then. */
+/**
+ * True when the account has no quota or credit left. Retries do not help then.
+ * Anthropic says so with HTTP 400: "Your credit balance is too low to access the Anthropic API."
+ */
 export function isQuotaError(status: number, body: string): boolean {
-  return (status === 429 || status === 402 || status === 403) && quotaPattern.test(body);
+  return (status === 400 || status === 429 || status === 402 || status === 403) && quotaPattern.test(body);
 }
 
 /** Parses durations like `1s`, `6m0s`, `250ms`, or `1h2m3.5s` in milliseconds. */
@@ -125,18 +141,24 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
 /** Builds the final error after a failed request, with clear advice for limits and quotas. */
 export function finalError(providerName: string, status: number, body: string, attempts: number): Error {
   if (isQuotaError(status, body)) {
-    return new Error(
+    return new ProviderError(
       `${providerName}: your account has no quota or credit left (${errorMessage(body).slice(0, 200)}). Check the billing of the provider, or switch the model with Phew: Switch Model.`,
+      "quota",
+      status,
     );
   }
   if (status === 429) {
-    return new Error(
+    return new ProviderError(
       `${providerName} rate limit reached${attempts > 1 ? ` after ${attempts} attempts` : ""}: ${redactSecrets(errorMessage(body)).text.slice(0, 200)}. Wait a minute, use a model with higher limits, or switch the model with Phew: Switch Model.`,
+      "rate",
+      status,
     );
   }
   if (status === 529 || status === 503) {
-    return new Error(
+    return new ProviderError(
       `${providerName} is overloaded${attempts > 1 ? ` after ${attempts} attempts` : ""}. Try again later or switch the model.`,
+      "overloaded",
+      status,
     );
   }
   return httpError(providerName, status, body);

@@ -34,6 +34,8 @@ export interface ModelItem {
   contextWindow: number | null;
   price: { input: number; output: number } | null;
   api: "chat" | "responses" | null;
+  /** The id of the model that takes over when this one runs out of quota. */
+  fallback: string | null;
 }
 
 interface TestResult {
@@ -258,11 +260,21 @@ export class ModelsSection {
         : model.name;
     const nameRow = el("div", "model-name-row");
     nameRow.append(el("strong", "model-name", name));
-    if (model.active) nameRow.append(el("span", "tag accent", "In use"));
+    if (model.active) {
+      const tag = el("span", "tag accent", "Default");
+      tag.title = "New chats start with this model. Each chat can choose its own in the menu under the input.";
+      nameRow.append(tag);
+    }
     const facts = el("div", "facts");
     const parts = [model.model, model.provider];
     if (model.contextWindow) parts.push(`${formatTokens(model.contextWindow)} context`);
     facts.append(el("span", undefined, parts.join(" · ")));
+    const fallback = this.models.find((item) => item.id === model.fallback && item.id !== model.id);
+    if (fallback) {
+      const line = el("span", "fallback-fact", `Fallback: ${fallback.name}`);
+      line.title = `When ${model.name} runs out of quota or credit, or stays rate limited or overloaded, ${fallback.name} goes on with the task.`;
+      facts.append(line);
+    }
     if (model.needsKey) {
       facts.append(
         model.key === "saved"
@@ -277,8 +289,11 @@ export class ModelsSection {
     title.append(nameRow, facts);
     header.append(badge, title);
     const actions = el("div", "model-actions");
-    if (!model.active)
-      actions.append(button("Use", () => this.post({ type: "useModel", id: model.id }), "primary small"));
+    if (!model.active) {
+      const use = button("Use", () => this.post({ type: "useModel", id: model.id }), "primary small");
+      use.title = "Use it in the chat in front and in new chats";
+      actions.append(use);
+    }
     actions.append(
       button(
         "Test",
@@ -379,6 +394,25 @@ export class ModelsSection {
       "0 to 2. Empty uses the provider default.",
     );
     field("Max output tokens", number("maxTokens", model.maxTokens, "Provider default", "1"));
+    const others = this.models.filter((item) => item.id !== model.id);
+    if (others.length > 0) {
+      const select = el("select");
+      select.dataset.focusKey = `fallback-${model.id}`;
+      for (const [value, label] of [["", "None"], ...others.map((item) => [item.id, item.name])] as const) {
+        const option = el("option", undefined, label);
+        option.value = value;
+        option.selected = (model.fallback ?? "") === value;
+        select.append(option);
+      }
+      select.addEventListener("change", () =>
+        this.post({ type: "updateModel", id: model.id, field: "fallback", value: select.value || null }),
+      );
+      field(
+        "Fallback model",
+        select,
+        "Takes over a task when this model runs out of quota or credit, or stays rate limited or overloaded after all retries. A wrong key does not fall back.",
+      );
+    }
     if (model.api) {
       const select = el("select");
       for (const [value, label] of [

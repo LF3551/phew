@@ -27,6 +27,11 @@ export interface ModelProfile {
    * It wins over the secret storage and the environment variable. Only the user settings can set it.
    */
   readonly apiKeyCommand?: string;
+  /**
+   * The id of another model that takes over a task when this one runs out of quota or credit, or stays rate
+   * limited or overloaded after all retries.
+   */
+  readonly fallback?: string;
   /** Extra HTTP headers. Do not put secrets here; settings are plain text. */
   readonly headers: Readonly<Record<string, string>>;
   /** Extra URL query parameters, for example `api-version` for Azure. */
@@ -115,6 +120,12 @@ export function parseProfile(value: unknown): ModelProfile | string {
     model,
     auth,
     apiKeyEnv: typeof raw.apiKeyEnv === "string" && raw.apiKeyEnv.trim() ? raw.apiKeyEnv.trim() : undefined,
+    fallback:
+      typeof raw.fallback === "string" &&
+      /^[A-Za-z0-9_.-]{1,64}$/.test(raw.fallback.trim()) &&
+      raw.fallback.trim() !== id
+        ? raw.fallback.trim()
+        : undefined,
     apiKeyCommand:
       typeof raw.apiKeyCommand === "string" && raw.apiKeyCommand.trim()
         ? raw.apiKeyCommand.trim().slice(0, 2000)
@@ -164,6 +175,7 @@ export function serializeProfile(profile: ModelProfile): Record<string, unknown>
   if (profile.auth !== defaultAuth[profile.provider]) result.auth = profile.auth;
   if (profile.apiKeyEnv) result.apiKeyEnv = profile.apiKeyEnv;
   if (profile.apiKeyCommand) result.apiKeyCommand = profile.apiKeyCommand;
+  if (profile.fallback) result.fallback = profile.fallback;
   if (Object.keys(profile.headers).length > 0) result.headers = profile.headers;
   if (Object.keys(profile.query).length > 0) result.query = profile.query;
   if (Object.keys(profile.extraBody).length > 0) result.extraBody = profile.extraBody;

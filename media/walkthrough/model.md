@@ -11,5 +11,9 @@ Phew works with the model that you choose:
 - **Gateways:** OpenRouter, LiteLLM, or any OpenAI-compatible API.
 - **Local:** Ollama, LM Studio, vLLM. Your code stays on your computer.
 
+Connect a provider twice for two keys, for example **Claude (work)** and **Claude (personal)**.
+Each chat keeps its own model, so chats and windows work side by side.
+A model can name a **fallback model** that goes on with the task when its quota or credit runs out.
+
 Phew loads the model list from the provider and tests the connection.
 The API key goes to the VS Code secret storage, never to the settings.
