@@ -461,6 +461,32 @@ async function run() {
       /<!-- phew:handoff:begin -->[\s\S]*\.phew\/handoff\/LATEST\.md[\s\S]*<!-- phew:handoff:end -->/,
     );
 
+    console.log("[it] fork and edit");
+    // Fork from a message: a new chat with the conversation before it; Edit takes this chat back to it.
+    sessions.newSession();
+    await api.run({ text: "First question.", mode: "ask" });
+    await api.run({ text: "Second question.", mode: "ask" });
+    const original = sessions.active;
+    const users = original.transcript.all().filter((item) => item.type === "user");
+    assert.deepEqual(
+      users.map((item) => item.text),
+      ["First question.", "Second question."],
+    );
+    const historyLength = original.toStored().history.length;
+    await sessions.fork(original, users[1].checkpointId);
+    const forked = sessions.active;
+    assert.notEqual(forked.id, original.id, "the fork is a new chat");
+    assert.match(forked.title, /\(fork\)$/);
+    assert.deepEqual(
+      forked.toStored().history.map((message) => message.role),
+      ["user", "assistant"],
+      "the fork keeps the conversation before the message",
+    );
+    assert.equal(original.toStored().history.length, historyLength, "the original chat stays as it is");
+    assert.equal(await original.rewindTo(users[0].checkpointId, true), "First question.");
+    assert.equal(original.toStored().history.length, 0, "Edit takes the chat back to before the message");
+    assert.ok(!original.transcript.all().some((item) => item.type === "user"));
+
     console.log("[it] retry");
     // The model says one word and goes quiet; Retry sends the request again, and the task finishes.
     sessions.newSession();
@@ -510,7 +536,7 @@ async function run() {
     }
 
     console.log(
-      "PHEW_INTEGRATION_OK: fix, review, commit, checkpoint, ask_user, skills, MCP HTTP, multi-root, plan, queue, btw, parallel chats, rename, approvals, context, Phew it!, handoff, summary, suggestions, retry, key command",
+      "PHEW_INTEGRATION_OK: fix, review, commit, checkpoint, ask_user, skills, MCP HTTP, multi-root, plan, queue, btw, parallel chats, rename, approvals, context, Phew it!, handoff, summary, suggestions, fork and edit, retry, key command",
     );
   } finally {
     server.close();

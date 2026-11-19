@@ -114,6 +114,12 @@ class ChatController implements ChatViewHandle {
       case "stop":
         session?.stop();
         return;
+      case "forkChat":
+        if (session) await sessions.fork(session, message.checkpointId);
+        return;
+      case "editMessage":
+        if (session) await sessions.editMessage(session, message.checkpointId);
+        return;
       case "retryRequest":
         if (!session?.retryRequest())
           this.post({ type: "notice", level: "info", text: "No model request is running." });

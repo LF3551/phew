@@ -32,7 +32,13 @@ export interface ImagePart {
 
 export type ChatMessage =
   | { readonly role: "system"; readonly content: string }
-  | { readonly role: "user"; readonly content: string; readonly images?: readonly ImagePart[] }
+  | {
+      readonly role: "user";
+      readonly content: string;
+      readonly images?: readonly ImagePart[];
+      /** The checkpoint of the message, so Fork and Edit find it; providers never send it. */
+      readonly checkpointId?: string;
+    }
   | {
       readonly role: "assistant";
       readonly content: string;

@@ -7,6 +7,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- **Fork from here** on your messages: a new chat with the conversation before the message and the message in the input, to try another way; the original chat stays as it is.
+- **Edit and resend** now really goes back: after you agree, the later messages go away and the files that changed after the message are restored, and the message waits in the input. Before, Edit only copied the text.
 - **Changes to review, above the input**: how many files, the lines added and removed, **Review**, **Undo all**, and **Keep all**. A click opens the list with **Keep** and **Undo** for each file; a click on a name opens the file.
 - **New in Phew**: after an update to a new minor version, the chat shows a short card with what changed and a link to all changes. A fresh install shows nothing.
 - **Signed build provenance** for each release: `gh attestation verify phew-x.y.z.vsix --repo LF3551/phew` proves that this repository built the file. SECURITY.md explains how to check that you have the real Phew.

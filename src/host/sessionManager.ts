@@ -158,6 +158,47 @@ export class SessionManager implements vscode.Disposable {
     return this.whatsNewState.value;
   }
 
+  /**
+   * Fork from here: a new chat with the conversation before one of your messages, and that message in the
+   * input to change and send. The original chat stays as it is.
+   */
+  async fork(session: AgentSession, checkpointId: string): Promise<void> {
+    const earlier = session.before(checkpointId);
+    if (!earlier) {
+      this.post(
+        { type: "notice", level: "warning", text: "This message is no longer in the history of the chat." },
+        session,
+      );
+      return;
+    }
+    const now = Date.now();
+    const id = `c_${now.toString(36)}_${(++this.counter).toString(36)}`;
+    const forked = this.create(session.root, id, session.worktree, {
+      ...session.toStored(),
+      id,
+      title: `${session.title} (fork)`,
+      titleSource: "user",
+      createdAt: now,
+      updatedAt: now,
+      history: earlier.history,
+      transcript: earlier.transcript,
+      checkpoints: [],
+      tokens: 0,
+      cost: 0,
+    });
+    this.switchTo(forked.id);
+    await this.persist(forked);
+    this.post({ type: "focusInput", text: earlier.text, replace: true }, forked);
+  }
+
+  /** Edit and resend: the chat goes back to before the message, and the message goes to the input. */
+  async editMessage(session: AgentSession, checkpointId: string): Promise<void> {
+    const text = await session.rewindTo(checkpointId);
+    if (text === undefined) return;
+    this.replay();
+    this.post({ type: "focusInput", text, replace: true }, session);
+  }
+
   /** A file under review, by its URI from the chat; undefined for any other file. */
   reviewUri(value: string): vscode.Uri | undefined {
     return this.deps.reviews.pendingFiles.find((uri) => uri.toString() === value);

@@ -569,10 +569,12 @@ function addUser(message: Extract<HostMessage, { type: "user" }>): void {
       iconButton("restore", "Restore checkpoint: undo the file changes made since this message", () =>
         vscode.postMessage({ type: "restoreCheckpoint", checkpointId: message.checkpointId }),
       ),
-      iconButton("edit", "Edit and send again", () => {
-        prompt.value = message.text;
-        prompt.focus();
-      }),
+      iconButton("edit", "Edit and resend: later messages go away, and changed files go back", () =>
+        vscode.postMessage({ type: "editMessage", checkpointId: message.checkpointId }),
+      ),
+      iconButton("split", "Fork from here: a new chat up to this message; this chat stays", () =>
+        vscode.postMessage({ type: "forkChat", checkpointId: message.checkpointId }),
+      ),
     );
   }
   actions.append(
@@ -1737,7 +1739,7 @@ function handle(message: HostMessage): void {
       togglePanel(true);
       break;
     case "focusInput":
-      if (message.text && !prompt.value) prompt.value = message.text;
+      if (message.text && (message.replace || !prompt.value)) prompt.value = message.text;
       prompt.focus();
       break;
   }

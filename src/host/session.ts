@@ -180,7 +180,7 @@ export class Transcript {
 /** One conversation with the agent. Several sessions can run at the same time. */
 export class AgentSession {
   readonly broker: ApprovalBroker;
-  readonly transcript: Transcript;
+  transcript: Transcript;
   readonly createdAt: number;
   private checkpoints: CheckpointStore;
   private readonly changes: ChangeManager;
@@ -363,6 +363,68 @@ export class AgentSession {
       plan: this.currentPlan,
       overrides: this.overrides,
     };
+  }
+
+  /**
+   * The chat before one of your messages: the history for the model, what the chat shows, and the text of
+   * that message. Undefined when the message is no longer in the history, for example after compaction.
+   */
+  before(checkpointId: string): { history: ChatMessage[]; transcript: HostMessage[]; text: string } | undefined {
+    const index = this.history.findIndex((message) => message.role === "user" && message.checkpointId === checkpointId);
+    if (index < 0) return undefined;
+    const items = this.transcript.persistable();
+    const at = items.findIndex((item) => item.type === "user" && item.checkpointId === checkpointId);
+    if (at < 0) return undefined;
+    const user = items[at];
+    return {
+      history: this.history.slice(0, index),
+      transcript: items.slice(0, at),
+      text: user?.type === "user" ? user.text : "",
+    };
+  }
+
+  /**
+   * Edit and resend: the chat goes back to the moment before this message. The later messages go away, and
+   * the files that changed after it are restored, after the user agrees.
+   */
+  async rewindTo(checkpointId: string, confirmed = false): Promise<string | undefined> {
+    if (this.busy) {
+      this.notice("warning", "Stop the current task before you edit an earlier message.");
+      return undefined;
+    }
+    const earlier = this.before(checkpointId);
+    if (!earlier) {
+      this.notice(
+        "warning",
+        "This message is no longer in the history of the chat. Fork from a later message instead.",
+      );
+      return undefined;
+    }
+    const later = this.history.length - earlier.history.length;
+    const files = this.checkpoints.has(checkpointId) ? this.checkpoints.changedSince(checkpointId) : [];
+    const answer = confirmed
+      ? "Edit"
+      : await vscode.window.showWarningMessage(
+          "Edit this message and send it again?",
+          {
+            modal: true,
+            detail: [
+              `The ${later} later ${later === 1 ? "message goes" : "messages go"} away.`,
+              files.length > 0
+                ? `${files.length} ${files.length === 1 ? "file goes" : "files go"} back to the state before this message:\n${files.slice(0, 12).join("\n")}${files.length > 12 ? "\n…" : ""}`
+                : "No files changed after this message.",
+              "To keep this chat as it is, use Fork from here instead.",
+            ].join("\n\n"),
+          },
+          "Edit",
+        );
+    if (answer !== "Edit") return undefined;
+    if (files.length > 0) await this.restore(checkpointId, files);
+    this.history = earlier.history;
+    this.transcript = new Transcript(earlier.transcript);
+    this.lastInputTokens = 0;
+    this.deps.persist(this);
+    return earlier.text;
   }
 
   /** Sends the current model request again, when the model stopped answering. False when no request runs. */
@@ -860,7 +922,12 @@ export class AgentSession {
     });
     const prefix = queued ? "(The user sent this while you were working. Take it into account now.)\n" : "";
     const content = [prefix + text, resolved.context].filter(Boolean).join("\n\n");
-    this.history.push({ role: "user", content, ...(resolved.images.length > 0 ? { images: resolved.images } : {}) });
+    this.history.push({
+      role: "user",
+      content,
+      checkpointId,
+      ...(resolved.images.length > 0 ? { images: resolved.images } : {}),
+    });
   }
 
   private async restore(checkpointId: string, files: string[]): Promise<void> {

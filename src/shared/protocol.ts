@@ -285,7 +285,7 @@ export type HostMessage = (
   | { readonly type: "addAttachment"; readonly attachment: Attachment; readonly label: string }
   | { readonly type: "mentions"; readonly query: string; readonly items: readonly MentionItem[] }
   | { readonly type: "contextOptions"; readonly options: readonly ContextOption[] }
-  | { readonly type: "focusInput"; readonly text?: string }
+  | { readonly type: "focusInput"; readonly text?: string; readonly replace?: boolean }
   | { readonly type: "openPanel" }
 ) & {
   /** Time of the event in milliseconds since 1970. */
@@ -316,6 +316,8 @@ export type WebviewMessage =
   | { readonly type: "configureModel" }
   | { readonly type: "setupOptions" }
   | { readonly type: "retryRequest" }
+  | { readonly type: "forkChat"; readonly checkpointId: string }
+  | { readonly type: "editMessage"; readonly checkpointId: string }
   | { readonly type: "dismissWhatsNew" }
   | { readonly type: "connectProvider"; readonly id: string }
   | { readonly type: "openSettings" }
@@ -564,6 +566,11 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
         return { type: "setAppearance", key, value };
       return undefined;
     }
+    case "forkChat":
+    case "editMessage":
+      return typeof message.checkpointId === "string" && /^[A-Za-z0-9_-]{1,80}$/.test(message.checkpointId)
+        ? { type: message.type, checkpointId: message.checkpointId }
+        : undefined;
     case "reviewFile":
       return typeof message.uri === "string" &&
         message.uri.length <= 4000 &&
