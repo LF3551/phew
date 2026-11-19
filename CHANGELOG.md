@@ -10,6 +10,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - A website at <https://lf3551.github.io/phew/>: the task from the error to the green tests, the features with pictures, how to start, the providers, privacy, and answers to common questions.
 - Phew is on Open VSX, for VSCodium and other editors that use it.
 
+### Changed
+
+- Phew installs in VS Code 1.95 and newer (it needed 1.100), so it also runs in editors that are based on an older VS Code. The integration tests pass in VS Code 1.95.
+- Better search words in the Marketplace and Open VSX.
+
 ## [0.4.0] - 2026-11-18
 
 ### Changed

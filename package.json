@@ -23,7 +23,7 @@
     "url": "https://github.com/LF3551/phew/issues"
   },
   "engines": {
-    "vscode": "^1.100.0"
+    "vscode": "^1.95.0"
   },
   "categories": [
     "AI",
@@ -36,14 +36,32 @@
     "ai",
     "agent",
     "coding agent",
-    "bug fix",
-    "quick fix",
+    "ai assistant",
+    "pair programming",
     "chat",
+    "bug fix",
+    "fix errors",
+    "quick fix",
+    "debug",
+    "tests",
+    "code review",
+    "refactor",
+    "autocomplete",
+    "code completion",
+    "next edit",
+    "terminal",
+    "commit message",
     "llm",
+    "local llm",
     "ollama",
+    "lm studio",
     "openai",
+    "anthropic",
+    "gemini",
+    "deepseek",
+    "openrouter",
     "mcp",
-    "code review"
+    "agents.md"
   ],
   "main": "./dist/extension.js",
   "activationEvents": [
@@ -1711,7 +1729,7 @@
     "@biomejs/biome": "2.6.8",
     "@types/jsdom": "30.0.0",
     "@types/node": "22.20.5",
-    "@types/vscode": "1.100.0",
+    "@types/vscode": "1.95.0",
     "@vscode/test-electron": "3.1.0",
     "@vscode/vsce": "4.1.1",
     "@xterm/addon-fit": "0.11.0",
