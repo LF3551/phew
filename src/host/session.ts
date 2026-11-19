@@ -34,6 +34,15 @@ import { buildSystemPrompt } from "../core/prompts";
 import { RootSet } from "../core/roots";
 import { rulesForFile } from "../core/rules";
 import { skillsPrompt } from "../core/skills";
+import {
+  delegateTool,
+  delegateToolName,
+  Limiter,
+  parseDelegate,
+  subagentPrompt,
+  subagentResult,
+  subagentToolNames,
+} from "../core/subagents";
 import { type FileChange, fileChange } from "../core/summary";
 import type { ModelProfile } from "../providers/profile";
 import type { CommandSetting, HostMessage, ReviewSetting } from "../shared/protocol";
@@ -179,6 +188,14 @@ export class Transcript {
       this.items = this.items.filter((item) => !(item.type === "reasoningDelta" && item.id === stamped.id));
     }
     if (stamped.type === "plan") this.items = this.items.filter((item) => item.type !== "plan");
+    // A subagent card changes while it works: the newest state takes the place of the old one.
+    if (stamped.type === "subagent") {
+      const index = this.items.findIndex((item) => item.type === "subagent" && item.id === stamped.id);
+      if (index >= 0) {
+        this.items[index] = stamped;
+        return stamped;
+      }
+    }
     this.items.push(stamped);
     if (this.items.length > maximumTranscript) this.items.splice(0, this.items.length - maximumTranscript);
     return stamped;
@@ -1221,6 +1238,161 @@ export class AgentSession {
   }
 
   /** Summarizes the older part of the history. Returns true when the history became shorter. */
+  /**
+   * Runs a subagent: a research task with read-only tools and its own model, in parallel with others. Its card in
+   * the chat shows the model, the steps, and the report; the report goes back to the agent of the chat.
+   */
+  private async runSubagent(
+    call: ToolCall,
+    signal: AbortSignal,
+    context: { settings: Settings; meter: CostMeter; limiter: Limiter; rules: string },
+  ): Promise<{ content: string }> {
+    const { settings } = context;
+    const profiles = this.deps.models.profiles().profiles;
+    let args: Record<string, unknown>;
+    try {
+      const parsed = JSON.parse(call.arguments || "{}") as unknown;
+      args = typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : {};
+    } catch {
+      return { content: "Error: the arguments of delegate are not valid JSON." };
+    }
+    const request = parseDelegate(
+      args,
+      profiles.map((item) => ({ id: item.id, name: item.name })),
+    );
+    if (typeof request === "string") return { content: `Error: ${request}` };
+    // The model: the one the agent chose, else the model for subagents in the settings, else the model of the chat.
+    const preferred = request.model ?? settings.subagents.model;
+    const profile = profiles.find((item) => item.id === preferred) ?? this.profile();
+    if (!profile) return { content: "Error: there is no model for the subagent." };
+
+    const id = `sa_${++this.counter}_${Date.now().toString(36)}`;
+    const steps: { name: string; summary: string }[] = [];
+    let stepCount = 0;
+    let fallback: string | undefined;
+    let startedAt = Date.now();
+    const card = (
+      status: "running" | "done" | "failed" | "stopped",
+      extra: { seconds?: number; report?: string; error?: string } = {},
+    ) =>
+      this.emit({
+        type: "subagent",
+        id,
+        title: request.title,
+        task: request.task.slice(0, 4000),
+        model: profile.name,
+        status,
+        steps: steps.slice(-8),
+        stepCount,
+        ...(fallback ? { fallback } : {}),
+        ...extra,
+      });
+    card("running");
+
+    return context.limiter.run(async () => {
+      startedAt = Date.now();
+      if (signal.aborted) {
+        card("stopped");
+        return { content: subagentResult({ model: profile.name, status: "stopped", steps: 0, seconds: 0 }) };
+      }
+      const chain = [
+        profile,
+        ...fallbackChain(profile.id, profiles)
+          .slice(1)
+          .flatMap((next) => profiles.filter((item) => item.id === next)),
+      ];
+      const childMeter = new CostMeter(profile.price, { maxCostPerTask: 0, maxTokensPerTask: 0 });
+      const client = new FallbackClient(
+        chain.map((step) => ({ name: step.name, client: () => this.deps.models.client(step) })),
+        (from, to, error) => {
+          const failed = chain[from] as ModelProfile;
+          const next = chain[to] as ModelProfile;
+          fallback = next.name;
+          childMeter.usePrice(next.price);
+          steps.push({ name: "fallback", summary: `${failed.name} ${fallbackReason(error)}; ${next.name} goes on` });
+          card("running");
+        },
+      );
+      const ruleSet = await loadRuleSet(this.root.uri);
+      const delivered = new Set<string>();
+      // Read-only tools: no edits, no commands, no MCP, no questions, no plan, and no memory changes.
+      const tools = new ToolHost({
+        root: this.root,
+        roots: this.roots,
+        mode: findMode("ask", this.deps.modes()),
+        settings,
+        broker: this.broker,
+        changes: this.changes,
+        mcp: this.deps.mcp,
+        index: this.deps.index,
+        memory: this.deps.memory,
+        rulesFor: (path) => rulesForFile(ruleSet.scoped, path, delivered),
+        skills: this.deps.skills,
+        plan: { get: () => emptyPlan, set: () => {} },
+        log: this.deps.log,
+      });
+      const definitions = (await tools.definitions()).filter((tool) => subagentToolNames.has(tool.name));
+      const history: ChatMessage[] = [{ role: "user", content: request.task }];
+      let result: AgentResult | undefined;
+      let error: string | undefined;
+      try {
+        result = await runAgent({
+          client,
+          systemPrompt: subagentPrompt({
+            workspace: this.root.name,
+            platform: `${os.platform()} ${os.release()}`,
+            date: new Date().toISOString().slice(0, 10),
+            rules: context.rules,
+          }),
+          history,
+          tools: definitions,
+          // A second check: whatever the model asks, a subagent only reads.
+          executeTool: (toolCall, toolSignal) =>
+            subagentToolNames.has(toolCall.name)
+              ? tools.execute(toolCall, toolSignal)
+              : Promise.resolve({ content: `Error: a subagent cannot use ${toolCall.name}. It only reads.` }),
+          maxSteps: settings.subagents.maxSteps,
+          meter: childMeter,
+          signal,
+          events: {
+            onToolStart: (toolCall) => {
+              stepCount++;
+              steps.push({ name: toolCall.name, summary: ToolHost.summarize(toolCall) });
+              card("running");
+            },
+          },
+        });
+      } catch (caught) {
+        error = caught instanceof Error ? caught.message : String(caught);
+      } finally {
+        context.meter.absorb(childMeter);
+      }
+      const answer = [...history].reverse().find((message) => message.role === "assistant" && message.content)?.content;
+      const status = signal.aborted ? "stopped" : result?.status === "done" ? "done" : "failed";
+      if (status === "failed") error ??= result?.message ?? "it stopped without a report";
+      const seconds = (Date.now() - startedAt) / 1000;
+      this.deps.log.info(
+        `Subagent ${status}: model=${fallback ?? profile.name} steps=${result?.steps ?? stepCount} tokens=${childMeter.tokens}`,
+      );
+      card(status, {
+        seconds,
+        ...(answer ? { report: answer.slice(0, 20_000) } : {}),
+        ...(error ? { error: failureLine(error) } : {}),
+      });
+      return {
+        content: subagentResult({
+          model: profile.name,
+          status,
+          answer,
+          error,
+          steps: result?.steps ?? stepCount,
+          seconds,
+          fallback,
+        }),
+      };
+    });
+  }
+
   private async compact(client: ModelClient, signal: AbortSignal, manual = false): Promise<boolean> {
     const split = splitForCompaction(this.history, 2) ?? (manual ? splitForCompaction(this.history, 1) : undefined);
     if (!split) return false;
@@ -1295,7 +1467,20 @@ export class AgentSession {
     this.activeTools = tools;
     this.toolIdsByCall.clear();
     this.callIdsByTool.clear();
-    const definitions = await tools.definitions();
+    // Subagents: research helpers that read in parallel, with the models of the user.
+    const subagents = settings.subagents.enabled && mode.tools.has("read");
+    const limiter = new Limiter(settings.subagents.maxParallel);
+    const definitions = [
+      ...(await tools.definitions()),
+      ...(subagents
+        ? [
+            delegateTool(
+              this.deps.models.profiles().profiles.map((item) => ({ id: item.id, name: item.name })),
+              settings.subagents,
+            ),
+          ]
+        : []),
+    ];
     const memory = settings.memoryEnabled ? await this.deps.memory.notes(this.root.uri) : { project: [], personal: [] };
     const skills = settings.skillsEnabled
       ? await this.deps.skills.list(roots.roots.map((root) => vscode.Uri.file(root.path)))
@@ -1373,7 +1558,11 @@ export class AgentSession {
       systemPrompt,
       history: this.history,
       tools: definitions,
-      executeTool: (call, toolSignal) => tools.execute(call, toolSignal),
+      executeTool: (call, toolSignal) =>
+        call.name === delegateToolName && subagents
+          ? this.runSubagent(call, toolSignal, { settings, meter, limiter, rules: ruleSet.prompt })
+          : tools.execute(call, toolSignal),
+      concurrent: (call) => call.name === delegateToolName,
       verify,
       maxVerifyAttempts: settings.verifyMaxAttempts,
       requireChanges: mode.tools.has("edit") && request.kind === "fix",
@@ -1432,6 +1621,8 @@ export class AgentSession {
             `${answering.name}: ${info.reason}. Retrying in ${Math.ceil(info.delayMs / 1000)} s (attempt ${info.attempt} of ${info.maxAttempts}).`,
           ),
         onToolStart: (call) => {
+          // A subagent has its own card.
+          if (call.name === delegateToolName) return;
           const id = `t_${++this.counter}_${Date.now().toString(36)}`;
           toolIds.set(call.id, id);
           this.toolIdsByCall.set(call.id, id);
@@ -1451,6 +1642,7 @@ export class AgentSession {
         onToolEnd: (call, toolResult) => {
           this.flushOutput();
           this.journalTool(call, toolResult.content);
+          if (call.name === delegateToolName) return;
           this.emit({
             type: "tool",
             id: toolIds.get(call.id) ?? call.id,

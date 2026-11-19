@@ -237,6 +237,23 @@ export type HostMessage = (
   | { readonly type: "suggestions"; readonly items: readonly Suggestion[] }
   | { readonly type: "handoff"; readonly path: string; readonly manual: boolean }
   | {
+      /** A subagent: its task, model, live steps, and report. It changes in place while it works. */
+      readonly type: "subagent";
+      readonly id: string;
+      readonly title: string;
+      readonly task: string;
+      readonly model: string;
+      readonly status: "running" | "done" | "failed" | "stopped";
+      /** The latest steps, with the tool name and its summary. */
+      readonly steps: readonly { readonly name: string; readonly summary: string }[];
+      readonly stepCount: number;
+      readonly seconds?: number;
+      readonly report?: string;
+      readonly error?: string;
+      /** The fallback model that finished the work. */
+      readonly fallback?: string;
+    }
+  | {
       readonly type: "toolOutput";
       readonly id: string;
       readonly text: string;

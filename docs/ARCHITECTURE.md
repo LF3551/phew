@@ -42,6 +42,7 @@ Pure TypeScript without the `vscode` module, so unit tests run in Node.js.
 | `secrets.ts` | Sensitive file detection and secret redaction. |
 | `cost.ts` | Token and cost tracking and budget limits, with a new price after a switch to a fallback model. |
 | `fallback.ts` | Failure kinds of providers, the fallback chain of a model, and the client that moves to the fallback when the quota ends or a rate limit lasts. |
+| `subagents.ts` | The `delegate` tool, its arguments, the read-only tools of a subagent, its prompt, the report for the agent of the chat, and the limit of subagents at once. |
 | `chatStatus.ts` | The state of a chat in the list (needs input, model quiet, on a fallback, running, failed, done) and when a model counts as quiet. |
 | `modelChoice.ts` | Which model answers in a chat: the model of the mode, of the chat, or the default. |
 | `rules.ts` | Rules: the files and folders of Phew and other agents, their front matter (`applyTo`, `paths`, `globs`, `alwaysApply`, `trigger`, `inclusion`), path patterns, and how each rule reaches the agent (always, with a matching file, by description, or only when attached). |

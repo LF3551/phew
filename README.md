@@ -59,6 +59,7 @@
 - **A mascot that shows the work.** The Phew drop blinks, looks up while it thinks, reads along a line while it reads files, and sweats while it waits for your answer. The Phew icon shows a number when a chat needs you. Choose **Lively**, **Calm**, or **Still** in **Appearance**.
 - **Parallel chats.** Open a second chat in an editor tab (⧉) and let two agents work at the same time. Phew warns before two chats change the same file.
   Each chat, and each window, keeps its own model, so two keys of one provider can work side by side.
+- **Subagents.** The agent can send research tasks to subagents that read and search in parallel, each with the model it needs, and report back. They only read; each has a card in the chat with its steps and its report.
 - **Fallback model.** When a model runs out of quota or credit, or stays rate limited, the model you chose as its fallback goes on with the task.
 - **Steer while it works.** Keep typing while the agent works: messages wait in a queue and reach the agent at its next step. `/btw` asks a quick side question without stopping the task.
 - **See the thinking and the context.** Phew shows the reasoning of models that stream it, and a context meter. Long chats are compacted automatically, or with `/compact`.

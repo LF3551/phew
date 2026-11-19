@@ -1530,6 +1530,35 @@
         }
       },
       {
+        "title": "Subagents",
+        "properties": {
+          "phew.subagents.enabled": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "Let the agent give research tasks to subagents that read and search the workspace in parallel and report back. Subagents cannot change files, run commands, use MCP tools, or ask you."
+          },
+          "phew.subagents.model": {
+            "type": "string",
+            "default": "",
+            "markdownDescription": "The `id` of the default model of subagents, for example a fast and cheap one. Leave empty to use the model of the chat. The agent can choose another of your models for each subagent."
+          },
+          "phew.subagents.maxParallel": {
+            "type": "number",
+            "default": 3,
+            "minimum": 1,
+            "maximum": 6,
+            "markdownDescription": "Subagents that run at the same time. More wait for a free place."
+          },
+          "phew.subagents.maxSteps": {
+            "type": "number",
+            "default": 25,
+            "minimum": 3,
+            "maximum": 100,
+            "markdownDescription": "Model requests of one subagent before it has to report."
+          }
+        }
+      },
+      {
         "title": "MCP",
         "properties": {
           "phew.mcp.servers": {

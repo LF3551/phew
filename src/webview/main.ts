@@ -43,6 +43,7 @@ import {
   showWrapped,
 } from "./persona";
 import { createSetupCard } from "./setupCard";
+import { renderSubagent } from "./subagentCard";
 import { appendCommandOutput, renderCommandTerminal, setCommandWhere, setTerminalLook } from "./terminalBlock";
 import { createTerminalsPanel } from "./terminalsPanel";
 import { groupSummary, toolLabel } from "./toolLabels";
@@ -1702,6 +1703,7 @@ const signsOfLife = new Set<HostMessage["type"]>([
   "reasoningEnd",
   "tool",
   "toolOutput",
+  "subagent",
   "approval",
   "approvalResolved",
   "notice",
@@ -1743,6 +1745,15 @@ function handle(message: HostMessage): void {
     case "tool":
       updateTool(message);
       break;
+    case "subagent": {
+      let card = transcript.querySelector<HTMLDetailsElement>(`details.subagent[data-id="${CSS.escape(message.id)}"]`);
+      if (!card) {
+        card = element("details", "subagent");
+        append(card);
+      } else keepFollowing();
+      renderSubagent(card, message, markdown);
+      break;
+    }
     case "toolOutput": {
       if (message.where)
         setCommandWhere(message.id, message.where, { approval: message.approval, terminal: message.terminal });

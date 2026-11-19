@@ -705,6 +705,73 @@ const states = {
       { type: "openPanel" },
     ],
   },
+  // Subagents at work: one running, one done with its report open, one on a fallback, one failed.
+  subagents: {
+    messages: [
+      ...kitchen,
+      {
+        type: "subagent",
+        id: "sa1",
+        title: "Find every caller of parseConfig",
+        task: "Find every caller of parseConfig in src and test, with the file and line, and say which ones pass a path.",
+        model: "Gemini Flash",
+        status: "running",
+        steps: [
+          { name: "search_text", summary: "search_text parseConfig" },
+          { name: "read_file", summary: "read_file src/server/bootstrap.ts" },
+        ],
+        stepCount: 2,
+      },
+      {
+        type: "subagent",
+        id: "sa2",
+        title: "Map the auth flow",
+        task: "Map how a request is authenticated, from the middleware to the session store.",
+        model: "Claude (personal) · claude-sonnet-4-5",
+        status: "done",
+        steps: [
+          { name: "list_files", summary: "list_files src/auth/**" },
+          { name: "read_file", summary: "read_file src/auth/middleware.ts" },
+          { name: "read_file", summary: "read_file src/auth/session.ts" },
+        ],
+        stepCount: 11,
+        seconds: 38.2,
+        report:
+          "1. `src/auth/middleware.ts:14` reads the cookie and calls `verify()`.\n2. `src/auth/session.ts:40` loads the session from Redis.\n\nNot found: any check of the CSRF token.",
+      },
+      {
+        type: "subagent",
+        id: "sa3",
+        title: "Read the release notes",
+        task: "Summarize the breaking changes in docs/CHANGELOG.md since 3.0.",
+        model: "Claude (work)",
+        fallback: "GPT-5 mini",
+        status: "running",
+        steps: [
+          { name: "fallback", summary: "Claude (work) has no quota or credit left; GPT-5 mini goes on" },
+          { name: "read_file", summary: "read_file docs/CHANGELOG.md" },
+        ],
+        stepCount: 1,
+      },
+      {
+        type: "subagent",
+        id: "sa4",
+        title: "Check the migrations",
+        task: "List the database migrations that drop a column.",
+        model: "Local · qwen3-coder",
+        status: "failed",
+        steps: [],
+        stepCount: 0,
+        seconds: 3,
+        error: "Cannot reach Local at localhost:11434 (ECONNREFUSED). Is the local server running?",
+      },
+    ],
+    after: async (page) => {
+      await page.click('details.subagent[data-id="sa2"] > summary');
+      await page.click('details.subagent[data-id="sa4"] > summary');
+      await page.waitForTimeout(150);
+    },
+  },
   find: {
     messages: kitchen,
     after: async (page) => {

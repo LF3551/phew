@@ -46,6 +46,18 @@ export class CostMeter {
     this.segmentOutput += output;
   }
 
+  /**
+   * Adds the tokens and the cost of a subagent to this task, so the budget sees them. The fill of the context
+   * window stays that of this chat.
+   */
+  absorb(other: CostMeter): void {
+    this.input += other.inputTokens;
+    this.output += other.outputTokens;
+    const cost = other.cost;
+    if (cost !== undefined) this.settled += cost;
+    else if (other.tokens > 0) this.unpriced = true;
+  }
+
   /** Counts the next tokens with another price, for example after a switch to a fallback model. */
   usePrice(price: ModelPrice | undefined): void {
     if (this.segmentInput + this.segmentOutput > 0) {

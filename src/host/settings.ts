@@ -85,6 +85,13 @@ export interface Settings {
   readonly nextEditModel: string;
   readonly commit: CommitSettings & { readonly model: string };
   readonly worktrees: { readonly location: string; readonly branchPrefix: string };
+  readonly subagents: {
+    readonly enabled: boolean;
+    /** The id of the default model of subagents; empty for the model of the chat. */
+    readonly model: string;
+    readonly maxParallel: number;
+    readonly maxSteps: number;
+  };
 }
 
 const strings = (value: unknown): string[] =>
@@ -229,6 +236,12 @@ export function readSettings(scope?: vscode.Uri): Settings {
       assistedBy: config.get<boolean>("commit.assistedByTrailer") === true,
       instructions: text(config.get("commit.instructions")),
       model: text(config.get("commit.model")),
+    },
+    subagents: {
+      enabled: config.get("subagents.enabled") !== false,
+      model: text(config.get("subagents.model")),
+      maxParallel: Math.max(1, Math.round(positive(config.get("subagents.maxParallel"), 3, 6))),
+      maxSteps: Math.max(3, Math.round(positive(config.get("subagents.maxSteps"), 25, 100))),
     },
     worktrees: {
       location: text(config.get("worktrees.location")),

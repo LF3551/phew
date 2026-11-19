@@ -36,6 +36,7 @@ export function sectionInfo(title: string): { group: string; icon: string; line?
       short: "Memory, Modes, Skills",
     },
     Handoff: { group: "Agent", icon: "export", line: "Notes that let any agent continue the work." },
+    Subagents: { group: "Agent", icon: "bolt", line: "Helpers that research in parallel and report back." },
     Approvals: { group: "Safety", icon: "shield", line: "What runs without asking: edits, commands, and MCP tools." },
     Checks: { group: "Safety", icon: "check", line: "The command that proves a fix, for example npm test." },
     Budget: { group: "Safety", icon: "balance", line: "Limits for tokens and cost." },

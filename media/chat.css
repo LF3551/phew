@@ -5671,3 +5671,143 @@ html body .transcript > .rating-card {
   margin-right: auto;
   margin-left: auto;
 }
+
+/* A subagent: its title and state, its model below, and the task, the steps, and the report when you open it. */
+.subagent {
+  margin: 0 0 8px;
+  border: 1px solid var(--vscode-widget-border, color-mix(in srgb, var(--vscode-foreground) 14%, transparent));
+  border-left: 2px solid var(--phew-accent, var(--phew-drop));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--vscode-foreground) 3%, transparent);
+  font-size: 0.92em;
+}
+
+.subagent > summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  column-gap: 8px;
+  align-items: center;
+  padding: 6px 10px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.subagent > summary::-webkit-details-marker {
+  display: none;
+}
+
+.subagent > summary:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+  border-radius: 6px;
+}
+
+.sub-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--phew-drop);
+}
+
+.subagent[data-status="running"] .sub-dot {
+  animation: chat-pulse 1.2s ease-in-out infinite;
+}
+
+.subagent[data-status="done"] .sub-dot {
+  background: var(--phew-success, var(--vscode-testing-iconPassed, #73c991));
+}
+
+.subagent[data-status="failed"] .sub-dot {
+  background: var(--phew-error, var(--vscode-errorForeground, #f14c4c));
+}
+
+.subagent[data-status="stopped"] .sub-dot {
+  background: var(--vscode-descriptionForeground);
+}
+
+.sub-title {
+  overflow: hidden;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sub-state {
+  overflow: hidden;
+  max-width: 22ch;
+  color: var(--vscode-descriptionForeground);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.subagent[data-status="failed"] .sub-state {
+  color: var(--phew-error, var(--vscode-errorForeground, #f14c4c));
+}
+
+.sub-meta {
+  grid-column: 2 / 4;
+  overflow: hidden;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.88em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sub-body {
+  padding: 0 10px 8px 25px;
+}
+
+.sub-task {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0 0 6px;
+  color: var(--vscode-descriptionForeground);
+  white-space: pre-wrap;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+}
+
+.sub-steps {
+  margin: 0 0 6px;
+  padding: 0;
+  list-style: none;
+  color: var(--vscode-descriptionForeground);
+}
+
+.sub-steps li {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sub-steps li::before {
+  content: "· ";
+}
+
+.sub-steps .sub-earlier {
+  font-style: italic;
+}
+
+.sub-steps .sub-fallback {
+  color: var(--phew-warning, var(--vscode-editorWarning-foreground, #cca700));
+}
+
+.sub-error {
+  margin: 0 0 6px;
+  color: var(--phew-error, var(--vscode-errorForeground, #f14c4c));
+}
+
+.sub-report {
+  padding-top: 6px;
+  border-top: 1px solid var(--vscode-widget-border, color-mix(in srgb, var(--vscode-foreground) 12%, transparent));
+}
+
+.sub-report > :first-child {
+  margin-top: 0;
+}
+
+.sub-report > :last-child {
+  margin-bottom: 0;
+}

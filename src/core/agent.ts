@@ -33,6 +33,11 @@ export interface AgentOptions {
   readonly history: ChatMessage[];
   readonly tools: readonly ToolDefinition[];
   readonly executeTool: (call: ToolCall, signal: AbortSignal) => Promise<ToolResult>;
+  /**
+   * Tool calls that may run at the same time, such as subagents. Calls next to each other that all may run
+   * together start at once; their results go to the history in the order of the calls.
+   */
+  readonly concurrent?: (call: ToolCall) => boolean;
   /** Runs the check command, for example the tests, after the agent says that it is done. */
   readonly verify?: () => Promise<VerificationResult>;
   readonly maxVerifyAttempts?: number;
@@ -154,11 +159,7 @@ export async function runAgent(options: AgentOptions): Promise<AgentResult> {
       continue;
     }
 
-    for (const call of result.toolCalls) {
-      if (signal.aborted) {
-        history.push({ role: "tool", toolCallId: call.id, content: "Cancelled by the user." });
-        continue;
-      }
+    const runTool = async (call: ToolCall): Promise<ToolResult> => {
       events?.onToolStart?.(call);
       let toolResult: ToolResult;
       try {
@@ -166,9 +167,28 @@ export async function runAgent(options: AgentOptions): Promise<AgentResult> {
       } catch (error) {
         toolResult = { content: `Error: ${error instanceof Error ? error.message : String(error)}` };
       }
-      if (toolResult.changed) filesChanged = true;
-      history.push({ role: "tool", toolCallId: call.id, content: toolResult.content });
       events?.onToolEnd?.(call, toolResult);
+      return toolResult;
+    };
+    const calls = result.toolCalls;
+    for (let index = 0; index < calls.length; ) {
+      const call = calls[index] as ToolCall;
+      if (signal.aborted) {
+        history.push({ role: "tool", toolCallId: call.id, content: "Cancelled by the user." });
+        index++;
+        continue;
+      }
+      // A run of calls that may work at the same time starts together.
+      let end = index + 1;
+      if (options.concurrent?.(call)) while (end < calls.length && options.concurrent(calls[end] as ToolCall)) end++;
+      const batch = calls.slice(index, end);
+      const results = await Promise.all(batch.map(runTool));
+      batch.forEach((item, position) => {
+        const toolResult = results[position] as ToolResult;
+        if (toolResult.changed) filesChanged = true;
+        history.push({ role: "tool", toolCallId: item.id, content: toolResult.content });
+      });
+      index = end;
     }
   }
   return finish("max-steps", `The task stopped after ${options.maxSteps} steps.`);

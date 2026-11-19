@@ -33,9 +33,34 @@ const call = (name, args) => ({
   tool_calls: [{ index: 0, id: `call_${name}`, function: { name, arguments: JSON.stringify(args) } }],
 });
 
+/** Several tool calls in one step, such as subagents that run in parallel. */
+const calls = (...items) => ({
+  tool_calls: items.map(([name, args], index) => ({
+    index,
+    id: `call_${name}_${index}`,
+    function: { name, arguments: JSON.stringify(args) },
+  })),
+});
+
+/** A subagent: it reads what its task names and reports, or tries what it must not do. */
+function subagentScript(messages) {
+  const task = taskOf(messages);
+  const step = stepOf(messages);
+  if (task.startsWith("SUB-EDIT"))
+    return step === 0
+      ? call("edit_file", { path: "math.js", old_text: "a", new_text: "HACKED" })
+      : { content: `BLOCKED ${lastToolResult(messages)}` };
+  if (step === 0) return call("read_file", { path: task.startsWith("SUB-B") ? "check.js" : "math.js" });
+  const first = lastToolResult(messages)
+    .split("\n")
+    .find((line) => line.includes("exports") || line.includes("add"));
+  return { content: `FOUND-${task.slice(4, 5)} ${first ?? "nothing"}` };
+}
+
 /** A scripted model. Each task has its own steps. */
 async function script(data) {
   const messages = data.messages;
+  if (data.tools?.length > 0 && /You are a subagent of Phew/.test(messages[0].content)) return subagentScript(messages);
   if (!data.tools || data.tools.length === 0) {
     if (/side question/.test(messages[0].content)) return { content: "BTW-ANSWER" };
     if (/summarize a coding conversation/.test(messages[0].content)) return { content: "## Summary\nEarlier work." };
@@ -63,6 +88,23 @@ async function script(data) {
       ? call("edit_file", { path: "math.js", old_text: "a - b", new_text: "a + b" })
       : { content: "**Fix:** use +." };
   }
+  if (task.startsWith("Delegate research"))
+    return step === 0
+      ? calls(
+          ["delegate", { title: "Find add", task: "SUB-A: find the add function in math.js" }],
+          ["delegate", { title: "Read the check", task: "SUB-B: read check.js", model: "personal" }],
+          ["delegate", { title: "Ask the work key", task: "SUB-C: find add with the work key", model: "work" }],
+        )
+      : {
+          content: `RESULT ${messages
+            .filter((message) => message.role === "tool")
+            .map((message) => message.content)
+            .join("\n---\n")}`,
+        };
+  if (task.startsWith("Delegate an edit"))
+    return step === 0
+      ? call("delegate", { title: "Try to edit", task: "SUB-EDIT: change math.js" })
+      : { content: `RESULT ${lastToolResult(messages)}` };
   if (task.startsWith("Ask me"))
     return step === 0
       ? call("ask_user", { question: "Which color?", options: ["red", "blue"] })
@@ -123,6 +165,8 @@ function startServer() {
   let hangs = 0;
   // "Go quiet" also gets no answer once, for the quiet model in the list of chats.
   let quiets = 0;
+  // Requests of subagents: how many ran at once, and which tools they were offered.
+  const subagents = { running: 0, peak: 0, tools: new Set() };
   let mcpSession = 0;
   const server = http.createServer((request, response) => {
     let body = "";
@@ -197,6 +241,15 @@ function startServer() {
         return;
       }
       requests.push(data);
+      const isSubagent = /You are a subagent of Phew/.test(data.messages?.[0]?.content ?? "");
+      if (isSubagent) {
+        subagents.running++;
+        subagents.peak = Math.max(subagents.peak, subagents.running);
+        for (const tool of data.tools ?? []) subagents.tools.add(tool.function.name);
+        // Long enough for the subagents of one step to overlap.
+        await delay(400);
+        subagents.running--;
+      }
       const delta = await script(data);
       response.writeHead(200, { "Content-Type": "text/event-stream" });
       response.write(`data: ${JSON.stringify({ choices: [{ delta }] })}\n\n`);
@@ -207,7 +260,7 @@ function startServer() {
     });
   });
   return new Promise((resolve) =>
-    server.listen(0, "127.0.0.1", () => resolve({ server, requests, keyedAuth, routed })),
+    server.listen(0, "127.0.0.1", () => resolve({ server, requests, keyedAuth, routed, subagents })),
   );
 }
 
@@ -225,7 +278,7 @@ async function run() {
     assert.ok(commands.includes(command), `${command} is registered`);
   }
 
-  const { server, requests, keyedAuth, routed } = await startServer();
+  const { server, requests, keyedAuth, routed, subagents } = await startServer();
   const port = server.address().port;
   const config = vscode.workspace.getConfiguration("phew");
   await config.update(
@@ -743,6 +796,91 @@ async function run() {
       "the chat says which model took over and why",
     );
     assert.equal(rescued.chatModelId, "work", "the chat keeps its model and tries it again next time");
+    console.log("[it] subagents");
+    // The agent gives three research tasks to subagents with different models; they run in parallel, only read,
+    // and their reports come back. One model has no quota, so its fallback finishes that subagent.
+    sessions.newSession();
+    const lead = sessions.active;
+    await sessions.useModel("fake");
+    const mathBefore = fs.readFileSync(file, "utf8");
+    await lead.run({ text: "Delegate research", kind: "chat", mode: "code" });
+    const leadRequest = requests.find(
+      (request) => request.messages.some((message) => message.content === "Delegate research") && request.tools,
+    );
+    const delegate = leadRequest.tools.find((tool) => tool.function.name === "delegate");
+    assert.ok(delegate, "the agent of a chat has the delegate tool");
+    assert.deepEqual(
+      delegate.function.parameters.properties.model.enum,
+      ["fake", "work", "personal"],
+      "and may choose any model of the user for a subagent",
+    );
+    const cards = lead.transcript.all().filter((item) => item.type === "subagent");
+    assert.equal(cards.length, 3, "each subagent has one card, updated in place");
+    const cardTitled = (title) => cards.find((item) => item.title === title);
+    assert.deepEqual(
+      cards.map((item) => item.status),
+      ["done", "done", "done"],
+      "all three finished",
+    );
+    assert.equal(cardTitled("Find add").model, "Fake", "without a model, a subagent uses the model of the chat");
+    assert.equal(
+      cardTitled("Read the check").model,
+      "Claude (personal)",
+      "a subagent works with the model it was given",
+    );
+    assert.equal(cardTitled("Ask the work key").fallback, "Claude (personal)", "a subagent falls back like a chat");
+    assert.ok(
+      cards.every(
+        (item) =>
+          item.stepCount === 1 &&
+          item.steps
+            .filter((step) => step.name !== "fallback")
+            .map((step) => step.name)
+            .join() === "read_file" &&
+          /FOUND-/.test(item.report),
+      ),
+      `the cards show the steps and the reports ${JSON.stringify(cards.map((item) => [item.title, item.stepCount, item.steps, item.report]))}`,
+    );
+    assert.deepEqual([...new Set(routesOf("SUB-B: read check.js"))], ["personal"], "the requests went to that model");
+    assert.deepEqual(routesOf("SUB-C: find add with the work key").slice(0, 2), ["work", "personal"]);
+    assert.ok(
+      /no quota or credit left; Claude \(personal\) goes on/.test(
+        cardTitled("Ask the work key").steps.find((step) => step.name === "fallback")?.summary,
+      ),
+      "the card of C says why it switched",
+    );
+    assert.ok(subagents.peak >= 2, `subagents ran in parallel (at most ${subagents.peak} at once)`);
+    for (const tool of ["edit_file", "write_file", "run_command", "delegate", "ask_user", "remember", "update_plan"])
+      assert.ok(!subagents.tools.has(tool), `a subagent is not offered ${tool}`);
+    assert.ok(subagents.tools.has("read_file") && subagents.tools.has("search_text"), "it reads and searches");
+    const answer = lastAssistant(lead);
+    assert.match(answer, /The subagent \(Fake\) finished in 2 steps[\s\S]*FOUND-A/, "the report of A came back");
+    assert.match(answer, /The subagent \(Claude \(personal\)\) finished[\s\S]*FOUND-B/, "and of B");
+    assert.match(answer, /Claude \(personal\) \(fallback for Claude \(work\)\)[\s\S]*FOUND-C/, "and of C");
+    assert.ok(
+      !lead.transcript.all().some((item) => item.type === "tool" && item.name === "delegate"),
+      "a subagent shows as its card, not as a tool line",
+    );
+    // Whatever the model of a subagent asks, it cannot change a file.
+    sessions.newSession();
+    const tempted = sessions.active;
+    await sessions.useModel("fake");
+    await tempted.run({ text: "Delegate an edit", kind: "chat", mode: "code" });
+    assert.match(lastAssistant(tempted), /BLOCKED Error: a subagent cannot use edit_file\. It only reads\./);
+    assert.equal(fs.readFileSync(file, "utf8"), mathBefore, "the file did not change");
+    assert.equal(api.reviews.pendingFiles.length, 0, "and nothing waits for review");
+    // Subagents can be turned off.
+    await vscode.workspace.getConfiguration("phew").update("subagents.enabled", false, global);
+    sessions.newSession();
+    const plain = sessions.active;
+    await sessions.useModel("fake");
+    await plain.run({ text: "No helpers today", kind: "chat", mode: "code" });
+    const plainRequest = requests.findLast((request) =>
+      request.messages.some((message) => message.content === "No helpers today"),
+    );
+    assert.ok(!plainRequest.tools.some((tool) => tool.function.name === "delegate"), "then the tool is gone");
+    await vscode.workspace.getConfiguration("phew").update("subagents.enabled", undefined, global);
+
     // While a fallback runs the task, the list says so.
     sessions.newSession();
     const slow = sessions.active;
@@ -857,7 +995,7 @@ async function run() {
     }
 
     console.log(
-      "PHEW_INTEGRATION_OK: fix, review, commit, checkpoint, ask_user, skills, MCP HTTP, multi-root, plan, queue, btw, parallel chats, rename, approvals, context, Phew it!, handoff, summary, suggestions, fork and edit, rating, retry, models of chats, fallback, chat status, quiet model, worktree agent model, memory from many chats, key command",
+      "PHEW_INTEGRATION_OK: fix, review, commit, checkpoint, ask_user, skills, MCP HTTP, multi-root, plan, queue, btw, parallel chats, rename, approvals, context, Phew it!, handoff, summary, suggestions, fork and edit, rating, retry, models of chats, fallback, chat status, quiet model, subagents, worktree agent model, memory from many chats, key command",
     );
   } finally {
     server.close();
