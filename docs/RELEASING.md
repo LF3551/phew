@@ -33,11 +33,22 @@ Both stores use trusted publishing: the workflow gets a short-lived token from G
    - Environment: `release`
 2. In GitHub: **Settings → Secrets and variables → Actions → Variables** → add `PUBLISH_MARKETPLACE` = `true`.
 
-### Open VSX (VSCodium, Cursor, Windsurf, and others)
+### Open VSX (VSCodium and other editors)
 
-1. Sign in at <https://open-vsx.org> with GitHub, sign the publisher agreement, and create the namespace `alekseialeinikov`.
-2. Set up trusted publishing for the namespace with the same repository, workflow, and environment.
-3. Add the variable `PUBLISH_OPEN_VSX` = `true`.
+The namespace `alekseialeinikov` is verified, and trusted publishing is set up. For a new namespace:
+
+1. Sign in at <https://open-vsx.org> with GitHub, sign the publisher agreement, and create the namespace.
+2. Ask for ownership of the namespace in an issue at <https://github.com/EclipseFdn/open-vsx.org>. Until it is approved, uploads stay inactive.
+3. In the namespace, **Trusted Publishers → GitHub**: extension `phew`, repository `LF3551` / `phew`, workflow `release.yml`, environment `release`.
+4. Add the variable `PUBLISH_OPEN_VSX` = `true`.
+
+## When a store job did not run
+
+If a store was turned off or failed, publish the same release later without a new version: open the run of the release in **Actions** and **Re-run** only the job of that store (`gh run rerun <run-id> --job <job-id>`). It uses the `.vsix` of that run; the other jobs do not run again.
+
+## Website
+
+The website in `site/` is published to <https://lf3551.github.io/phew/> by the **Website** workflow after each change on `main` to `site/`, `docs/images/`, `resources/`, or `package.json`, so it shows the version of the latest release. Build it locally with `npm run site`.
 
 ### Optional: approve each publication
 

@@ -12,3 +12,6 @@ coverage/
 # Local release builds
 /release/
 .cache/
+
+# GitHub Pages build
+/_site/

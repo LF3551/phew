@@ -5,6 +5,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- A website at <https://lf3551.github.io/phew/>: the task from the error to the green tests, the features with pictures, how to start, the providers, privacy, and answers to common questions.
+- Phew is on Open VSX, for VSCodium and other editors that use it.
+
 ## [0.4.0] - 2026-11-18
 
 ### Changed

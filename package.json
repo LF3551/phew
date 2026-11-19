@@ -1696,7 +1696,7 @@
     "build": "node scripts/build.mjs",
     "watch": "node scripts/build.mjs --watch",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p src/webview/tsconfig.json --noEmit",
-    "lint": "biome check src test scripts media",
+    "lint": "biome check src test scripts media site",
     "format": "biome check --write src test scripts media",
     "test": "vitest run",
     "check": "npm run typecheck && npm run lint && npm test",
@@ -1704,6 +1704,7 @@
     "vscode:prepublish": "node scripts/build.mjs --production",
     "test:integration": "node scripts/build.mjs && node test/integration/run.mjs",
     "check:providers": "node scripts/check-providers.mjs",
+    "site": "node scripts/site.mjs",
     "images": "node scripts/build.mjs && node scripts/readme-images.mjs"
   },
   "devDependencies": {

@@ -10,6 +10,8 @@
 </p>
 
 <p align="center">
+  <a href="https://marketplace.visualstudio.com/items?itemName=alekseialeinikov.phew"><img alt="Visual Studio Marketplace version" src="https://img.shields.io/visual-studio-marketplace/v/alekseialeinikov.phew?label=Marketplace"></a>
+  <a href="https://open-vsx.org/extension/alekseialeinikov/phew"><img alt="Open VSX version" src="https://img.shields.io/open-vsx/v/alekseialeinikov/phew?label=Open%20VSX"></a>
   <a href="LICENSE"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-blue.svg"></a>
   <img alt="Status: preview" src="https://img.shields.io/badge/status-preview-orange.svg">
 </p>
@@ -20,11 +22,13 @@
 
 <p align="center">
   <a href="https://marketplace.visualstudio.com/items?itemName=alekseialeinikov.phew"><strong>Install from the Visual Studio Marketplace</strong></a>
-  or search for <strong>Phew</strong> in the Extensions view.
+  or search for <strong>Phew</strong> in the Extensions view.<br>
+  On VSCodium and other editors that use Open VSX: <a href="https://open-vsx.org/extension/alekseialeinikov/phew"><strong>install from Open VSX</strong></a>.<br>
+  Website: <a href="https://lf3551.github.io/phew/">lf3551.github.io/phew</a>
 </p>
 
 > [!NOTE]
-> Phew is in preview. Each release also has the `.vsix` file on [GitHub Releases](https://github.com/LF3551/phew/releases/latest).
+> Phew is in preview. Each release also has the `.vsix` file on [GitHub Releases](https://github.com/LF3551/phew/releases/latest): install it with **Extensions: Install from VSIX…**.
 
 ## Why Phew
 
@@ -152,7 +156,8 @@ In the terminal of a command in the chat:
 
 ## Settings
 
-**Phew: Open Settings** opens a settings page with sections for models, the agent, approvals, checks, budget, commits, worktrees, the code index, autocomplete, memory, modes, and skills, MCP, privacy, and the interface.
+**Phew: Open Settings** opens a settings page with a search field and a menu in five groups: **Models** (your models, the connection, autocomplete, and the code index), **Agent** (the agent, your assistant, memory, modes, and skills, and handoff notes), **Safety** (approvals, checks, budget, and privacy), **Git and tools** (commits, worktrees, and MCP), and **Look and feel**.
+Each model shows its provider, its context size, and whether its key is saved, with **Use**, **Test**, and **Key** at hand.
 The approval toggles in the chat change only that chat; **save as default** makes them the default.
 Notifications, the sound, the font size of the chat, and the send key (`Enter` or `Ctrl+Enter`) are in **Agent**.
 `phew.commands.terminal` chooses whether the terminal of the chat opens in the panel with the first command, only on request, or never (then each command runs in a hidden process). `phew.commands.shell` sets its shell, and `phew.commands.shellStartupFiles` turns your startup files off for a fast, plain shell.
@@ -185,10 +190,12 @@ npm run build            # build dist/ with esbuild
 npm run test:integration # run the extension in VS Code with a fake model server
 npm run package          # create phew.vsix
 npm run images           # render the README pictures from the real chat (needs Playwright)
+npm run site             # build the website into _site/ (open _site/index.html)
 ```
 
 Press `F5` in VS Code to start an Extension Development Host.
 The architecture is described in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+The website lives in `site/` and uses the pictures in `docs/images`; the **Website** workflow publishes it to GitHub Pages after each change on `main`.
 
 ## Releasing
 
