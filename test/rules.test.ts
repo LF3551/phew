@@ -67,6 +67,11 @@ test("matches paths like the tools do", () => {
   expect(matchesGlob("src/api/", "src/api/x/y.go")).toBe(true);
   expect(matchesGlob("./docs/**", "docs/a.md")).toBe(true);
   expect(matchesGlob("test_?.py", "tests/test_a.py")).toBe(true);
+  expect(matchesGlob("src/[ab].ts", "src/a.ts")).toBe(true);
+  expect(matchesGlob("src/[ab].ts", "src/c.ts")).toBe(false);
+  expect(matchesGlob("*.[jt]s", "x/y.js")).toBe(true);
+  expect(matchesGlob("src/[!a]*.ts", "src/a1.ts")).toBe(false);
+  expect(matchesGlob("src/[!a]*.ts", "src/b1.ts")).toBe(true);
 });
 
 test("a scoped rule comes once per task with the first matching file", () => {
@@ -95,4 +100,19 @@ test("the system prompt lists rules for some files and rules to read by descript
   expect(index).toContain("- db.mdc: Database migrations");
   expect(index).not.toContain("always.md");
   expect(index).not.toContain("m.mdc");
+});
+
+test("matching stays fast on patterns that make regexes backtrack, and a final ** means inside", () => {
+  const long = `${"a/".repeat(2000)}x.js`;
+  const start = performance.now();
+  for (const glob of ["**/**/**/**/**/*.ts", "**/*/**/*/**/*.ts", "**/[a-z]*/**/*.ts", "{a,b}/**/{c,d}/**/*.ts"])
+    expect(matchesGlob(glob, long)).toBe(false);
+  expect(performance.now() - start).toBeLessThan(500);
+  expect(matchesGlob("lib/**", "lib")).toBe(false);
+  expect(matchesGlob("lib/**", "lib/a.ts")).toBe(true);
+  expect(matchesGlob("lib/[x-z]*/**", "lib/x.test.ts")).toBe(false);
+  expect(matchesGlob("{src,lib}/**/*.ts", "lib/a/b.ts")).toBe(true);
+  // A broken class matches nothing instead of throwing.
+  expect(matchesGlob("src/[z-a].ts", "src/b.ts")).toBe(false);
+  expect(matchesGlob("[z-a]", "b")).toBe(false);
 });

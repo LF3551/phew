@@ -227,9 +227,14 @@ export class ToolHost {
       this.options.rulesFor &&
       (call.name === "read_file" || call.name === "edit_file" || call.name === "write_file")
     ) {
-      const file = this.relativeToRoot(stringArgument(args, "path"));
-      const rules = file ? this.options.rulesFor(file) : undefined;
-      if (rules) result = { ...result, content: `${rules}\n\n${result.content}` };
+      try {
+        const file = this.relativeToRoot(stringArgument(args, "path"));
+        const rules = file ? this.options.rulesFor(file) : undefined;
+        if (rules) result = { ...result, content: `${rules}\n\n${result.content}` };
+      } catch (error) {
+        // A broken rule never breaks reading or changing a file.
+        this.options.log.warn(`Rules for a file failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
     const content = this.options.settings.redactSecrets
       ? redactSecrets(result.content)

@@ -1760,5 +1760,8 @@
     "vitest": "5.1.0"
   },
   "pricing": "Free",
-  "preview": true
+  "preview": true,
+  "overrides": {
+    "minimatch": "^11.0.9"
+  }
 }

@@ -15,6 +15,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - **All unfinished work**: a new chat tells the agent about up to three unfinished handoff notes of other sessions, not only the latest one.
 - **`/init`** writes or improves `AGENTS.md` from what the project shows: commands, layout, conventions, testing, and gotchas. You review the file in the editor and keep or undo it; the handoff block of an existing file stays.
 
+### Fixed
+
+- Rule patterns are matched part by part, so a pattern such as `**/*/**/*/**/*.ts` can no longer make reading a file hang for seconds; a broken pattern such as `[z-a]` matches nothing instead of breaking `read_file` and `edit_file`; character classes such as `*.[jt]s` work; and `lib/**` means what is inside `lib`. Checked against minimatch on 104 000 cases.
+- The packaging tool uses a fixed version of minimatch (a moderate advisory in a development dependency; the extension itself was not affected).
+
 ## [0.5.0] - 2026-11-19
 
 ### Added

@@ -158,37 +158,95 @@ export function nestedRule(path: string, content: string): Rule {
   return { path, mode: "scoped", globs: [`${folder}/**`], body: content.trim() };
 }
 
-const globCache = new Map<string, RegExp>();
+const segmentCache = new Map<string, RegExp>();
 
-function globRegex(glob: string): RegExp {
-  let cached = globCache.get(glob);
+/** One part of a pattern between slashes, such as `*.ts`, `[ab]?`, or `{api,web}`, as an anchored regex. */
+function segmentRegex(segment: string): RegExp {
+  let cached = segmentCache.get(segment);
   if (cached) return cached;
   let source = "";
-  for (let index = 0; index < glob.length; index++) {
-    const char = glob[index] ?? "";
+  for (let index = 0; index < segment.length; index++) {
+    const char = segment[index] ?? "";
     if (char === "*") {
-      if (glob[index + 1] === "*") {
-        const slash = glob[index + 2] === "/";
-        source += slash ? "(?:.*/)?" : ".*";
-        index += slash ? 2 : 1;
-      } else source += "[^/]*";
-    } else if (char === "?") source += "[^/]";
-    else if (char === "{") {
-      const end = glob.indexOf("}", index);
+      while (segment[index + 1] === "*") index++;
+      source += ".*";
+    } else if (char === "?") source += ".";
+    else if (char === "[") {
+      // A character class: [abc], [a-z], or [!abc] for anything else.
+      const end = segment.indexOf("]", index + 2);
+      if (end < 0) source += "\\[";
+      else {
+        const inside = segment.slice(index + 1, end);
+        const negated = inside.startsWith("!") || inside.startsWith("^");
+        const body = (negated ? inside.slice(1) : inside).replace(/[\\\]^]/g, "\\$&");
+        source += negated ? `[^${body}]` : `[${body}]`;
+        index = end;
+      }
+    } else if (char === "{") {
+      const end = segment.indexOf("}", index);
       if (end < 0) source += "\\{";
       else {
-        source += `(?:${glob
+        source += `(?:${segment
           .slice(index + 1, end)
           .split(",")
-          .map((part) => part.replace(/[.+^$()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]*"))
+          .map((part) =>
+            part
+              .replace(/[.+^$()|[\]\\]/g, "\\$&")
+              .replace(/\*/g, ".*")
+              .replace(/\?/g, "."),
+          )
           .join("|")})`;
         index = end;
       }
     } else source += char.replace(/[.+^$()|[\]\\]/g, "\\$&");
   }
-  cached = new RegExp(`^${source}$`);
-  globCache.set(glob, cached);
+  try {
+    cached = new RegExp(`^${source}$`, "s");
+  } catch {
+    // A broken pattern, such as the class [z-a], matches nothing instead of failing the tool.
+    cached = /(?!)/;
+  }
+  if (segmentCache.size > 2000) segmentCache.clear();
+  segmentCache.set(segment, cached);
   return cached;
+}
+
+/** Braces with a slash inside, such as `{src,lib}/**`, become separate patterns (at most 64). */
+function expandBraces(pattern: string): string[] {
+  const open = pattern.search(/\{[^{}]*\/[^{}]*\}/);
+  if (open < 0) return [pattern];
+  const close = pattern.indexOf("}", open);
+  const results: string[] = [];
+  for (const choice of pattern.slice(open + 1, close).split(",")) {
+    for (const expanded of expandBraces(pattern.slice(0, open) + choice + pattern.slice(close + 1))) {
+      results.push(expanded);
+      if (results.length >= 64) return results;
+    }
+  }
+  return results;
+}
+
+/**
+ * Matches the parts of a pattern against the parts of a path. `**` takes any number of parts. The answers
+ * for each pair of positions are kept, so the time grows with the size of the pattern times the path, never
+ * more, whatever the input.
+ */
+function matchParts(pattern: readonly string[], parts: readonly string[]): boolean {
+  const known = new Map<number, boolean>();
+  const visit = (p: number, q: number): boolean => {
+    const key = p * (parts.length + 1) + q;
+    const cached = known.get(key);
+    if (cached !== undefined) return cached;
+    let result: boolean;
+    if (p === pattern.length) result = q === parts.length;
+    // A final ** means what is inside: at least one more part, so "lib/**" is not the file "lib".
+    else if (pattern[p] === "**" && p === pattern.length - 1) result = q < parts.length;
+    else if (pattern[p] === "**") result = visit(p + 1, q) || (q < parts.length && visit(p, q + 1));
+    else result = q < parts.length && segmentRegex(pattern[p] ?? "").test(parts[q] ?? "") && visit(p + 1, q + 1);
+    known.set(key, result);
+    return result;
+  };
+  return visit(0, 0);
 }
 
 /**
@@ -200,8 +258,16 @@ export function matchesGlob(glob: string, path: string): boolean {
   if (!pattern) return false;
   if (pattern.endsWith("/")) pattern += "**";
   const file = path.replace(/^\.?\//, "");
-  if (!pattern.includes("/")) return globRegex(pattern).test(file.slice(file.lastIndexOf("/") + 1));
-  return globRegex(pattern).test(file);
+  // Real paths are short; a huge one cannot be a file of the workspace.
+  if (file.length > 4096 || pattern.length > 500) return false;
+  if (!pattern.includes("/")) return segmentRegex(pattern).test(file.slice(file.lastIndexOf("/") + 1));
+  const parts = file.split("/").filter(Boolean);
+  return expandBraces(pattern).some((one) =>
+    matchParts(
+      one.split("/").filter((part, index, all) => part && !(part === "**" && all[index - 1] === "**")),
+      parts,
+    ),
+  );
 }
 
 /** The part of the system prompt about rules that do not apply all the time. */
