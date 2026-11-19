@@ -16,7 +16,13 @@ import type { HostMessage, MentionItem, SessionSummary, ViewState } from "../sha
 import { ConversationStore, type StoredConversation } from "./conversationStore";
 import { git, gitOrThrow, repositoryRoot } from "./git";
 import { providerNames } from "./models";
-import { AgentSession, type SessionDependencies, type TaskRequest, type WorktreeInfo } from "./session";
+import {
+  AgentSession,
+  type NotifyEvent,
+  type SessionDependencies,
+  type TaskRequest,
+  type WorktreeInfo,
+} from "./session";
 import { readSettings, updateSetting } from "./settings";
 import type { SuggestionProvider } from "./suggestions";
 
@@ -141,6 +147,9 @@ export class SessionManager implements vscode.Disposable {
 
   /** The user looks at the chats now, so finished chats are no longer news. */
   markSeen(): void {
+    let cleared = false;
+    for (const view of this.views) if (view.visible && this.sessionFor(view)?.clearOutcome()) cleared = true;
+    if (cleared) void this.postSessions();
     if (this.unseen.size === 0) return;
     this.unseen.clear();
     this.onBusyChange(this.runningCount);
@@ -455,6 +464,8 @@ export class SessionManager implements vscode.Disposable {
     for (const view of only ? [only] : this.views) {
       if (!only && view.pinnedId) continue;
       const session = this.sessionFor(view);
+      // The chat is in front now, so its result is no longer news in the list.
+      if (view.visible && session?.clearOutcome()) void this.postSessions();
       view.post({ type: "cleared" });
       for (const message of session?.transcript.all() ?? []) view.post(message);
       if (session) {
@@ -560,25 +571,35 @@ export class SessionManager implements vscode.Disposable {
     await this.postSessions();
   }
 
+  /** The open chats for the list, with their state. */
+  summaries(pinned = this.pinnedChats): SessionSummary[] {
+    return (
+      [...this.sessions.values()]
+        // An empty new chat is where the user already is, so the list does not show it.
+        .filter((session) => !session.isEmpty)
+        .map((session) => {
+          const preview = chatPreview(session.conversation, session.title);
+          return {
+            id: session.id,
+            title: session.title,
+            running: session.busy,
+            active: session.id === this.activeId,
+            needsApproval: session.needsApproval,
+            updatedAt: session.updatedAt,
+            ...(this.stalledIds.has(session.id) ? { stalled: true } : {}),
+            ...(session.fallbackModel ? { fallback: session.fallbackModel } : {}),
+            ...(session.outcome ? { outcome: session.outcome } : {}),
+            ...(pinned.has(session.id) ? { pinned: true } : {}),
+            ...(preview ? { preview } : {}),
+            ...(session.worktree ? { worktree: session.worktree.branch } : {}),
+          };
+        })
+    );
+  }
+
   async postSessions(only?: ChatViewHandle): Promise<void> {
     const pinned = this.pinnedChats;
-    const sessions: SessionSummary[] = [...this.sessions.values()]
-      // An empty new chat is where the user already is, so the list does not show it.
-      .filter((session) => !session.isEmpty)
-      .map((session) => {
-        const preview = chatPreview(session.conversation, session.title);
-        return {
-          id: session.id,
-          title: session.title,
-          running: session.busy,
-          active: session.id === this.activeId,
-          needsApproval: session.needsApproval,
-          updatedAt: session.updatedAt,
-          ...(pinned.has(session.id) ? { pinned: true } : {}),
-          ...(preview ? { preview } : {}),
-          ...(session.worktree ? { worktree: session.worktree.branch } : {}),
-        };
-      });
+    const sessions = this.summaries(pinned);
     const open = new Set(sessions.map((session) => session.id));
     const history = (await this.store.list())
       .filter((item) => !open.has(item.id))
@@ -855,7 +876,32 @@ export class SessionManager implements vscode.Disposable {
   }
 
   dispose(): void {
+    clearInterval(this.stallTimer);
     for (const session of this.sessions.values()) session.dispose();
+  }
+
+  /** Chats whose model is quiet now, and the stalls that were already announced. */
+  private readonly stalledIds = new Set<string>();
+  private readonly announcedStalls = new Set<string>();
+  private readonly stallTimer = setInterval(() => this.checkStalls(), 10_000);
+
+  /** Marks chats whose model went quiet in the list, and tells the user once per stall. */
+  checkStalls(now = Date.now()): void {
+    let changed = false;
+    for (const session of this.sessions.values()) {
+      const stalled = session.stalledAt(now);
+      if (stalled !== this.stalledIds.has(session.id)) {
+        changed = true;
+        if (stalled) this.stalledIds.add(session.id);
+        else this.stalledIds.delete(session.id);
+      }
+      const key = `${session.id}:${session.lastEvent}`;
+      if (stalled && !this.announcedStalls.has(key)) {
+        this.announcedStalls.add(key);
+        this.notify(session, "stalled");
+      }
+    }
+    if (changed) void this.postSessions();
   }
 
   private create(
@@ -906,49 +952,89 @@ export class SessionManager implements vscode.Disposable {
   private readonly pinnedIds = new Set<string>();
 
   private route(session: AgentSession, message: HostMessage): void {
+    // The model spoke again, so the chat is no longer quiet.
+    if (this.stalledIds.delete(session.id)) void this.postSessions();
     for (const view of this.views) if (this.shows(view, session)) view.post(message);
     // Approvals change the badge of the activity bar.
     if (message.type === "approval" || message.type === "approvalResolved") this.onBusyChange(this.runningCount);
   }
 
   /** Tells the user that a chat finished or needs input, when the user does not look at it. */
-  private notify(session: AgentSession, event: "done" | "failed" | "input", seconds = 0): void {
+  private notify(session: AgentSession, event: NotifyEvent, seconds = 0): void {
     const settings = readSettings();
     const visible = [...this.views].some((view) => view.visible && this.shows(view, session));
     const focused = vscode.window.state.focused;
-    if (event !== "input" && ![...this.views].some((view) => view.visible)) {
+    const result = event === "done" || event === "failed";
+    // A result that you see in front of you is not news in the list.
+    if (result && visible && focused) session.clearOutcome();
+    if (result && ![...this.views].some((view) => view.visible)) {
       this.unseen.add(session.id);
       this.onBusyChange(this.runningCount);
     }
-    if (settings.sound === "always" || (settings.sound === "unfocused" && (!focused || !visible))) {
+    if (
+      (event === "done" || event === "failed" || event === "input") &&
+      (settings.sound === "always" || (settings.sound === "unfocused" && (!focused || !visible)))
+    ) {
       for (const view of this.views) if (view.visible) view.post({ type: "sound", style: settings.soundStyle, event });
     }
     if (settings.notifyOnComplete === "never") return;
+    // A quiet model and a fallback show in the chat itself; a pop-up is for chats you do not look at.
+    if ((event === "stalled" || event === "fallback") && focused && visible) return;
     if (settings.notifyOnComplete === "unfocused" && focused && visible) return;
-    // A quick answer is not worth a pop-up; the badge on the Phew icon is enough. A question always notifies.
-    if (event !== "input" && seconds < settings.notifyMinSeconds) return;
-    const key = `${session.id}:${event}:${session.updatedAt}`;
+    // A quick answer is not worth a pop-up; the badge on the Phew icon is enough. A problem always notifies.
+    if (event === "done" && seconds < settings.notifyMinSeconds) return;
+    const key = `${session.id}:${event}:${event === "stalled" ? session.lastEvent : session.updatedAt}`;
     if (this.notifiedApprovals.has(key)) return;
     this.notifiedApprovals.add(key);
     const name = settings.assistant.name;
-    const text =
-      event === "input"
-        ? `${name} needs your input in "${session.title}".`
-        : event === "done"
-          ? `Phew! ${name} finished "${session.title}".`
-          : `${name} could not finish "${session.title}".`;
-    void vscode.window.showInformationMessage(text, "Show", "Notify Less").then(async (answer) => {
+    const title = `"${session.title}"`;
+    const reason = session.failure;
+    const show = async (answer: string | undefined) => {
       if (answer === "Notify Less") {
         await vscode.commands.executeCommand("workbench.action.openSettings", "phew.notifications");
+        return;
+      }
+      if (answer === "Retry") {
+        session.retryRequest();
         return;
       }
       if (answer !== "Show") return;
       if (![...this.views].some((view) => view.pinnedId === session.id)) this.switchTo(session.id);
       void vscode.commands.executeCommand("phew.openChat");
-    });
+    };
+    switch (event) {
+      case "input":
+        void vscode.window
+          .showInformationMessage(`${name} needs your input in ${title}.`, "Show", "Notify Less")
+          .then(show);
+        return;
+      case "done":
+        void vscode.window.showInformationMessage(`Phew! ${name} finished ${title}.`, "Show", "Notify Less").then(show);
+        return;
+      case "failed":
+        void vscode.window
+          .showWarningMessage(`${name} could not finish ${title}${reason ? `: ${reason}` : "."}`, "Show", "Notify Less")
+          .then(show);
+        return;
+      case "fallback":
+        void vscode.window
+          .showInformationMessage(
+            `${title}: the model ran out of quota, so ${session.fallbackModel ?? "the fallback model"} goes on with the task.`,
+            "Show",
+          )
+          .then(show);
+        return;
+      case "stalled":
+        void vscode.window
+          .showWarningMessage(`The model in ${title} has sent nothing for a minute.`, "Retry", "Show")
+          .then(show);
+        return;
+    }
   }
 
-  private changed(_session: AgentSession): void {
+  private changed(session: AgentSession): void {
+    // The model spoke again, so the chat is no longer quiet; the list does not wait for the next check.
+    if (this.stalledIds.has(session.id) && !session.stalled) this.stalledIds.delete(session.id);
     this.onBusyChange(this.runningCount);
     this.postState();
     void this.postSessions();

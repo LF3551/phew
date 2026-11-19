@@ -128,6 +128,12 @@ export interface SessionSummary {
   /** A short line from the conversation that tells chats apart. */
   readonly preview?: string;
   readonly pinned?: boolean;
+  /** The model of a running task has sent nothing for a minute. */
+  readonly stalled?: boolean;
+  /** The fallback model that runs the task now. */
+  readonly fallback?: string;
+  /** How the last task ended, until the user opens the chat. */
+  readonly outcome?: "done" | "failed";
 }
 
 export interface HistoryItem {

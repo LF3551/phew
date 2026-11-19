@@ -1198,6 +1198,44 @@ body.in-sidebar .panel {
   background: var(--vscode-editorWarning-foreground, #cca700);
 }
 
+/* A model that went quiet: the warning color, pulsing, because the task still runs. */
+.chat-status.stalled {
+  background: var(--phew-warning, var(--vscode-editorWarning-foreground, #cca700));
+  animation: chat-pulse 1.2s ease-in-out infinite;
+}
+
+/* A fallback model runs the task: work goes on, with a ring that says "not the usual model". */
+.chat-status.fallback {
+  background: var(--phew-drop);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--phew-warning, #cca700) 70%, transparent);
+  animation: chat-pulse 1.2s ease-in-out infinite;
+}
+
+.chat-status.failed {
+  background: var(--phew-error, var(--vscode-errorForeground, #f14c4c));
+}
+
+.chat-status.done {
+  background: var(--phew-success, var(--vscode-testing-iconPassed, #73c991));
+}
+
+.chat-status.pinned.stalled,
+.chat-status.pinned.fallback {
+  color: var(--phew-warning, var(--vscode-editorWarning-foreground, #cca700));
+  background: none;
+  box-shadow: none;
+}
+
+.chat-status.pinned.failed {
+  color: var(--phew-error, var(--vscode-errorForeground, #f14c4c));
+  background: none;
+}
+
+.chat-status.pinned.done {
+  color: var(--phew-success, var(--vscode-testing-iconPassed, #73c991));
+  background: none;
+}
+
 @keyframes chat-pulse {
   50% {
     opacity: 0.35;
@@ -1262,7 +1300,24 @@ body.in-sidebar .panel {
 }
 
 .chat-time.warn {
-  color: var(--vscode-editorWarning-foreground, #cca700);
+  color: var(--phew-warning, var(--vscode-editorWarning-foreground, #cca700));
+}
+
+.chat-time.bad {
+  color: var(--phew-error, var(--vscode-errorForeground, #f14c4c));
+}
+
+.chat-time.good {
+  color: var(--phew-success, var(--vscode-testing-iconPassed, #73c991));
+}
+
+/* "On Claude (personal)" can be long; the title of the chat keeps its room. */
+.chat-time.live,
+.chat-time.warn {
+  max-width: 45%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .chat-more {

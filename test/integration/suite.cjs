@@ -121,6 +121,8 @@ function startServer() {
   const routed = [];
   // "Hang once" gets no answer on its first request, until Phew stops that request (Retry).
   let hangs = 0;
+  // "Go quiet" also gets no answer once, for the quiet model in the list of chats.
+  let quiets = 0;
   let mcpSession = 0;
   const server = http.createServer((request, response) => {
     let body = "";
@@ -188,7 +190,8 @@ function startServer() {
         );
         return;
       }
-      if (typeof lastUser?.content === "string" && lastUser.content.includes("Hang once") && hangs++ === 0) {
+      const hangText = typeof lastUser?.content === "string" ? lastUser.content : "";
+      if ((hangText.includes("Hang once") && hangs++ === 0) || (hangText.includes("Go quiet") && quiets++ === 0)) {
         response.writeHead(200, { "Content-Type": "text/event-stream" });
         response.write(`data: ${JSON.stringify({ choices: [{ delta: { content: "Partial" } }] })}\n\n`);
         return;
@@ -722,6 +725,11 @@ async function run() {
       notices(broke).some((text) => /no quota or credit left/.test(text)),
       "the chat says that the quota is gone",
     );
+    const rowOf = (session) => sessions.summaries().find((row) => row.id === session.id);
+    assert.equal(rowOf(broke).outcome, "failed", "the list of chats marks the chat that failed");
+    assert.match(broke.failure, /no quota or credit left/, "and knows why, for the notification");
+    assert.equal(broke.clearOutcome(), true, "opening the chat clears the mark");
+    assert.equal(rowOf(broke).outcome, undefined, "and the list shows its time again");
     // With a fallback, the second key goes on with the same task.
     await setModels("personal");
     sessions.newSession();
@@ -735,6 +743,37 @@ async function run() {
       "the chat says which model took over and why",
     );
     assert.equal(rescued.chatModelId, "work", "the chat keeps its model and tries it again next time");
+    // While a fallback runs the task, the list says so.
+    sessions.newSession();
+    const slow = sessions.active;
+    await sessions.useModel("work");
+    const slowRun = slow.run({ text: "Slow fallback", kind: "chat", mode: "ask" });
+    let onFallback;
+    for (let index = 0; index < 60 && !onFallback; index++) {
+      onFallback = rowOf(slow)?.fallback;
+      if (!onFallback) await delay(50);
+    }
+    assert.equal(onFallback, "Claude (personal)", "the list shows the fallback that runs the task");
+    await slowRun;
+    assert.equal(rowOf(slow).fallback, undefined, "and forgets it when the task ends");
+    assert.equal(rowOf(slow).outcome, "done", "the list marks the finished chat");
+
+    console.log("[it] quiet model");
+    // A model that sends nothing for a minute: the list marks the chat, and Retry clears it.
+    await sessions.useModel("fake");
+    sessions.newSession();
+    const quiet = sessions.active;
+    await sessions.useModel("fake");
+    const quietRun = quiet.run({ text: "Go quiet, then answer.", kind: "chat", mode: "ask" });
+    await delay(1500);
+    sessions.checkStalls();
+    assert.ok(!rowOf(quiet)?.stalled, "a short silence is not a stall");
+    sessions.checkStalls(Date.now() + 61_000);
+    assert.equal(rowOf(quiet)?.stalled, true, "a minute of silence marks the chat");
+    assert.equal(quiet.retryRequest(), true, "the request can be sent again");
+    await quietRun;
+    assert.equal(lastAssistant(quiet), "Done.", "the task finished after Retry");
+    assert.ok(!rowOf(quiet)?.stalled, "and the mark is gone");
     // Removing a model also removes it as a fallback.
     await api.models.delete("personal");
     const afterDelete = current("models");
@@ -795,7 +834,7 @@ async function run() {
     }
 
     console.log(
-      "PHEW_INTEGRATION_OK: fix, review, commit, checkpoint, ask_user, skills, MCP HTTP, multi-root, plan, queue, btw, parallel chats, rename, approvals, context, Phew it!, handoff, summary, suggestions, fork and edit, rating, retry, models of chats, fallback, memory from many chats, key command",
+      "PHEW_INTEGRATION_OK: fix, review, commit, checkpoint, ask_user, skills, MCP HTTP, multi-root, plan, queue, btw, parallel chats, rename, approvals, context, Phew it!, handoff, summary, suggestions, fork and edit, rating, retry, models of chats, fallback, chat status, quiet model, memory from many chats, key command",
     );
   } finally {
     server.close();

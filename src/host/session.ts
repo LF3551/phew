@@ -6,6 +6,7 @@ import { achievementList } from "../core/achievements";
 import { type AgentResult, runAgent, type VerificationResult } from "../core/agent";
 import type { Attachment } from "../core/attachments";
 import { type ChatMessage, type ModelClient, type ToolCall, trimHistory, truncateMiddle } from "../core/chat";
+import { failureLine, isStalled } from "../core/chatStatus";
 import { buildTitleMessages, cleanTitle, firstExchange } from "../core/chatTitle";
 import { CheckpointStore } from "../core/checkpoints";
 import { decideCommand } from "../core/commandPolicy";
@@ -78,6 +79,9 @@ export interface FileClaimRegistry {
   release(sessionId: string): void;
 }
 
+/** What a chat tells the user about: a result, a question, a fallback model, or a quiet model. */
+export type NotifyEvent = "done" | "failed" | "input" | "fallback" | "stalled";
+
 export interface SessionDependencies {
   readonly context: vscode.ExtensionContext;
   readonly log: vscode.LogOutputChannel;
@@ -102,7 +106,7 @@ export interface SessionDependencies {
   readonly onChange: (session: AgentSession) => void;
   readonly persist: (session: AgentSession) => Promise<void>;
   /** Tells the user that the session finished or needs input, for example with a notification and a sound. */
-  readonly notify: (session: AgentSession, event: "done" | "failed" | "input", seconds?: number) => void;
+  readonly notify: (session: AgentSession, event: NotifyEvent, seconds?: number) => void;
 }
 
 export interface WorktreeInfo {
@@ -232,6 +236,10 @@ export class AgentSession {
   private lastInputTokens = 0;
   /** The model of this chat; older chats get one at their next task. */
   private modelId: string | undefined;
+  private lastEventAt = Date.now();
+  private fallbackName: string | undefined;
+  private taskOutcome: "done" | "failed" | undefined;
+  private lastFailure: string | undefined;
   private verifyAttempts = 0;
   private queue: QueuedMessage[] = [];
   private currentPlan: Plan;
@@ -287,6 +295,49 @@ export class AgentSession {
 
   get needsApproval(): boolean {
     return this.broker.pendingCount > 0;
+  }
+
+  /** True when the model of a running request has sent nothing for a minute. */
+  get stalled(): boolean {
+    return this.stalledAt(Date.now());
+  }
+
+  /** True when the model of a running request has been quiet for a minute at `now`. */
+  stalledAt(now: number): boolean {
+    return isStalled({
+      busy: this.busy,
+      modelRequest: this.requestControl.retry !== undefined,
+      needsApproval: this.needsApproval,
+      lastEventAt: this.lastEventAt,
+      now,
+    });
+  }
+
+  /** When the chat last heard from its task, to tell a stall apart from a new one. */
+  get lastEvent(): number {
+    return this.lastEventAt;
+  }
+
+  /** The fallback model that answers in the running task, if the model of the chat ran out of quota. */
+  get fallbackModel(): string | undefined {
+    return this.fallbackName;
+  }
+
+  /** How the last task ended, until the user saw it. */
+  get outcome(): "done" | "failed" | undefined {
+    return this.taskOutcome;
+  }
+
+  /** Why the last task failed, in one line. */
+  get failure(): string {
+    return failureLine(this.lastFailure);
+  }
+
+  /** The user saw the result, so the list no longer marks it. */
+  clearOutcome(): boolean {
+    if (!this.taskOutcome) return false;
+    this.taskOutcome = undefined;
+    return true;
   }
 
   get isEmpty(): boolean {
@@ -557,6 +608,11 @@ export class AgentSession {
 
     const controller = new AbortController();
     this.controller = controller;
+    // A new task: the result of the last one is no longer news.
+    this.taskOutcome = undefined;
+    this.lastFailure = undefined;
+    this.fallbackName = undefined;
+    this.lastEventAt = Date.now();
     this.deps.onChange(this);
 
     const checkpointId = `cp_${Date.now().toString(36)}_${++this.counter}`;
@@ -577,6 +633,7 @@ export class AgentSession {
     } catch (error) {
       if (!controller.signal.aborted) {
         const message = error instanceof Error ? error.message : String(error);
+        this.lastFailure = message;
         this.deps.log.error(`Task failed: ${message}`);
         this.notice("error", message);
       }
@@ -587,6 +644,11 @@ export class AgentSession {
       this.sessionCost += meter.cost ?? 0;
       this.updatedAt = Date.now();
       this.deps.claims.release(this.id);
+      this.fallbackName = undefined;
+    }
+    if (!controller.signal.aborted) {
+      this.taskOutcome = result?.status === "done" ? "done" : "failed";
+      if (this.taskOutcome === "failed") this.lastFailure ??= result?.message;
     }
     await this.finish(request, result, controller.signal.aborted, meter, settings, startedAt);
     this.deps.onChange(this);
@@ -1146,6 +1208,7 @@ export class AgentSession {
   }
 
   private emit(message: HostMessage): void {
+    this.lastEventAt = Date.now();
     this.deps.emit(this, this.transcript.add(message));
   }
 
@@ -1293,6 +1356,9 @@ export class AgentSession {
         const message = error instanceof Error ? error.message : String(error);
         this.deps.log.warn(`${failed.name} failed, ${answering.name} takes over: ${message}`);
         this.notice("warning", `${failed.name} ${fallbackReason(error)}. ${answering.name} goes on with the task.`);
+        this.fallbackName = answering.name;
+        this.deps.onChange(this);
+        this.deps.notify(this, "fallback");
       },
     );
     const verify = mode.tools.has("edit") && settings.verifyCommand ? () => this.verify(settings, signal) : undefined;

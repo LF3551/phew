@@ -1,6 +1,7 @@
 import { accentPresets, defaultAppearance, readableAccent, textOnColor } from "../core/appearance";
 import { type Attachment, isLongPaste, pastedLabel } from "../core/attachments";
 import { chatGroup, chatGroupLabels, chatTime, highlightParts, matchesChat } from "../core/chatList";
+import { type ChatStatus, type ChatStatusKind, chatStatus } from "../core/chatStatus";
 import { lookOf, personaInfo } from "../core/persona";
 import { summaryHeadline, summaryTotals } from "../core/summary";
 import { icon } from "../shared/icons";
@@ -1339,6 +1340,17 @@ function chooseMention(index: number): void {
   prompt.focus();
 }
 
+/** The color of the label of each state in the list of chats. */
+const statusTone: Record<ChatStatusKind, string> = {
+  waiting: "warn",
+  stalled: "warn",
+  fallback: "live",
+  running: "live",
+  failed: "bad",
+  done: "good",
+  idle: "",
+};
+
 // Sessions panel
 
 interface ChatRow {
@@ -1352,6 +1364,7 @@ interface ChatRow {
   readonly needsApproval: boolean;
   readonly worktree?: string;
   readonly pinned: boolean;
+  readonly status: ChatStatus;
 }
 
 const chatList = $("chatList");
@@ -1374,6 +1387,13 @@ function chatRows(): ChatRow[] {
     needsApproval: session.needsApproval,
     worktree: session.worktree,
     pinned: session.pinned === true,
+    status: chatStatus({
+      busy: session.running,
+      needsApproval: session.needsApproval,
+      stalled: session.stalled === true,
+      fallback: session.fallback,
+      outcome: session.outcome,
+    }),
   }));
   open.sort((a, b) => Number(b.active) - Number(a.active) || b.updatedAt - a.updatedAt);
   const saved: ChatRow[] = history.map((item) => ({
@@ -1387,6 +1407,7 @@ function chatRows(): ChatRow[] {
     needsApproval: false,
     worktree: item.worktree,
     pinned: item.pinned === true,
+    status: chatStatus({ busy: false, needsApproval: false, stalled: false }),
   }));
   const rows = [...open, ...saved].filter((row) => !pendingDeletes.has(row.id));
   return [...rows.filter((row) => row.pinned), ...rows.filter((row) => !row.pinned)];
@@ -1469,26 +1490,22 @@ function chatRowNode(row: ChatRow, index: number, query: string, now: number): H
     status.classList.add("pinned");
     status.append(iconNode("pin"));
   }
-  if (row.needsApproval) status.classList.add("waiting");
-  else if (row.running) status.classList.add("running");
+  // The state of the chat: who needs you, which has a problem, which works, and which is done.
+  const kind = row.status.kind;
+  if (kind !== "idle") status.classList.add(kind);
   else if (row.active) status.classList.add("current");
   else if (row.open) status.classList.add("open");
   status.setAttribute(
     "aria-label",
-    row.needsApproval
-      ? "Needs your input"
-      : row.running
-        ? "Running"
-        : row.active
-          ? "Current chat"
-          : row.open
-            ? "Open"
-            : "",
+    kind !== "idle" ? row.status.description : row.active ? "Current chat" : row.open ? "Open" : "",
   );
   line.append(status, highlighted("chat-title", row.title, query));
-  if (row.needsApproval) line.append(element("span", "chat-time warn", "Needs input"));
-  else if (row.running) line.append(element("span", "chat-time live", "Running"));
-  else line.append(element("span", "chat-time", chatTime(row.updatedAt, now)));
+  if (kind === "idle") line.append(element("span", "chat-time", chatTime(row.updatedAt, now)));
+  else {
+    const label = element("span", `chat-time ${statusTone[kind]}`, row.status.label);
+    label.title = row.status.description;
+    line.append(label);
+  }
   main.append(line);
   if (row.preview || row.worktree) {
     const detail = element("span", "chat-detail");

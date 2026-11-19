@@ -6,6 +6,7 @@
 const notes: Readonly<Record<string, readonly string[]>> = {
   "1.1": [
     "Each chat keeps its own model, so two chats or two windows can work with different models or keys at once.",
+    "The list of chats shows which agent needs you, which one failed or went quiet, and which one is done.",
     "A model can have a fallback: when its quota or credit runs out, the fallback goes on with the task. Set it in Settings → Models → ⋯.",
   ],
   "1.0": [
