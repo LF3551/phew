@@ -9,6 +9,7 @@ import { conversationToMarkdown } from "../core/export";
 import { builtInModes, type ModeDefinition, parseCustomModes } from "../core/modes";
 import { type Assistant, defaultAssistant, parseAssistant } from "../core/persona";
 import { type SetupOption, setupOptions } from "../core/setupOptions";
+import { type WhatsNew, whatsNewFor } from "../core/whatsNew";
 import { branchName, isValidBranch, worktreeFolder } from "../core/worktree";
 import type { HostMessage, SessionSummary, ViewState } from "../shared/protocol";
 import { ConversationStore, type StoredConversation } from "./conversationStore";
@@ -143,6 +144,30 @@ export class SessionManager implements vscode.Disposable {
     this.onBusyChange(this.runningCount);
   }
 
+  /** "New in Phew" after an update, worked out once; undefined until then. */
+  private whatsNewState: { value: WhatsNew | undefined } | undefined;
+
+  /** "New in Phew" after an update; a fresh install remembers its version and shows nothing. */
+  private get whatsNew(): WhatsNew | undefined {
+    if (!this.whatsNewState) {
+      const current = String(this.deps.context.extension.packageJSON.version ?? "");
+      const seen = this.deps.context.globalState.get<string>("phew.seenVersion");
+      if (!seen) void this.deps.context.globalState.update("phew.seenVersion", current);
+      this.whatsNewState = { value: whatsNewFor(current, seen) };
+    }
+    return this.whatsNewState.value;
+  }
+
+  /** Closes "New in Phew" until the next minor version. */
+  async dismissWhatsNew(): Promise<void> {
+    this.whatsNewState = { value: undefined };
+    await this.deps.context.globalState.update(
+      "phew.seenVersion",
+      String(this.deps.context.extension.packageJSON.version ?? ""),
+    );
+    this.postState();
+  }
+
   /** The options of the first-run card: ready providers, free ones, and the private one. */
   async setupOptions(): Promise<SetupOption[]> {
     // GitHub Copilot comes only to VS Code itself, not to editors that are based on it.
@@ -244,6 +269,7 @@ export class SessionManager implements vscode.Disposable {
         language: settings.assistant.language,
       },
       onboarding: !this.deps.context.globalState.get<boolean>("phew.assistantIntroduced"),
+      ...(this.whatsNew ? { whatsNew: this.whatsNew } : {}),
       handoff: session && settings.handoff.enabled ? this.deps.handoffs.latest(session.root.uri.fsPath) : undefined,
       showThinking: settings.showThinking,
       pinned: view?.pinnedId !== undefined,

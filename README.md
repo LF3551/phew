@@ -203,6 +203,8 @@ Every setting is also available in the VS Code settings under **Phew**.
 - Every tool call is written to the **Phew** output channel (`Phew: Show Log`).
 - Phew collects no telemetry. Statistics stay on your computer.
 
+- Each release is built by the Release workflow of this repository and comes with a SHA-256 checksum and, from 0.5.0, a signed build provenance attestation. [SECURITY.md](SECURITY.md) shows how to check that you have the real Phew.
+
 See [SECURITY.md](SECURITY.md) to report a vulnerability.
 
 ## Development

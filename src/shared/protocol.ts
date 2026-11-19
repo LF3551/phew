@@ -6,6 +6,7 @@ import { isModeId, type Mode } from "../core/modes";
 import { type Persona, personas } from "../core/persona";
 import type { SetupOption } from "../core/setupOptions";
 import type { FileChange } from "../core/summary";
+import type { WhatsNew } from "../core/whatsNew";
 
 export interface ModeView {
   readonly id: Mode;
@@ -21,6 +22,8 @@ export type CommandSetting = "ask" | "allowlist" | "safe";
 
 export interface ViewState {
   readonly sessionId: string;
+  /** "New in Phew" after an update, until the user closes it. */
+  readonly whatsNew?: WhatsNew;
   readonly title: string;
   readonly worktree?: string;
   readonly mode: Mode;
@@ -306,6 +309,7 @@ export type WebviewMessage =
   | { readonly type: "configureModel" }
   | { readonly type: "setupOptions" }
   | { readonly type: "retryRequest" }
+  | { readonly type: "dismissWhatsNew" }
   | { readonly type: "connectProvider"; readonly id: string }
   | { readonly type: "openSettings" }
   | { readonly type: "editModes" }
@@ -384,6 +388,7 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
     case "configureModel":
     case "setupOptions":
     case "retryRequest":
+    case "dismissWhatsNew":
     case "openSettings":
     case "editModes":
     case "editAllowlist":

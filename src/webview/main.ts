@@ -341,6 +341,31 @@ function applyAssistant(next: ViewState): void {
 let resumeKey = "";
 
 /** "Continue where you left off" on the welcome screen, from the latest handoff note. */
+let whatsNewKey = "";
+
+/** "New in Phew 0.5" after an update: a few lines, the full changelog, and a close button. */
+function renderWhatsNew(next: ViewState): void {
+  const card = $("whatsNew");
+  const key = next.whatsNew ? next.whatsNew.version : "";
+  if (key === whatsNewKey) return;
+  whatsNewKey = key;
+  card.hidden = !next.whatsNew;
+  if (!next.whatsNew) {
+    card.replaceChildren();
+    return;
+  }
+  const head = element("div", "whats-new-head");
+  head.append(
+    element("strong", undefined, `New in Phew ${next.whatsNew.version}`),
+    iconButton("close", "Close", () => vscode.postMessage({ type: "dismissWhatsNew" })),
+  );
+  const list = element("ul");
+  for (const item of next.whatsNew.items) list.append(element("li", undefined, item));
+  const more = element("a", "link", "All changes");
+  more.href = "https://github.com/LF3551/phew/blob/main/CHANGELOG.md";
+  card.replaceChildren(head, list, more);
+}
+
 function renderResume(next: ViewState): void {
   const card = $("resumeCard");
   const key = next.handoff ? `${next.handoff.path}|${next.handoff.created}|${next.handoff.title}` : "";
@@ -387,6 +412,7 @@ function applyState(next: ViewState): void {
   renderStatus();
   applyAssistant(next);
   renderResume(next);
+  renderWhatsNew(next);
   applyAppearance(next);
   $("titleText").textContent = next.title;
   const worktree = $("worktree");

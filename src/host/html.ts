@@ -137,6 +137,7 @@ export function renderChatHtml(options: ChatHtmlOptions): string {
       <h1 id="welcomeName">Phew</h1>
       <p class="tagline" id="welcomeTagline">Bug fixed. Phew.</p>
       <div class="setup-card" id="setupCard" hidden></div>
+      <div class="whats-new" id="whatsNew" hidden></div>
       <div class="resume-card" id="resumeCard" hidden></div>
       <div class="suggestions" id="suggestions" aria-label="Suggested tasks"></div>
       <p class="welcome-hint">Or describe a change. Type <kbd>@</kbd> to attach files and <kbd>/</kbd> for commands.</p>

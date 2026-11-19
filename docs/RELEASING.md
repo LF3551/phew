@@ -11,7 +11,7 @@ Releases run in GitHub Actions with one click. No tokens are stored: the stores 
    - **dry_run**: check and build only.
 3. The workflow:
    - chooses the version, moves **Unreleased** in `CHANGELOG.md` to it, and runs all checks;
-   - builds `phew-x.y.z.vsix` with a SHA-256 checksum;
+   - builds `phew-x.y.z.vsix` with a SHA-256 checksum and a signed build provenance attestation (`gh attestation verify phew-x.y.z.vsix --repo LF3551/phew`);
    - commits `chore: release x.y.z`, tags `vx.y.z`, and pushes both to `main`;
    - creates the GitHub release with the changelog section as notes (0.x versions are pre-releases);
    - publishes to the Visual Studio Marketplace and Open VSX, when they are turned on (see below).

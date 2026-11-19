@@ -38,6 +38,9 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: write
+      # A signed statement that this workflow built the .vsix from this commit (build provenance).
+      id-token: write
+      attestations: write
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -77,6 +80,12 @@ jobs:
           npm run package
           mv phew.vsix "phew-${{ steps.version.outputs.version }}.vsix"
           sha256sum "phew-${{ steps.version.outputs.version }}.vsix" > "phew-${{ steps.version.outputs.version }}.vsix.sha256"
+
+      - name: Attest build provenance
+        if: ${{ !inputs.dry_run }}
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: phew-${{ steps.version.outputs.version }}.vsix
 
       - uses: actions/upload-artifact@v7
         with:

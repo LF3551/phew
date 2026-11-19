@@ -214,6 +214,9 @@ class ChatController implements ChatViewHandle {
         await target?.continueFrom(message.path);
         return;
       }
+      case "dismissWhatsNew":
+        await sessions.dismissWhatsNew();
+        return;
       case "skipOnboarding":
         await sessions.introduceAssistant();
         return;
