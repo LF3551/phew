@@ -5,10 +5,11 @@
 
 const notes: Readonly<Record<string, readonly string[]>> = {
   "0.5": [
-    "A start card shows the models that are ready on this computer and free ways to begin.",
-    "A calmer chat: short commands fold into one line, and long output shows its end.",
+    "The files to review sit above the input, with Keep and Undo for each file.",
+    "Find in the chat with Ctrl+F, search all chats by their messages, and fork any message.",
+    "A calmer chat: short commands fold into one line, long output shows its end, and long pastes become a chip.",
     "Retry when the model goes quiet. Long chats open about 15 times faster.",
-    "Keys from a command, for Vertex AI, Azure with Entra ID, and company sign-in.",
+    "A start card shows the models ready on this computer and free ways to begin.",
   ],
 };
 

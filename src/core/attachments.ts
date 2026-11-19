@@ -12,6 +12,8 @@ export type Attachment =
   | { readonly kind: "terminal"; readonly command?: string; readonly output: string }
   | { readonly kind: "problems"; readonly path?: string }
   | { readonly kind: "git" }
+  /** A long text that you pasted: it waits as a chip instead of filling the input. */
+  | { readonly kind: "text"; readonly name: string; readonly text: string }
   | { readonly kind: "image"; readonly name: string; readonly mimeType: string; readonly data: string };
 
 export const imageMimeTypes: readonly string[] = ["image/png", "image/jpeg", "image/gif", "image/webp"];
@@ -47,6 +49,10 @@ export function parseAttachment(value: unknown): Attachment | undefined {
       return { kind: "problems", path: text(item.path, 1000) };
     case "git":
       return { kind: "git" };
+    case "text": {
+      const body = text(item.text, 500_000);
+      return body === undefined ? undefined : { kind: "text", name: text(item.name, 100) ?? "Pasted text", text: body };
+    }
     case "image": {
       const mimeType = text(item.mimeType, 40);
       const data = text(item.data, maximumImageCharacters);
@@ -56,6 +62,17 @@ export function parseAttachment(value: unknown): Attachment | undefined {
     default:
       return undefined;
   }
+}
+
+/** A pasted text this long becomes a chip instead of filling the input. */
+export function isLongPaste(text: string): boolean {
+  return text.length > 3000 || text.split("\n").length > 30;
+}
+
+/** "Pasted text · 120 lines". */
+export function pastedLabel(text: string): string {
+  const lines = text.replace(/\s+$/, "").split("\n").length;
+  return `Pasted text · ${lines.toLocaleString("en-US")} ${lines === 1 ? "line" : "lines"}`;
 }
 
 /** A short label for an attachment chip. */
@@ -71,6 +88,8 @@ export function attachmentLabel(attachment: Attachment): string {
       return attachment.path ? `Problems: ${attachment.path}` : "Problems";
     case "git":
       return "Git changes";
+    case "text":
+      return pastedLabel(attachment.text);
     case "image":
       return attachment.name;
   }

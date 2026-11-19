@@ -41,15 +41,22 @@
 </p>
 
 <p align="center">
+  <img src="docs/images/chat.png" alt="A calm chat: pwd and uptime fold into one line each with their result, and a loop of 20 steps shows its end with Show all lines" width="800">
+</p>
+
+<p align="center">
   <img src="docs/images/real-tasks.png" alt="The welcome screen offers real tasks: continue yesterday's work, fix errors, fix a failed command, review changes" width="800">
 </p>
 
 - **A real terminal, shared.** The agent works in your own shell, in a terminal of the chat: `cd`, variables, virtual environments, `ssh` into another machine, and REPLs carry over between commands. You see every command live, in the panel and in the chat, and you can type at any time: answer a prompt, press Ctrl+C, or run your own command. When a program waits for input, the agent notices and types the answer or the next command inside ssh, and it asks you for passwords; you can answer in the chat with **Your turn**, also hidden for a password. A failed command has **Phew it!**, which finds the cause and fixes it. Servers run in their own terminal, and the agent reads their log and waits until they are ready. The **Terminals** button shows every terminal of the chat with its process id; closing one ends all its processes, so no dev server is left behind. Commands get `PHEW_AGENT=1`, so your scripts know that an agent runs them. Works with bash, zsh (also with powerlevel10k), fish, PowerShell, and sh on Linux, macOS, and Windows.
 - **Phew it!** One click on an error in the editor, a failed terminal command, or failing tests. Phew finds the cause, fixes it, and checks the result.
 - **Fixes until green.** Phew runs your check command, for example `npm test`, and keeps fixing until it passes.
-- **Review in the editor.** Each change has **Keep** and **Undo** buttons in the file, and **Keep All** and **Undo All** in the editor title. Prefer to approve first? Switch **Edits** to **Ask first** in the chat.
+- **Review in the editor.** Each change has **Keep** and **Undo** buttons in the file, and **Keep All** and **Undo All** in the editor title. Above the input, the files to review show with their lines added and removed, and **Keep** and **Undo** for each file. Prefer to approve first? Switch **Edits** to **Ask first** in the chat.
 - **Undo anything.** Each request is a checkpoint. **Restore checkpoint** reverts all file changes made after it, even after a restart.
-- **Chat history.** Chats are saved per workspace, named automatically after the first answer, and grouped by day with a line from each conversation. Pin, search, rename, open them in a new tab, and export them as Markdown. Delete has Undo. Every message shows its time, and every answer has a Copy button.
+- **Chat history.** Chats are saved per workspace, named automatically after the first answer, and grouped by day with a line from each conversation. Search finds chats by their messages, not only by their names. Pin, rename, open them in a new tab, and export them as Markdown. Delete has Undo. Every message shows its time, and every answer has a Copy button.
+- **Find, fork, and edit.** Ctrl+F finds words in the chat. **Fork from here** on any of your messages starts a new chat with the conversation before it, to try another way. **Edit** takes the chat back to a message, with its files, and lets you send it again.
+- **A calm chat.** A command reads as plain words with its result on the right; a short result folds into one line, and a long output shows its end with **Show all lines**. A long pasted text waits as a chip that you can open and edit. Long chats open fast.
+- **Never stuck.** When the model goes quiet for 30 seconds, **Retry** sends the request again and the task goes on.
 - **A mascot that shows the work.** The Phew drop blinks, looks up while it thinks, reads along a line while it reads files, and sweats while it waits for your answer. The Phew icon shows a number when a chat needs you. Choose **Lively**, **Calm**, or **Still** in **Appearance**.
 - **Parallel chats.** Open a second chat in an editor tab (⧉) and let two agents work at the same time. Phew warns before two chats change the same file.
 - **Steer while it works.** Keep typing while the agent works: messages wait in a queue and reach the agent at its next step. `/btw` asks a quick side question without stopping the task.
@@ -168,6 +175,7 @@ Ask, Plan, and Review are read-only: the mode switch shows a lock for them.
 | `↑` in the input | Reuse an earlier request |
 | `Shift+Tab` in the input | Switch the mode |
 | `/btw`, `/goal`, `/compact` | Side question, goal of the chat, compact the chat |
+| `Ctrl+F` in the chat | Find in the chat |
 
 On macOS, use `Cmd` instead of `Ctrl`.
 
@@ -175,7 +183,7 @@ In the terminal of a command in the chat:
 
 | Shortcut | Action |
 | --- | --- |
-| `Ctrl+C` (also on macOS) | Stop the command |
+| `Ctrl+C` (also on macOS) | Copy the selected text, or stop the command when nothing is selected |
 | `Ctrl+D` | End the input of the command |
 | `Ctrl+F` (`Cmd+F` on macOS) | Find in the output |
 | Typing and `Enter` | Answer a prompt of the command |

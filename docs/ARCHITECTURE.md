@@ -94,6 +94,10 @@ The chat view runs in a sandboxed webview with a strict Content Security Policy 
 `core/outputLimit.ts` keeps huge output bounded for the model and the chat; `core/commandPolicy.ts` decides which commands run without asking.
 xterm.js adds `<style>` elements; they get the nonce of the page, so the policy needs no `unsafe-inline`.
 The menus under the input are separate modules: `modeMenu.ts`, `modelMenu.ts`, `attachMenu.ts`, and `approvalsPanel.ts`.
+A command that arrives finished (a chat that opens again) shows its output as text without a terminal, so long chats open fast; only commands that run get xterm. Short results fold into one line.
+`chatFind.ts` is Ctrl+F in the chat: matches use the CSS Custom Highlight API, so the text never changes. `setupCard.ts` is the first-run card (its options come from `core/setupOptions.ts`).
+Retry of a quiet model request: `core/agent.ts` runs each request with its own abort controller and gives the host a retry function (`requestControl`); the chat drops the unfinished text with `assistantDiscard`.
+Fork and Edit find a message in the history by its `checkpointId`: `AgentSession.before()` returns the history and the transcript before it.
 
 ## Tests
 

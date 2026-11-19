@@ -7,6 +7,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- **Long pastes become a chip**: a pasted text of more than 30 lines or 3000 characters waits as "Pasted text · 120 lines" instead of filling the input. A click shows it to read or change, or puts it into the message.
 - **Find in the chat** with Ctrl+F (Cmd+F on macOS): matches are highlighted, Enter and Shift+Enter move between them, and a match in a folded command or a closed group opens it. The output of a live terminal keeps its own Ctrl+F.
 - **Search the messages of all chats**: the search of the chat list also finds chats by what you and the assistant wrote, and shows the words around the match.
 - **Fork from here** on your messages: a new chat with the conversation before the message and the message in the input, to try another way; the original chat stays as it is.
@@ -29,6 +30,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Phew installs in VS Code 1.95 and newer (it needed 1.100), so it also runs in editors that are based on an older VS Code. The integration tests pass in VS Code 1.95.
 - Better search words in the Marketplace and Open VSX.
 - **Long chats open about 15 times faster** (300 turns with 150 commands: 1.9 s → 0.13 s). Commands of a reopened chat show their output as text instead of starting a terminal each, the colors of the terminal theme are read once per theme, and the chat measures its scroll position once per frame.
+- In the terminal of a command, Ctrl+C copies the selected text, like the terminal of VS Code; without a selection it still stops the command.
 - The **↓ New** button sits at the right edge, small, and no longer covers the output. Less space between a message and the next step.
 - When the suggested model of a provider is missing, the setup chooses a chat model, not an embedding or speech model. The suggested Gemini model is `gemini-3.8-flash`.
 

@@ -5409,3 +5409,51 @@ html body.style-bubbles .message.user > .message-actions {
   background-color: var(--vscode-editor-findMatchBackground, rgb(81 92 106 / 80%));
   color: inherit;
 }
+
+/* A long pasted text waits as a chip; this editor shows and changes it. */
+.paste-editor {
+  right: 0;
+  width: auto;
+}
+
+.paste-editor textarea {
+  width: 100%;
+  min-height: 180px;
+  max-height: 50vh;
+  padding: 6px 8px;
+  color: var(--vscode-input-foreground);
+  font-family: var(--vscode-editor-font-family);
+  font-size: var(--vscode-editor-font-size);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 4px;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.paste-editor textarea:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+}
+
+.paste-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.paste-space {
+  flex: 1;
+}
+
+.chip-open {
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.chip-open:hover {
+  text-decoration: underline;
+}

@@ -282,10 +282,19 @@ function createTerminal(view: CommandView, id: string, post: (message: WebviewMe
   term.loadAddon(search);
   view.search = search;
   term.open(view.screen);
-  // Ctrl+F (Cmd+F) searches the output of this command.
+  // Ctrl+F (Cmd+F) searches the output of this command. Ctrl+C with selected text copies it, like the
+  // terminal of VS Code; without a selection it stops the command.
   term.attachCustomKeyEventHandler((event) => {
-    if (event.type === "keydown" && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
+    if (event.type !== "keydown") return true;
+    const key = event.key.toLowerCase();
+    if ((event.ctrlKey || event.metaKey) && key === "f") {
       openSearch(view);
+      return false;
+    }
+    if ((event.ctrlKey || event.metaKey) && key === "c" && term.hasSelection()) {
+      event.preventDefault();
+      void copyWithFeedback(view.screen, term.getSelection(), "Selection");
+      term.clearSelection();
       return false;
     }
     return true;

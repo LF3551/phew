@@ -1,5 +1,5 @@
 import { accentPresets, defaultAppearance } from "../core/appearance";
-import type { Attachment } from "../core/attachments";
+import { type Attachment, isLongPaste, pastedLabel } from "../core/attachments";
 import { chatGroup, chatGroupLabels, chatTime, highlightParts, matchesChat } from "../core/chatList";
 import { lookOf, personaInfo } from "../core/persona";
 import { summaryHeadline, summaryTotals } from "../core/summary";
@@ -1140,7 +1140,14 @@ function renderChips(): void {
         image.alt = item.label;
         chip.append(image);
       }
-      chip.append(element("span", "chip-label", item.label));
+      if (item.attachment.kind === "text") {
+        // The label opens the pasted text to read or change it.
+        const open = element("button", "chip-label chip-open", item.label);
+        open.type = "button";
+        open.title = "Show and edit the pasted text";
+        open.addEventListener("click", () => openPaste(index));
+        chip.append(open);
+      } else chip.append(element("span", "chip-label", item.label));
       chip.append(
         button(
           "×",
@@ -1157,6 +1164,30 @@ function renderChips(): void {
   );
   attachMenu.refresh();
   updateSendButton();
+}
+
+let pasteIndex = -1;
+
+/** Shows a pasted text in a small editor above the input. */
+function openPaste(index: number): void {
+  const item = attachments[index];
+  if (item?.attachment.kind !== "text") return;
+  pasteIndex = index;
+  const editor = $("pasteEditor");
+  closePopovers(editor);
+  $("pasteTitle").textContent = item.label;
+  $<HTMLTextAreaElement>("pasteText").value = item.attachment.text;
+  editor.hidden = false;
+  const area = $<HTMLTextAreaElement>("pasteText");
+  area.focus();
+  area.setSelectionRange(0, 0);
+  area.scrollTop = 0;
+}
+
+function closePaste(): void {
+  $("pasteEditor").hidden = true;
+  pasteIndex = -1;
+  prompt.focus();
 }
 
 function addAttachment(attachment: Attachment, label: string): void {
@@ -1915,6 +1946,13 @@ prompt.addEventListener("input", () => {
 prompt.addEventListener("blur", () => setTimeout(() => showMentions([]), 150));
 
 prompt.addEventListener("paste", (event) => {
+  // A long text becomes a chip, so the input stays readable; a click on the chip shows and edits it.
+  const pasted = event.clipboardData?.getData("text/plain") ?? "";
+  if (pasted && isLongPaste(pasted) && !(event.clipboardData?.types ?? []).includes("Files")) {
+    event.preventDefault();
+    addAttachment({ kind: "text", name: "Pasted text", text: pasted }, pastedLabel(pasted));
+    return;
+  }
   for (const item of event.clipboardData?.items ?? []) {
     if (item.kind === "file" && item.type.startsWith("image/")) {
       const file = item.getAsFile();
@@ -2026,7 +2064,9 @@ document.addEventListener("click", (event) => {
     .some(
       (node) =>
         node instanceof Element &&
-        node.matches(".popover, #attachButton, #approvalsButton, #appearanceButton, #mode, #model, #terminalsButton"),
+        node.matches(
+          ".popover, .chip-open, #attachButton, #approvalsButton, #appearanceButton, #mode, #model, #terminalsButton",
+        ),
     );
   if (!inside && !target.closest(".popover")) closePopovers();
 });
@@ -2229,6 +2269,35 @@ document.addEventListener("mousedown", (event) => {
   if (!panel.hidden && !target.closest("#panel, #rowMenu, #undoToast, #historyButton, #title")) togglePanel(false);
 });
 $("setup").addEventListener("click", () => vscode.postMessage({ type: "configureModel" }));
+$("pasteCancel").addEventListener("click", closePaste);
+$("pasteSave").addEventListener("click", () => {
+  const item = attachments[pasteIndex];
+  const text = $<HTMLTextAreaElement>("pasteText").value;
+  if (item?.attachment.kind === "text") {
+    if (text.trim()) attachments[pasteIndex] = { attachment: { ...item.attachment, text }, label: pastedLabel(text) };
+    else attachments.splice(pasteIndex, 1);
+    renderChips();
+  }
+  closePaste();
+});
+$("pasteInline").addEventListener("click", () => {
+  const item = attachments[pasteIndex];
+  if (item?.attachment.kind === "text") {
+    const text = $<HTMLTextAreaElement>("pasteText").value;
+    attachments.splice(pasteIndex, 1);
+    renderChips();
+    prompt.value = prompt.value ? `${prompt.value}\n${text}` : text;
+    prompt.dispatchEvent(new Event("input"));
+  }
+  closePaste();
+});
+$("pasteText").addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    event.stopPropagation();
+    closePaste();
+  }
+});
 $("stallRetry").addEventListener("click", () => {
   lastSignAt = Date.now();
   renderStatus();

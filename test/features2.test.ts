@@ -565,3 +565,16 @@ describe("appearance", () => {
     });
   });
 });
+
+test("a long paste becomes a chip with the number of lines, and the host accepts it", async () => {
+  const { isLongPaste, pastedLabel, parseAttachment, attachmentLabel } = await import("../src/core/attachments");
+  const log = Array.from({ length: 120 }, (_, i) => `line ${i}`).join("\n");
+  expect(isLongPaste(log)).toBe(true);
+  expect(isLongPaste("short text\nwith two lines")).toBe(false);
+  expect(isLongPaste("x".repeat(3001))).toBe(true);
+  expect(pastedLabel(`${log}\n\n`)).toBe("Pasted text · 120 lines");
+  const parsed = parseAttachment({ kind: "text", name: "Pasted text", text: log });
+  expect(parsed).toEqual({ kind: "text", name: "Pasted text", text: log });
+  if (parsed) expect(attachmentLabel(parsed)).toBe("Pasted text · 120 lines");
+  expect(parseAttachment({ kind: "text", text: "x".repeat(500_001) })).toBeUndefined();
+});

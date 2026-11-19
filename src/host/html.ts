@@ -177,6 +177,16 @@ export function renderChatHtml(options: ChatHtmlOptions): string {
       <div class="popover attach-menu" id="attachMenu" role="menu" aria-label="Add context" hidden></div>
       <div class="popover mode-menu" id="modeMenu" role="menu" aria-label="Mode" hidden></div>
       <div class="popover model-menu" id="modelMenu" role="menu" aria-label="Model" hidden></div>
+      <div class="popover paste-editor" id="pasteEditor" role="dialog" aria-labelledby="pasteTitle" hidden>
+        <strong id="pasteTitle">Pasted text</strong>
+        <textarea id="pasteText" spellcheck="false" aria-label="Pasted text"></textarea>
+        <div class="paste-actions">
+          <button type="button" class="link" id="pasteInline" title="Put the whole text into the message">Put in the message</button>
+          <span class="paste-space"></span>
+          <button type="button" class="secondary" id="pasteCancel">Cancel</button>
+          <button type="button" class="primary" id="pasteSave">Save</button>
+        </div>
+      </div>
       <div class="popover terminals-panel" id="terminalsPanel" role="dialog" aria-label="Terminals" hidden></div>
       <div class="popover approvals" id="approvals" role="dialog" aria-label="Auto-approve in this chat" hidden></div>
       <div class="box">

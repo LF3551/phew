@@ -105,6 +105,9 @@ export async function resolveAttachments(
         blocks.push({ title: "Problems", body: lines.slice(0, 300).join("\n") || "No errors or warnings." });
         break;
       }
+      case "text":
+        blocks.push({ title: attachment.name, body: truncateMiddle(attachment.text, 100_000) });
+        break;
       case "git": {
         const result = await git(root.fsPath, ["diff", "HEAD", "--no-color", "--no-ext-diff"]);
         blocks.push({

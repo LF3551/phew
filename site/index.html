@@ -115,6 +115,10 @@
               <strong>Leaves nothing running</strong>
               <span>Servers get their own terminal, and the agent waits until they are ready. Closing a chat ends every process it started.</span>
             </button>
+            <button type="button" role="tab" id="tab-calm" aria-controls="panel" aria-selected="false" tabindex="-1" data-image="images/chat.png" data-alt="A calm chat: short commands fold into one line with their result, and a long output shows its end with Show all lines">
+              <strong>Keeps the chat calm</strong>
+              <span>Commands read as plain words. Short results fold into one line, and long output shows its end. Long chats open fast.</span>
+            </button>
             <button type="button" role="tab" id="tab-modes" aria-controls="panel" aria-selected="false" tabindex="-1" data-image="images/modes.png" data-alt="The mode menu: Ask, Plan, Code, Debug, and Review, each with a color and a description">
               <strong>Asks, plans, codes, debugs, reviews</strong>
               <span>Five modes and your own. Ask, Plan, and Review never change a file.</span>
@@ -142,13 +146,13 @@
         <dl class="more">
           <div><dt>Review in the editor</dt><dd>Every change has Keep and Undo right in the file.</dd></div>
           <div><dt>Undo anything</dt><dd>Each request is a checkpoint. Restore it, even after a restart.</dd></div>
-          <div><dt>Chat history</dt><dd>Chats are saved, named, and searchable. Export any of them as Markdown.</dd></div>
+          <div><dt>Find, fork, and edit</dt><dd>Search all chats by their messages, fork any message to try another way, or edit it and send again.</dd></div>
           <div><dt>Parallel agents</dt><dd>Run a second chat in a tab, or an agent on its own branch in a worktree.</dd></div>
           <div><dt>Context in one click</dt><dd>Attach the file, the selection, the problems, the Git changes, or a screenshot.</dd></div>
           <div><dt>MCP and Agent Skills</dt><dd>Use your MCP servers, with OAuth sign-in, and <code>SKILL.md</code> skills.</dd></div>
           <div><dt>Autocomplete</dt><dd>Inline completions and the next edit, with any model.</dd></div>
           <div><dt>Commits your way</dt><dd>Commit messages with your style, sign-off, and signing.</dd></div>
-          <div><dt>Know the cost</dt><dd>Tokens and cost of each task, with optional budget limits.</dd></div>
+          <div><dt>Never stuck</dt><dd>When the model goes quiet, Retry sends the request again and the task goes on.</dd></div>
         </dl>
       </div>
     </section>
