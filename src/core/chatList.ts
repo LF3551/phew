@@ -87,6 +87,29 @@ export function matchesChat(query: string, title: string, preview = ""): boolean
   return words.every((word) => haystack.includes(word));
 }
 
+/**
+ * A short piece of a chat around the first place where all words of the query meet, for full-text search
+ * in the history: "…the timeout was read from the wrong option…". Undefined when the chat does not match.
+ */
+export function contentSnippet(query: string, texts: readonly string[], width = 90): string | undefined {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return undefined;
+  const all = texts.join("\n").toLowerCase();
+  if (!words.every((word) => all.includes(word))) return undefined;
+  // The text where the longest word appears first, so the snippet shows the most telling match.
+  const key = [...words].sort((a, b) => b.length - a.length)[0] ?? "";
+  for (const text of texts) {
+    const at = text.toLowerCase().indexOf(key);
+    if (at < 0) continue;
+    const flat = text.replace(/\s+/g, " ");
+    const position = flat.toLowerCase().indexOf(key);
+    const start = Math.max(0, position - Math.floor((width - key.length) / 2));
+    const end = Math.min(flat.length, start + width);
+    return `${start > 0 ? "…" : ""}${flat.slice(start, end).trim()}${end < flat.length ? "…" : ""}`;
+  }
+  return undefined;
+}
+
 /** Splits text into plain and matched parts, so the view can highlight matches without HTML. */
 export function highlightParts(text: string, query: string): { text: string; match: boolean }[] {
   const words = query

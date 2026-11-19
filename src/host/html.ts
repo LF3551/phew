@@ -114,7 +114,7 @@ export function renderChatHtml(options: ChatHtmlOptions): string {
   <section class="panel" id="panel" role="dialog" aria-label="Chats" hidden>
     <div class="panel-search">
       ${icon("search")}
-      <input type="search" id="historySearch" placeholder="Search chats" aria-label="Search chats" aria-controls="chatList" autocomplete="off" spellcheck="false">
+      <input type="search" id="historySearch" placeholder="Search chats and messages" aria-label="Search chats and their messages" aria-controls="chatList" autocomplete="off" spellcheck="false">
     </div>
     <div class="chat-list" id="chatList" role="listbox" aria-label="Chats"></div>
     <div class="panel-footer">
@@ -131,6 +131,13 @@ export function renderChatHtml(options: ChatHtmlOptions): string {
   </section>
   <div class="chat-menu row-menu" id="rowMenu" role="menu" hidden></div>
   <div class="undo-toast" id="undoToast" role="status" hidden><span id="undoText"></span><button type="button" id="undoButton">Undo</button></div>
+  <div class="find-bar" id="findBar" role="search" hidden>
+    <input type="text" placeholder="Find in chat" aria-label="Find in chat" spellcheck="false" autocomplete="off">
+    <span class="find-count" aria-live="polite"></span>
+    <button type="button" class="action" title="Previous match (Shift+Enter)" aria-label="Previous match">${icon("chevron")}</button>
+    <button type="button" class="action find-next" title="Next match (Enter)" aria-label="Next match">${icon("chevron")}</button>
+    <button type="button" class="action" title="Close (Escape)" aria-label="Close find">${icon("close")}</button>
+  </div>
   <main class="transcript" id="transcript" aria-live="polite">
     <section class="welcome" id="welcome">
       <div class="logo" id="welcomeAvatar"></div>

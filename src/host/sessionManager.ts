@@ -4,7 +4,7 @@ import * as vscode from "vscode";
 import { achievementList, wrapped } from "../core/achievements";
 import type { ActivityCounts } from "../core/activity";
 import { type ApprovalLevel, approvalPresets } from "../core/approvals";
-import { chatPreview } from "../core/chatList";
+import { chatPreview, contentSnippet } from "../core/chatList";
 import { conversationToMarkdown } from "../core/export";
 import { builtInModes, type ModeDefinition, parseCustomModes } from "../core/modes";
 import { type Assistant, defaultAssistant, parseAssistant } from "../core/persona";
@@ -197,6 +197,36 @@ export class SessionManager implements vscode.Disposable {
     if (text === undefined) return;
     this.replay();
     this.post({ type: "focusInput", text, replace: true }, session);
+  }
+
+  /** The texts of saved chats by id, kept while they do not change, so a search reads each file once. */
+  private readonly searchTexts = new Map<string, { updatedAt: number; texts: string[] }>();
+
+  /** Full-text search in all chats of the workspace: your messages and the answers. */
+  async searchHistory(query: string): Promise<{ id: string; snippet: string }[]> {
+    if (query.trim().length < 2) return [];
+    const textsOf = (items: readonly HostMessage[]) =>
+      items.flatMap((item) => (item.type === "user" || item.type === "assistantEnd" ? [item.text] : []));
+    const matches: { id: string; snippet: string }[] = [];
+    const seen = new Set<string>();
+    for (const session of this.sessions.values()) {
+      seen.add(session.id);
+      const snippet = contentSnippet(query, textsOf(session.transcript.all()));
+      if (snippet) matches.push({ id: session.id, snippet });
+    }
+    for (const item of await this.store.list()) {
+      if (seen.has(item.id) || matches.length >= 50) continue;
+      let cached = this.searchTexts.get(item.id);
+      if (!cached || cached.updatedAt !== item.updatedAt) {
+        const stored = await this.store.load(item.id);
+        if (!stored) continue;
+        cached = { updatedAt: item.updatedAt, texts: textsOf(stored.transcript) };
+        this.searchTexts.set(item.id, cached);
+      }
+      const snippet = contentSnippet(query, cached.texts);
+      if (snippet) matches.push({ id: item.id, snippet });
+    }
+    return matches;
   }
 
   /** A file under review, by its URI from the chat; undefined for any other file. */

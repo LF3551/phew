@@ -17,6 +17,7 @@ import type {
 } from "../shared/protocol";
 import { createApprovalsPanel } from "./approvalsPanel";
 import { createAttachMenu } from "./attachMenu";
+import { createChatFind } from "./chatFind";
 import { copyWithFeedback, setCopyFallback } from "./copy";
 import { renderMarkdown } from "./markdown";
 import {
@@ -1316,9 +1317,24 @@ function highlighted(className: string, text: string, query: string): HTMLElemen
   return node;
 }
 
+/** Full-text matches from the host for the current search: chat id → a piece of the text. */
+let contentMatches = { query: "", snippets: new Map<string, string>() };
+let historySearchTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** Asks the host to search the messages of all chats, a moment after the typing stops. */
+function searchHistoryContent(query: string): void {
+  clearTimeout(historySearchTimer);
+  if (query.length < 2) {
+    contentMatches = { query, snippets: new Map() };
+    return;
+  }
+  historySearchTimer = setTimeout(() => vscode.postMessage({ type: "searchHistory", query }), 200);
+}
+
 function renderPanel(): void {
   const query = $<HTMLInputElement>("historySearch").value.trim();
-  const rows = chatRows().filter((row) => matchesChat(query, row.title, row.preview));
+  const snippets = contentMatches.query === query ? contentMatches.snippets : new Map<string, string>();
+  const rows = chatRows().filter((row) => matchesChat(query, row.title, row.preview) || snippets.has(row.id));
   const now = Date.now();
   visibleRows = [];
   const children: HTMLElement[] = [];
@@ -1329,7 +1345,9 @@ function renderPanel(): void {
       group = label;
       children.push(element("div", "chat-group", label));
     }
-    children.push(chatRowNode(row, visibleRows.length, query, now));
+    // A chat found by its messages shows the matching words instead of its first line.
+    const snippet = matchesChat(query, row.title, row.preview) ? undefined : snippets.get(row.id);
+    children.push(chatRowNode(snippet ? { ...row, preview: snippet } : row, visibleRows.length, query, now));
     visibleRows.push(row);
   }
   if (rows.length === 0) {
@@ -1721,6 +1739,13 @@ function handle(message: HostMessage): void {
       history = [...message.history];
       if (!panel.hidden) renderPanel();
       break;
+    case "historyMatches":
+      contentMatches = {
+        query: message.query,
+        snippets: new Map(message.matches.map((match) => [match.id, match.snippet])),
+      };
+      if (!panel.hidden && $<HTMLInputElement>("historySearch").value.trim() === message.query) renderPanel();
+      break;
     case "setupOptions":
       setupCard.receive(message.options);
       $("setup").hidden = true;
@@ -1963,6 +1988,7 @@ const approvalsPanel = createApprovalsPanel({
   post: (message) => vscode.postMessage(message),
 });
 
+createChatFind(transcript, $("findBar"));
 const setupCard = createSetupCard($("setupCard"), (message) => vscode.postMessage(message));
 const terminalsPanel = createTerminalsPanel({
   button: $<HTMLButtonElement>("terminalsButton"),
@@ -2145,6 +2171,7 @@ $("historySearch").addEventListener("input", () => {
   selectedRow = 0;
   closeRowMenu();
   renderPanel();
+  searchHistoryContent($<HTMLInputElement>("historySearch").value.trim());
 });
 $("historySearch").addEventListener("keydown", (event) => {
   const row = visibleRows[selectedRow];

@@ -487,6 +487,12 @@ async function run() {
     assert.equal(original.toStored().history.length, 0, "Edit takes the chat back to before the message");
     assert.ok(!original.transcript.all().some((item) => item.type === "user"));
 
+    const found = await sessions.searchHistory("check.js pass");
+    assert.ok(
+      found.some((match) => match.snippet.includes("check.js pass")),
+      "full-text search finds a chat by its messages",
+    );
+
     console.log("[it] retry");
     // The model says one word and goes quiet; Retry sends the request again, and the task finishes.
     sessions.newSession();

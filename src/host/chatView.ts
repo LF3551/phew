@@ -120,6 +120,13 @@ class ChatController implements ChatViewHandle {
       case "editMessage":
         if (session) await sessions.editMessage(session, message.checkpointId);
         return;
+      case "searchHistory":
+        this.post({
+          type: "historyMatches",
+          query: message.query,
+          matches: await sessions.searchHistory(message.query),
+        });
+        return;
       case "retryRequest":
         if (!session?.retryRequest())
           this.post({ type: "notice", level: "info", text: "No model request is running." });

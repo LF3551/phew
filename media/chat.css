@@ -5338,3 +5338,74 @@ html body.style-bubbles .message.user > .message-actions {
 .whats-new .link {
   font-size: 0.88em;
 }
+
+/* Find in the chat (Ctrl+F), at the top right like the find widget of the editor. */
+.app {
+  position: relative;
+}
+
+.find-bar {
+  position: absolute;
+  top: 6px;
+  right: 12px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 4px 3px 6px;
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  border: 1px solid var(--vscode-editorWidget-border, var(--vscode-widget-border, transparent));
+  border-radius: 6px;
+  box-shadow: 0 2px 8px var(--vscode-widget-shadow, rgb(0 0 0 / 30%));
+}
+
+.find-bar[hidden] {
+  display: none;
+}
+
+.find-bar input {
+  width: 160px;
+  padding: 3px 6px;
+  color: var(--vscode-input-foreground);
+  font: inherit;
+  font-size: 0.92em;
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 4px;
+  outline: none;
+}
+
+.find-bar input:focus {
+  border-color: var(--vscode-focusBorder);
+}
+
+.find-bar.missing input {
+  border-color: var(--vscode-inputValidation-errorBorder, var(--phew-error));
+}
+
+.find-count {
+  min-width: 64px;
+  padding: 0 4px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.82em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.find-bar .action .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.find-bar .action:first-of-type .icon {
+  transform: rotate(180deg);
+}
+
+::highlight(phew-find) {
+  background-color: var(--vscode-editor-findMatchHighlightBackground, rgb(234 92 0 / 33%));
+}
+
+::highlight(phew-find-current) {
+  background-color: var(--vscode-editor-findMatchBackground, rgb(81 92 106 / 80%));
+  color: inherit;
+}

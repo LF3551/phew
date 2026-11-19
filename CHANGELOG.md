@@ -7,6 +7,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- **Find in the chat** with Ctrl+F (Cmd+F on macOS): matches are highlighted, Enter and Shift+Enter move between them, and a match in a folded command or a closed group opens it. The output of a live terminal keeps its own Ctrl+F.
+- **Search the messages of all chats**: the search of the chat list also finds chats by what you and the assistant wrote, and shows the words around the match.
 - **Fork from here** on your messages: a new chat with the conversation before the message and the message in the input, to try another way; the original chat stays as it is.
 - **Edit and resend** now really goes back: after you agree, the later messages go away and the files that changed after the message are restored, and the message waits in the input. Before, Edit only copied the text.
 - **Changes to review, above the input**: how many files, the lines added and removed, **Review**, **Undo all**, and **Keep all**. A click opens the list with **Keep** and **Undo** for each file; a click on a name opens the file.

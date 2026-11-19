@@ -58,3 +58,20 @@ test("splits text for highlighting", () => {
   ]);
   expect(highlightParts("abc", "")).toEqual([{ text: "abc", match: false }]);
 });
+
+test("full-text search finds a chat by its messages and shows the words around the match", async () => {
+  const { contentSnippet } = await import("../src/core/chatList");
+  const texts = [
+    "Fix the login.",
+    "The login timed out because the timeout was read from the wrong option. I moved it to Options and added a retry with backoff in src/retry.ts. The tests pass.",
+  ];
+  const snippet = contentSnippet("wrong option", texts, 60);
+  expect(snippet).toContain("wrong option");
+  expect(snippet?.startsWith("…")).toBe(true);
+  expect(snippet?.length).toBeLessThanOrEqual(62);
+  // Every word must appear somewhere in the chat.
+  expect(contentSnippet("retry banana", texts)).toBeUndefined();
+  expect(contentSnippet("  ", texts)).toBeUndefined();
+  // Words may be in different messages.
+  expect(contentSnippet("login backoff", texts)).toBeDefined();
+});

@@ -184,6 +184,12 @@ export type ApprovalKind = "command" | "edit" | "mcp" | "question";
 export type HostMessage = (
   | { readonly type: "state"; readonly state: ViewState }
   | { readonly type: "setupOptions"; readonly options: readonly SetupOption[] }
+  /** Full-text search in the history: the chats whose messages match, with a piece of the text. */
+  | {
+      readonly type: "historyMatches";
+      readonly query: string;
+      readonly matches: readonly { readonly id: string; readonly snippet: string }[];
+    }
   | {
       readonly type: "user";
       readonly id: string;
@@ -316,6 +322,7 @@ export type WebviewMessage =
   | { readonly type: "configureModel" }
   | { readonly type: "setupOptions" }
   | { readonly type: "retryRequest" }
+  | { readonly type: "searchHistory"; readonly query: string }
   | { readonly type: "forkChat"; readonly checkpointId: string }
   | { readonly type: "editMessage"; readonly checkpointId: string }
   | { readonly type: "dismissWhatsNew" }
@@ -566,6 +573,10 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
         return { type: "setAppearance", key, value };
       return undefined;
     }
+    case "searchHistory":
+      return typeof message.query === "string" && message.query.length <= 200
+        ? { type: "searchHistory", query: message.query }
+        : undefined;
     case "forkChat":
     case "editMessage":
       return typeof message.checkpointId === "string" && /^[A-Za-z0-9_-]{1,80}$/.test(message.checkpointId)
