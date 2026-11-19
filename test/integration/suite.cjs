@@ -543,6 +543,64 @@ async function run() {
       "full-text search finds a chat by its messages",
     );
 
+    console.log("[it] rating");
+    // A regular user: 10 tasks on 3 days, the first use 10 days ago. A fix that works is a good moment to ask once.
+    const day = 86_400_000;
+    const saved = {
+      stats: api.globalState.get("phew.stats"),
+      activity: api.globalState.get("phew.activity"),
+      rating: api.globalState.get("phew.rating"),
+    };
+    const dayOf = (offset) => new Date(Date.now() - offset * day).toISOString().slice(0, 10);
+    await api.globalState.update("phew.stats", {
+      tasksCompleted: 10,
+      bugsFixed: 4,
+      filesChanged: 12,
+      tokens: 1000,
+      cost: 0,
+      firstUse: Date.now() - 10 * day,
+    });
+    await api.globalState.update(
+      "phew.activity",
+      [5, 3, 1].map((offset) => ({
+        day: dayOf(offset),
+        tasks: 3,
+        bugs: 1,
+        tokens: 100,
+        cost: 0,
+        verifiedFirstTry: 0,
+        nightTasks: 0,
+        models: {},
+      })),
+    );
+    await api.globalState.update("phew.rating", undefined);
+    // The file changes through the editor, so the open document and the disk agree.
+    const setMath = async (text) => {
+      const document = await vscode.workspace.openTextDocument(file);
+      const edit = new vscode.WorkspaceEdit();
+      edit.replace(document.uri, new vscode.Range(0, 0, document.lineCount, 0), text);
+      await vscode.workspace.applyEdit(edit);
+      await document.save();
+    };
+    await setMath("exports.add = (a, b) => a - b;\n");
+    sessions.newSession();
+    await api.run({ text: "Make node check.js pass.", kind: "fix", mode: "code" });
+    await api.reviews.keepAll();
+    assert.equal(api.globalState.get("phew.rating")?.asked, 1, "a task that went well asks for a rating once");
+    await setMath("exports.add = (a, b) => a - b;\n");
+    sessions.newSession();
+    await api.run({ text: "Make node check.js pass.", kind: "fix", mode: "code" });
+    await api.reviews.keepAll();
+    assert.equal(api.globalState.get("phew.rating")?.asked, 1, "and not again within a month");
+    await sessions.answerRating("never");
+    assert.equal(api.globalState.get("phew.rating")?.done, "never", "Don't ask again is kept");
+    for (const [key, value] of Object.entries({
+      "phew.stats": saved.stats,
+      "phew.activity": saved.activity,
+      "phew.rating": saved.rating,
+    }))
+      await api.globalState.update(key, value);
+
     console.log("[it] retry");
     // The model says one word and goes quiet; Retry sends the request again, and the task finishes.
     sessions.newSession();
@@ -592,7 +650,7 @@ async function run() {
     }
 
     console.log(
-      "PHEW_INTEGRATION_OK: fix, review, commit, checkpoint, ask_user, skills, MCP HTTP, multi-root, plan, queue, btw, parallel chats, rename, approvals, context, Phew it!, handoff, summary, suggestions, fork and edit, retry, key command",
+      "PHEW_INTEGRATION_OK: fix, review, commit, checkpoint, ask_user, skills, MCP HTTP, multi-root, plan, queue, btw, parallel chats, rename, approvals, context, Phew it!, handoff, summary, suggestions, fork and edit, rating, retry, key command",
     );
   } finally {
     server.close();

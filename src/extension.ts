@@ -35,6 +35,8 @@ export interface PhewTestApi {
   sessions: SessionManager;
   reviews: ReviewManager;
   index: CodeIndexManager;
+  /** The global state of the extension, to set up statistics and the rating state in tests. */
+  globalState: vscode.Memento;
 }
 
 let disposeAll: (() => void) | undefined;
@@ -498,6 +500,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<PhewTe
     sessions: manager,
     reviews,
     index,
+    globalState: context.globalState,
   };
 }
 
