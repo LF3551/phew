@@ -13,7 +13,6 @@
   <a href="https://marketplace.visualstudio.com/items?itemName=alekseialeinikov.phew"><img alt="Visual Studio Marketplace version" src="https://img.shields.io/visual-studio-marketplace/v/alekseialeinikov.phew?label=Marketplace"></a>
   <a href="https://open-vsx.org/extension/alekseialeinikov/phew"><img alt="Open VSX version" src="https://img.shields.io/open-vsx/v/alekseialeinikov/phew?label=Open%20VSX"></a>
   <a href="LICENSE"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-blue.svg"></a>
-  <img alt="Status: preview" src="https://img.shields.io/badge/status-preview-orange.svg">
 </p>
 
 <p align="center">
@@ -27,8 +26,8 @@
   Website: <a href="https://lf3551.github.io/phew/">lf3551.github.io/phew</a>
 </p>
 
-> [!NOTE]
-> Phew is in preview. Each release also has the `.vsix` file on [GitHub Releases](https://github.com/LF3551/phew/releases/latest): install it with **Extensions: Install from VSIX…**.
+> [!TIP]
+> Each release also has the `.vsix` file on [GitHub Releases](https://github.com/LF3551/phew/releases/latest): install it with **Extensions: Install from VSIX…**. [SECURITY.md](SECURITY.md) shows how to check that it is the real Phew.
 
 ## Why Phew
 
@@ -51,7 +50,7 @@
 - **A real terminal, shared.** The agent works in your own shell, in a terminal of the chat: `cd`, variables, virtual environments, `ssh` into another machine, and REPLs carry over between commands. You see every command live, in the panel and in the chat, and you can type at any time: answer a prompt, press Ctrl+C, or run your own command. When a program waits for input, the agent notices and types the answer or the next command inside ssh, and it asks you for passwords; you can answer in the chat with **Your turn**, also hidden for a password. A failed command has **Phew it!**, which finds the cause and fixes it. Servers run in their own terminal, and the agent reads their log and waits until they are ready. The **Terminals** button shows every terminal of the chat with its process id; closing one ends all its processes, so no dev server is left behind. Commands get `PHEW_AGENT=1`, so your scripts know that an agent runs them. Works with bash, zsh (also with powerlevel10k), fish, PowerShell, and sh on Linux, macOS, and Windows.
 - **Phew it!** One click on an error in the editor, a failed terminal command, or failing tests. Phew finds the cause, fixes it, and checks the result.
 - **Fixes until green.** Phew runs your check command, for example `npm test`, and keeps fixing until it passes.
-- **Review in the editor.** Each change has **Keep** and **Undo** buttons in the file, and **Keep All** and **Undo All** in the editor title. Above the input, the files to review show with their lines added and removed, and **Keep** and **Undo** for each file. Prefer to approve first? Switch **Edits** to **Ask first** in the chat.
+- **Review in the editor.** Each change has **Keep** and **Undo** buttons in the file, and **Keep All** and **Undo All** in the editor title. Above the input, the files to review show with their lines added and removed, and **Keep** and **Undo** for each file. Prefer to approve first? Set **Edits** to **Ask first** in the auto-approve panel under the input.
 - **Undo anything.** Each request is a checkpoint. **Restore checkpoint** reverts all file changes made after it, even after a restart.
 - **Chat history.** Chats are saved per workspace, named automatically after the first answer, and grouped by day with a line from each conversation. Search finds chats by their messages, not only by their names. Pin, rename, open them in a new tab, and export them as Markdown. Delete has Undo. Every message shows its time, and every answer has a Copy button.
 - **Find, fork, and edit.** Ctrl+F finds words in the chat. **Fork from here** on any of your messages starts a new chat with the conversation before it, to try another way. **Edit** takes the chat back to a message, with its files, and lets you send it again.
@@ -64,7 +63,7 @@
 - **Questions and a checklist.** The agent asks you with clickable answers when something is unclear, and keeps a checklist of the task. `/goal` sets the goal of a chat.
 - **Clickable files.** `src/app.ts:42` in an answer opens the file at that line.
 - **Survives rate limits.** Phew retries rate limits and server errors as long as the provider asks, and explains a missing quota or credit in plain words.
-- **Rich context.** The paperclip adds the current file, the selection, the problems, the Git changes, or the last terminal output in one click, and shows what exactly it adds. Type `@` to attach any file. Paste or drop screenshots. Use **Add to Chat** in the editor, the explorer, and the terminal.
+- **Rich context.** The paperclip adds the current file, the selection, the problems, the Git changes, or the last terminal output in one click, and shows what exactly it adds. Type `@` to attach any file or an earlier chat. Paste or drop screenshots. Use **Add to Chat** in the editor, the explorer, and the terminal.
 - **Parallel agents.** **New Agent in Worktree** works on a new branch in a separate folder while you keep coding.
 - **Commits your way.** Generate commit messages in the Source Control view. See the author and signing that commits use, and set Conventional Commits, `Signed-off-by`, GPG or SSH signing, a different author, and trailers. Phew never adds co-authors by itself.
 - **Knows your project from the first message.** Every chat starts with a short overview that Phew gathers itself: the stack, the commands for checks, tests, lint, and build, the main folders, and the branch. `/init` writes an `AGENTS.md` from what the project shows, for you to keep or undo.
@@ -80,7 +79,7 @@
 - **Any model, one click away.** The model menu opens above the input and shows the provider and the context size of each model.
 - **You decide how far it goes.** **Careful**, **Balanced**, or **Autopilot** in one click, or set edits, commands, and MCP tools one by one. By default, commands that only read (`ls`, `cat`, `grep`, `find`, `git status`, `git diff`…) run without asking, also in pipes and chains; **All** runs everything except dangerous commands; **Always allow** on a request adds a command to your allowlist.
 - **Safe by default.** Phew does not read `.env` files and keys, removes secrets from tool output, and always asks before dangerous commands such as `git push --force`, `terraform apply`, or `kubectl delete`.
-- **Any model.** GitHub Copilot without a key or with a GitHub token, OpenAI, Anthropic, Google Gemini, Azure OpenAI, Mistral, xAI, DeepSeek, Groq, Cerebras, Together AI, Fireworks AI, OpenRouter, LiteLLM, and local models with Ollama, LM Studio, or vLLM.
+- **Any model.** GitHub Copilot without a key or with a GitHub token, OpenAI, Anthropic, Google Gemini, Azure OpenAI, Mistral, xAI, DeepSeek, Groq, Cerebras, Together AI, Fireworks AI, OpenRouter, LiteLLM, local models with Ollama, LM Studio, or vLLM, and company sign-in for Google Vertex AI, Azure with Entra ID, or a gateway.
 - **Know the cost.** Tokens and cost per task, with optional budget limits.
 - **Open source.** Apache 2.0, no telemetry.
 
@@ -107,7 +106,7 @@
 
 - **Your assistant.** Give it a name, a look, and a character: Partner, Mentor, Quiet, Strict reviewer, or your own words. Tell it how to call you and which language to answer in. The dice picks a look and a name for you.
 - **The Phew family.** The drop, Cat, Bot, Ghost, Sprout, Nerd, Night owl, Angel, and Ninja. Each one is the same living mascot: it blinks, follows your pointer, sweats while it works, and sighs with relief when your bug is fixed. The send button wears its symbol.
-- **Your chat.** Bubbles, Classic, or Compact style, your accent color, font, and text size: click **Aa** in the chat.
+- **Your chat.** Bubbles, Classic, or Compact style, your accent color (it colors the settings page too, and always stays readable), font, text size, and a 24 or 12 hour clock: click **Aa** in the chat.
 - **Phew Wrapped.** A weekly card with bugs fixed and time saved, ready to share, and achievements. All stats stay on your computer.
 
 <p align="center">
@@ -176,7 +175,7 @@ Ask, Plan, and Review are read-only: the mode switch shows a lock for them.
 | `Ctrl+Alt+.` | Phew it! Fix the problem at the cursor |
 | `Alt+]` | Suggest the next edit |
 | `Ctrl+Alt+Y` / `Ctrl+Alt+Z` | Keep or undo all changes in the file |
-| `↑` in the input | Reuse an earlier request |
+| `↑` in an empty input | Reuse an earlier request |
 | `Shift+Tab` in the input | Switch the mode |
 | `/btw`, `/goal`, `/compact` | Side question, goal of the chat, compact the chat |
 | `/init`, `/learn` | Write AGENTS.md for this project; save what this chat taught |
@@ -208,14 +207,13 @@ Every setting is also available in the VS Code settings under **Phew**.
 - Phew sends your prompts, the files that the agent reads, and tool output to the model provider that you choose.
   Use a local model if your code must not leave your computer.
 - In Restricted Mode, Phew only answers questions.
-  It does not change files, run commands, start MCP servers, or read project rules, memory, or modes.
+  It does not change files, run commands, start MCP servers, or read the rules, memory, or modes of the project; your personal rules and memory in `~/.phew` still apply.
 - Model profiles come only from the user settings, so a workspace cannot send your API keys to another server or set a key command.
 - Commands that change something ask first in the default **Smart** mode; dangerous commands such as `git push`, `rm -rf`, `sudo`, or `terraform apply` always ask, and `phew.commands.deny` blocks commands for good.
 - The agent's terminal is yours: you see every command, and passwords go from you to the program, never to the model.
   Closing a terminal or a chat ends every process that it started.
 - Every tool call is written to the **Phew** output channel (`Phew: Show Log`).
 - Phew collects no telemetry. Statistics stay on your computer.
-
 - Each release is built by the Release workflow of this repository and comes with a SHA-256 checksum and, from 0.5.0, a signed build provenance attestation. [SECURITY.md](SECURITY.md) shows how to check that you have the real Phew.
 
 See [SECURITY.md](SECURITY.md) to report a vulnerability.
@@ -232,6 +230,7 @@ npm run test:integration # run the extension in VS Code with a fake model server
 npm run package          # create phew.vsix
 npm run images           # render the README pictures from the real chat (needs Playwright)
 npm run site             # build the website into _site/ (open _site/index.html)
+npm run ui:audit         # check the chat in 3 themes and 3 widths: overflow, names, contrast (needs Playwright)
 ```
 
 Press `F5` in VS Code to start an Extension Development Host.

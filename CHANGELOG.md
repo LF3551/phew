@@ -16,6 +16,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - **All unfinished work**: a new chat tells the agent about up to three unfinished handoff notes of other sessions, not only the latest one.
 - **`/init`** writes or improves `AGENTS.md` from what the project shows: commands, layout, conventions, testing, and gotchas. You review the file in the editor and keep or undo it; the handoff block of an existing file stays.
 
+### Changed
+
+- **Phew is out of preview.** The Marketplace no longer marks it as a preview, and GitHub releases are full releases; only a version with a suffix, such as `1.2.0-beta.1`, is a pre-release.
+- The README, the guide in **Phew: Get Started**, the website, CONTRIBUTING, ARCHITECTURE, HANDOFF, and AGENTS.md describe the current Phew: the start card, company sign-in, the files to review, find, fork and edit, rules for some files, memory, `@` earlier chats, the UI audit, and that personal rules and memory also apply in Restricted Mode.
+
 ### Fixed
 
 - The accent color of Appearance now colors the settings page too, and it changes there at once.

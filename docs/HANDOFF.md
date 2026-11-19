@@ -64,3 +64,4 @@ Phew does this for `/continue` and tells the agent what changed, so it rereads t
 - `/handoff`: write a note now. Notes are also written after a task that changed files and when a long chat is compacted (`phew.handoff.auto`).
 - `/continue`, the **Continue** card on the welcome screen, or **Phew: Continue from Handoff Note…**: start a chat from a note.
 - **Phew: Point Other Agents to Handoff Notes**: update the section in `AGENTS.md`.
+- A new chat tells the agent about the unfinished work of other sessions: the latest note of up to three sessions that are not done.

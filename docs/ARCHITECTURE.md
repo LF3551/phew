@@ -23,7 +23,6 @@ Pure TypeScript without the `vscode` module, so unit tests run in Node.js.
 | `commit.ts` | Commit message prompts, trailers, identity, signing, and flags for agent commits. |
 | `completion.ts` | Inline completion and next edit prompts and parsing. |
 | `export.ts` | Markdown export and chat titles. |
-| `memory.ts` | Project memory notes. |
 | `review.ts` | Keep and undo of single hunks for the review in the editor. |
 | `worktree.ts` | Branch names, worktree folders, and `git worktree list` parsing. |
 | `compaction.ts` | Context estimates and the summary of older messages. |
@@ -48,6 +47,10 @@ Pure TypeScript without the `vscode` module, so unit tests run in Node.js.
 | `mcp.ts` | Minimal Model Context Protocol client over newline-delimited JSON-RPC. |
 | `sse.ts` | Server-Sent Events parser for streamed model responses. |
 | `stats.ts` | Local statistics. |
+| `rating.ts` | When to ask for a rating (a task that went well, a regular user, rarely), the store of the editor, and the answers. |
+| `whatsNew.ts` | The "New in Phew" card after an update to a new minor version. |
+| `setupOptions.ts` | The options of the first-run card: ready, free to start, and private. |
+| `modelLabels.ts` | Model names without repeats, context sizes, and the maker badge of a model. |
 | `paths.ts` | Workspace path containment. |
 
 ## `src/providers`
@@ -105,4 +108,6 @@ Fork and Edit find a message in the history by its `checkpointId`: `AgentSession
 ## Tests
 
 - `test/*.test.ts`: unit tests with Vitest.
-- `test/integration`: starts VS Code with the extension and a fake model server, fixes a file, runs the check, restores the checkpoint, and checks the "Phew it!" quick fix.
+- `test/integration`: starts VS Code with the extension and a fake model server, in a multi-root workspace, and goes through the main flows: fix and check, review, commit message, checkpoint, questions, skills, MCP over HTTP, plan, queue, `/btw`, parallel chats, approvals, "Phew it!", handoff notes, the summary card, fork and edit, the rating card, Retry of a quiet request, key commands, the project overview, rules for some files, memory, and `@` an earlier chat.
+- `scripts/ui-audit.mjs` (`npm run ui:audit`): renders the chat in 26 states, 3 themes, and 3 widths, and checks console errors, overflow, accessible names, overlapping controls, and contrast.
+- `scripts/readme-images.mjs` (`npm run images`): renders the pictures of the README from the real chat.

@@ -1,7 +1,7 @@
 # Contributing to Phew
 
 Thank you for your interest in Phew.
-The project is in early development, so the process is small and can change.
+The process is small on purpose: an issue for a large change, focused pull requests, and tests for each behavior change.
 
 ## Before you start
 
@@ -29,8 +29,12 @@ The project is in early development, so the process is small and can change.
 ```sh
 npm ci
 npm run check            # type check, lint, and unit tests
-npm run test:integration # run the extension in VS Code
+npm run test:integration # run the extension in VS Code with a fake model server
+npm run ui:audit         # check the chat in 3 themes and 3 widths (needs Playwright)
+npm run images           # render the README pictures from the real chat (needs Playwright)
 ```
+
+For a change in the chat, run `npm run ui:audit` and look at the screenshots it writes.
 
 Press `F5` in VS Code to start an Extension Development Host.
 Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before you change the structure.

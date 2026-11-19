@@ -26,6 +26,7 @@ These rules apply to human contributors and to AI coding agents.
 - `npm run check` runs the type check, the linter, and the unit tests. Run it before each commit.
 - `npm run test:integration` runs the extension in VS Code. On headless Linux, start a display server first, for example `Xvfb :99 &` and `DISPLAY=:99`.
 - `npm run package` creates `phew.vsix`.
+- `npm run ui:audit` checks the chat in three themes and three widths (it needs Playwright: `PLAYWRIGHT=/path/to/playwright`). Run it for changes in `src/webview` or `media`.
 
 ## Tests
 
@@ -35,8 +36,8 @@ These rules apply to human contributors and to AI coding agents.
 
 ## Security
 
-- Never apply a file change without a visible diff, unless the user turned off `phew.edits.requireApproval`.
-- Always ask before dangerous or chained commands, even when a prefix is auto-approved.
+- Keep every file change of the agent reviewable: Keep and Undo in the editor, or Ask first (`phew.review.mode`), and a checkpoint for each request.
+- Always ask before dangerous commands, even when a prefix is auto-approved; a chain runs without asking only when every part of it only reads (`phew.commands.approval`).
 - Never read sensitive files, and redact secrets from tool output.
 - Do not add telemetry.
 - Keep the webview Content Security Policy strict, keep assets local, and never render model output as HTML.

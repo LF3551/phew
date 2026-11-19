@@ -1,9 +1,13 @@
 # Choose a model
 
+The chat shows what is **ready on this computer**: GitHub Copilot in VS Code, a key in your environment, or a running Ollama or LM Studio. One click opens the setup.
+
 Phew works with the model that you choose:
 
-- **No key:** GitHub Copilot and other models that VS Code provides.
-- **Cloud:** OpenAI, Anthropic, Google Gemini, Azure OpenAI, Mistral, xAI, DeepSeek, Groq, Cerebras, Together AI, Fireworks AI.
+- **No key:** GitHub Copilot and other models that VS Code provides. The free Copilot plan is enough to start.
+- **Free to start:** a free key from Google AI Studio, or the free models of OpenRouter.
+- **Cloud:** OpenAI, Anthropic, Google Gemini, Azure OpenAI, Mistral, xAI, DeepSeek, Groq, Cerebras, Together AI, Fireworks AI, or GitHub Copilot with a token.
+- **Company sign-in:** Google Vertex AI, Azure with Entra ID, or a gateway, with a key from a command such as `gcloud auth print-access-token`.
 - **Gateways:** OpenRouter, LiteLLM, or any OpenAI-compatible API.
 - **Local:** Ollama, LM Studio, vLLM. Your code stays on your computer.
 

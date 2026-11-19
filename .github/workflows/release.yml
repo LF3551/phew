@@ -126,7 +126,8 @@ jobs:
           VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           prerelease=""
-          case "${VERSION}" in 0.*|*-*) prerelease="--prerelease" ;; esac
+          # A version with a suffix, such as 1.2.0-beta.1, is a pre-release; every other version is a release.
+          case "${VERSION}" in *-*) prerelease="--prerelease" ;; esac
           gh release create "v${VERSION}" "phew-${VERSION}.vsix" "phew-${VERSION}.vsix.sha256" \
             --repo "${GITHUB_REPOSITORY}" --title "Phew ${VERSION}" --notes-file release-notes.md \
             --verify-tag ${prerelease}

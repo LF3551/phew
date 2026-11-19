@@ -1677,7 +1677,7 @@
           {
             "id": "model",
             "title": "Choose a model",
-            "description": "Use GitHub Copilot, a cloud provider, or a local model.\n[Add Model](command:phew.addModel)",
+            "description": "Use what is ready on your computer, a free start, your own key, a company sign-in, or a local model.\n[Add Model](command:phew.addModel)",
             "media": {
               "markdown": "media/walkthrough/model.md"
             },
@@ -1729,8 +1729,8 @@
           },
           {
             "id": "more",
-            "title": "Parallel agents, memory, and more",
-            "description": "Worktree agents, project memory, code index, autocomplete, and custom modes.\n[Open Settings](command:phew.openSettings)",
+            "title": "Parallel agents, rules, memory, and more",
+            "description": "Worktree agents, the project overview and rules, memory, the code index, autocomplete, and custom modes.\n[Open Settings](command:phew.openSettings)",
             "media": {
               "markdown": "media/walkthrough/more.md"
             }
@@ -1771,7 +1771,6 @@
     "vitest": "5.1.0"
   },
   "pricing": "Free",
-  "preview": true,
   "overrides": {
     "minimatch": "^11.0.9"
   }
