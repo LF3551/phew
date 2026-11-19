@@ -112,6 +112,7 @@
 1. Open the **Phew** view in the activity bar, or press `Ctrl+Alt+P` (`Cmd+Alt+P` on macOS).
 2. The chat shows what is **ready on this computer** (GitHub Copilot in VS Code, a key in your environment such as `OPENAI_API_KEY`, or a running Ollama or LM Studio), what is **free to start**, and the **private** option. Click one: the setup opens with that provider, paste the key if it needs one, pick a model, and click **Connect and test**. Phew never downloads a model by itself.
    - **GitHub Copilot**: sign in to GitHub in VS Code; the free Copilot plan is enough to start, with no key.
+     Outside VS Code, or to use the Copilot API directly, choose **GitHub Copilot (token)** with a GitHub token (also the token of the Pi coding agent): Phew finds your plan (Individual, Business, or Enterprise), or you pick it or type the address, for example for GitHub Enterprise on GHE.com.
    - **Google Gemini**: a free key from [Google AI Studio](https://aistudio.google.com/apikey), with no card. On the free tier, Google may use your requests to improve its products.
    - **OpenRouter**: free models with a free key, 50 requests a day: enough to try Phew, not for daily work.
    - **Ollama** or **LM Studio**: models on your computer, so your code stays there. Models for code take a few GB.

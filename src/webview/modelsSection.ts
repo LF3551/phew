@@ -109,6 +109,15 @@ function testLine(result: TestResult | "running" | undefined): HTMLElement {
   return el("span", "status error", `✕ ${result.message}`);
 }
 
+/** The API addresses of the GitHub Copilot plans. Phew tries them in turn when the plan is not chosen. */
+const copilotPlans: readonly [value: string, label: string][] = [
+  ["", "Find my plan automatically"],
+  ["https://api.individual.githubcopilot.com", "Individual: Free, Pro, Pro+, or Max"],
+  ["https://api.business.githubcopilot.com", "Business"],
+  ["https://api.enterprise.githubcopilot.com", "Enterprise"],
+  ["custom", "Another address: GitHub Enterprise on GHE.com, or a proxy"],
+];
+
 /** Models that cannot chat: they are not chosen by default when the suggested model is missing. */
 const notForChat = /embed|tts|audio|transcri|whisper|dall-e|imagen|image-|veo|moderation|rerank|aqa|-live/i;
 
@@ -127,6 +136,7 @@ export class ModelsSection {
     usePi: false,
     baseUrl: "",
     foundBaseUrl: "",
+    customUrl: false,
     model: "",
     name: "",
     filter: "",
@@ -191,6 +201,7 @@ export class ModelsSection {
             usePi: false,
             baseUrl: "",
             foundBaseUrl: "",
+            customUrl: false,
             model: "",
             name: "",
             filter: "",
@@ -463,6 +474,7 @@ export class ModelsSection {
       apiKey: "",
       usePi: !provider.envFound && provider.piKey === true,
       foundBaseUrl: "",
+      customUrl: false,
       useEnv: provider.envFound,
       baseUrl: provider.askBaseUrl || provider.group === "Local" ? provider.baseUrl : "",
       model: "",
@@ -595,6 +607,42 @@ export class ModelsSection {
           ),
         );
       }
+    }
+
+    if (provider.id === "copilot-token") {
+      stepTitle("Plan");
+      const plan = el("select");
+      for (const [value, label] of copilotPlans) {
+        const option = el("option", undefined, label);
+        option.value = value;
+        plan.append(option);
+      }
+      plan.value = this.form.customUrl ? "custom" : this.form.baseUrl;
+      plan.addEventListener("change", () => {
+        this.form.customUrl = plan.value === "custom";
+        this.form.baseUrl = this.form.customUrl ? "" : plan.value;
+        this.loaded = undefined;
+        this.form.foundBaseUrl = "";
+        this.error = "";
+        this.render();
+      });
+      form.append(plan);
+      if (this.form.customUrl) {
+        const url = input("url", this.form.baseUrl, "https://copilot-api.example.ghe.com");
+        url.dataset.focusKey = "url";
+        url.addEventListener("input", () => {
+          this.form.baseUrl = url.value.trim();
+        });
+        form.append(
+          url,
+          el(
+            "p",
+            "hint",
+            "The Copilot API address of your company. On GHE.com, it is on the subdomain of your enterprise; your admin knows it. The token must come from the same GitHub.",
+          ),
+        );
+      } else if (!this.form.baseUrl)
+        form.append(el("p", "hint", "Phew tries Individual, Business, and Enterprise and keeps the one that works."));
     }
 
     updateLoad();
