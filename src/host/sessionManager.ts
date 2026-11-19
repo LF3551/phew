@@ -6,7 +6,7 @@ import type { ActivityCounts } from "../core/activity";
 import { type ApprovalLevel, approvalPresets } from "../core/approvals";
 import { chatPreview, contentSnippet, matchesChat } from "../core/chatList";
 import { conversationToMarkdown } from "../core/export";
-import { chooseModelId } from "../core/modelChoice";
+import { chooseModelId, modelPicks } from "../core/modelChoice";
 import { builtInModes, type ModeDefinition, parseCustomModes } from "../core/modes";
 import { type Assistant, defaultAssistant, parseAssistant } from "../core/persona";
 import { type SetupOption, setupOptions } from "../core/setupOptions";
@@ -645,47 +645,83 @@ export class SessionManager implements vscode.Disposable {
   }
 
   /** Starts an agent in a new Git worktree, so it works in parallel without touching the current files. */
-  async newWorktreeAgent(): Promise<void> {
+  /**
+   * Starts an agent on a new branch in a separate folder: the task, the model (when there is more than one), and
+   * the branch. The options skip the questions, for scripts and tests.
+   */
+  async newWorktreeAgent(
+    options: { task?: string; model?: string; branch?: string } = {},
+  ): Promise<AgentSession | undefined> {
     const root = this.defaultRoot();
     if (!root || !vscode.workspace.isTrusted) {
       void vscode.window.showWarningMessage("Phew: open a trusted folder in a Git repository first.");
-      return;
+      return undefined;
     }
     const repository = await repositoryRoot(root.uri.fsPath);
     if (!repository) {
       void vscode.window.showWarningMessage("Phew: this folder is not a Git repository.");
-      return;
+      return undefined;
     }
-    const task = await vscode.window.showInputBox({
-      title: "Phew: New agent in a worktree (1/2) — task",
-      prompt: "The agent works on a new branch in a separate folder. Your current files do not change.",
-      placeHolder: "For example: add input validation to the signup form",
-      ignoreFocusOut: true,
-      validateInput: (value) => (value.trim() ? undefined : "Describe the task."),
-    });
-    if (!task) return;
+    const profiles = this.deps.models.profiles().profiles;
+    const choose = profiles.length > 1 && !options.model;
+    const steps = choose ? 3 : 2;
+    const task =
+      options.task ??
+      (await vscode.window.showInputBox({
+        title: `Phew: New agent in a worktree (1/${steps}) — task`,
+        prompt: "The agent works on a new branch in a separate folder. Your current files do not change.",
+        placeHolder: "For example: add input validation to the signup form",
+        ignoreFocusOut: true,
+        validateInput: (value) => (value.trim() ? undefined : "Describe the task."),
+      }));
+    if (!task?.trim()) return undefined;
+    // The model of the agent: agents in parallel can work with different models or keys.
+    let model = options.model && profiles.some((profile) => profile.id === options.model) ? options.model : undefined;
+    if (choose) {
+      const pick = await vscode.window.showQuickPick(
+        modelPicks(profiles, this.deps.models.active()?.id).map(({ profile, isDefault }) => ({
+          label: profile.name,
+          description: isDefault ? "Default" : undefined,
+          detail: profile.fallback
+            ? `Fallback: ${profiles.find((item) => item.id === profile.fallback)?.name ?? profile.fallback}`
+            : undefined,
+          id: profile.id,
+        })),
+        {
+          title: `Phew: New agent in a worktree (2/${steps}) — model`,
+          placeHolder: "The model of this agent. Other chats keep theirs.",
+          ignoreFocusOut: true,
+        },
+      );
+      if (!pick) return undefined;
+      model = pick.id;
+    }
     const settings = readSettings();
-    const branch = await vscode.window.showInputBox({
-      title: "Phew: New agent in a worktree (2/2) — branch",
-      value: branchName(task, settings.worktrees.branchPrefix),
-      ignoreFocusOut: true,
-      validateInput: (value) => (isValidBranch(value.trim()) ? undefined : "Enter a valid branch name."),
-    });
-    if (!branch) return;
+    const branch =
+      options.branch ??
+      (await vscode.window.showInputBox({
+        title: `Phew: New agent in a worktree (${steps}/${steps}) — branch`,
+        value: branchName(task, settings.worktrees.branchPrefix),
+        ignoreFocusOut: true,
+        validateInput: (value) => (isValidBranch(value.trim()) ? undefined : "Enter a valid branch name."),
+      }));
+    if (!branch || !isValidBranch(branch.trim())) return undefined;
     const folder = worktreeFolder(repository, branch.trim(), settings.worktrees.location);
     try {
       await gitOrThrow(repository, ["worktree", "add", "-b", branch.trim(), folder, "HEAD"]);
     } catch (error) {
       void vscode.window.showErrorMessage(`Phew: ${error instanceof Error ? error.message : String(error)}`);
-      return;
+      return undefined;
     }
     this.deps.log.info(`[audit] worktree created: ${folder} on ${branch.trim()}`);
     const info: WorktreeInfo = { path: folder, branch: branch.trim(), repository };
     const session = this.create({ uri: vscode.Uri.file(folder), name: path.basename(folder) }, undefined, info);
     session.setMode("code");
+    if (model) session.setModel(model);
     this.activeId = session.id;
     this.replay();
     void session.run({ text: task.trim(), kind: "chat", mode: "code" }).then(() => this.worktreeDone(session));
+    return session;
   }
 
   /** Actions for a worktree agent: open, compare, merge, or remove. */

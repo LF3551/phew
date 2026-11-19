@@ -25,3 +25,15 @@ export function pinnedModelId(input: {
   if (input.chatModel && input.available.includes(input.chatModel)) return input.chatModel;
   return chooseModelId({ available: input.available, defaultModel: input.defaultModel });
 }
+
+/** The models to choose from for a new agent: the default first, marked, then the others in their order. */
+export function modelPicks<T extends { readonly id: string; readonly name: string }>(
+  profiles: readonly T[],
+  defaultId: string | undefined,
+): { readonly profile: T; readonly isDefault: boolean }[] {
+  const first = profiles.find((profile) => profile.id === defaultId) ?? profiles[0];
+  return [
+    ...(first ? [{ profile: first, isDefault: true }] : []),
+    ...profiles.filter((profile) => profile !== first).map((profile) => ({ profile, isDefault: false })),
+  ];
+}

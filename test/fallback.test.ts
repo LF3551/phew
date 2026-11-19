@@ -9,7 +9,7 @@ import {
   ProviderError,
   shouldFallBack,
 } from "../src/core/fallback";
-import { chooseModelId, pinnedModelId } from "../src/core/modelChoice";
+import { chooseModelId, modelPicks, pinnedModelId } from "../src/core/modelChoice";
 import { AnthropicClient } from "../src/providers/anthropic";
 import { finalError, httpError } from "../src/providers/http";
 import { OpenAiCompatibleClient } from "../src/providers/openaiCompatible";
@@ -371,6 +371,31 @@ describe("the model of a chat", () => {
     expect(pinnedModelId({ available, defaultModel: "personal" })).toBe("personal");
     expect(pinnedModelId({ available, chatModel: "gone", defaultModel: "gone" })).toBe("work");
     expect(pinnedModelId({ available: [] })).toBeUndefined();
+  });
+});
+
+describe("the models for a new agent", () => {
+  const profiles = [
+    { id: "work", name: "Claude (work)" },
+    { id: "personal", name: "Claude (personal)" },
+    { id: "gpt", name: "GPT" },
+  ];
+
+  test("the default comes first and is marked, the others keep their order", () => {
+    expect(modelPicks(profiles, "gpt").map((item) => [item.profile.id, item.isDefault])).toEqual([
+      ["gpt", true],
+      ["work", false],
+      ["personal", false],
+    ]);
+  });
+
+  test("without a valid default, the first model is the default", () => {
+    expect(modelPicks(profiles, "gone")[0]).toEqual({ profile: profiles[0], isDefault: true });
+    expect(modelPicks(profiles, undefined)).toHaveLength(3);
+  });
+
+  test("no models, no picks", () => {
+    expect(modelPicks([], "work")).toEqual([]);
   });
 });
 

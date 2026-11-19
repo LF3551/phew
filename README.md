@@ -66,7 +66,8 @@
 - **Clickable files.** `src/app.ts:42` in an answer opens the file at that line.
 - **Survives rate limits.** Phew retries rate limits and server errors as long as the provider asks, and explains a missing quota or credit in plain words.
 - **Rich context.** The paperclip adds the current file, the selection, the problems, the Git changes, or the last terminal output in one click, and shows what exactly it adds. Type `@` to attach any file or an earlier chat. Paste or drop screenshots. Use **Add to Chat** in the editor, the explorer, and the terminal.
-- **Parallel agents.** **New Agent in Worktree** works on a new branch in a separate folder while you keep coding.
+- **Parallel agents.** **New Agent in Worktree** works on a new branch in a separate folder, with the model you choose for it, while you keep coding.
+  The list of chats shows which agent needs you, which one failed or went quiet, and which one is done.
 - **Commits your way.** Generate commit messages in the Source Control view. See the author and signing that commits use, and set Conventional Commits, `Signed-off-by`, GPG or SSH signing, a different author, and trailers. Phew never adds co-authors by itself.
 - **Knows your project from the first message.** Every chat starts with a short overview that Phew gathers itself: the stack, the commands for checks, tests, lint, and build, the main folders, and the branch. `/init` writes an `AGENTS.md` from what the project shows, for you to keep or undo.
 - **Rules that fit the file.** Phew reads `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, and the rules of Copilot (`.github/instructions`, `applyTo`), Claude (`.claude/rules`, `paths`), Cursor (`.cursor/rules`, `globs`), Antigravity, Windsurf, and Kiro. A rule for some files comes to the agent when it reads or changes such a file; an `AGENTS.md` in a subfolder applies to that folder. Your personal rules for every project live in `~/.phew/AGENTS.md`.

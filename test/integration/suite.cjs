@@ -774,6 +774,29 @@ async function run() {
     await quietRun;
     assert.equal(lastAssistant(quiet), "Done.", "the task finished after Retry");
     assert.ok(!rowOf(quiet)?.stalled, "and the mark is gone");
+
+    console.log("[it] worktree agent with its own model");
+    // An agent on its own branch and folder, with the model chosen for it; the chats around keep theirs.
+    const branch = `phew/it-model-${Date.now().toString(36)}`;
+    const defaultBefore = current("activeModel");
+    const agent = await sessions.newWorktreeAgent({ task: "Worktree hello", model: "personal", branch });
+    assert.ok(agent, "the worktree agent started");
+    try {
+      assert.equal(agent.chatModelId, "personal", "the agent has the model chosen for it");
+      assert.equal(current("activeModel"), defaultBefore, "the default of other chats did not change");
+      for (let index = 0; index < 100 && (agent.busy || !agent.outcome); index++) await delay(100);
+      assert.equal(agent.outcome, "done", "the agent finished");
+      assert.deepEqual([...new Set(routesOf("Worktree hello"))], ["personal"], "it worked with its own model");
+      assert.equal(agent.worktree.branch, branch, "on its own branch");
+      assert.ok(fs.existsSync(agent.worktree.path), "in its own folder");
+    } finally {
+      const git = (...args) =>
+        require("node:child_process").execFileSync("git", args, { cwd: agent?.worktree?.repository ?? mainFolder });
+      if (agent?.worktree) {
+        git("worktree", "remove", "--force", agent.worktree.path);
+        git("branch", "-D", branch);
+      }
+    }
     // Removing a model also removes it as a fallback.
     await api.models.delete("personal");
     const afterDelete = current("models");
@@ -834,7 +857,7 @@ async function run() {
     }
 
     console.log(
-      "PHEW_INTEGRATION_OK: fix, review, commit, checkpoint, ask_user, skills, MCP HTTP, multi-root, plan, queue, btw, parallel chats, rename, approvals, context, Phew it!, handoff, summary, suggestions, fork and edit, rating, retry, models of chats, fallback, chat status, quiet model, memory from many chats, key command",
+      "PHEW_INTEGRATION_OK: fix, review, commit, checkpoint, ask_user, skills, MCP HTTP, multi-root, plan, queue, btw, parallel chats, rename, approvals, context, Phew it!, handoff, summary, suggestions, fork and edit, rating, retry, models of chats, fallback, chat status, quiet model, worktree agent model, memory from many chats, key command",
     );
   } finally {
     server.close();
