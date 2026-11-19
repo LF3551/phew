@@ -160,6 +160,7 @@ class ChatController implements ChatViewHandle {
           accentColor: "appearance.accentColor",
           fontSize: "chat.fontSize",
           timestamps: "appearance.timestamps",
+          clock: "appearance.clock",
           mascot: "appearance.mascot",
         } as const;
         const value = message.key === "accentColor" ? safeColor(message.value) : message.value;
@@ -174,6 +175,7 @@ class ChatController implements ChatViewHandle {
           "appearance.accentColor",
           "chat.fontSize",
           "appearance.timestamps",
+          "appearance.clock",
           "appearance.mascot",
         ] as const)
           await updateSetting(key, undefined);

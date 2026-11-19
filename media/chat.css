@@ -385,7 +385,54 @@ summary:focus-visible {
   height: 16px;
 }
 
+/* After a command finishes, the mascot settles into a quiet check, cross, or pause. */
+.term-state {
+  display: none;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--term-tone);
+}
+
+.term-state .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.term.settled .term-mascot {
+  display: none;
+}
+
+.term.settled .term-state {
+  display: inline-flex;
+}
+
+/* A short result in one line, next to the description. */
+.term-peek {
+  display: none;
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--vscode-descriptionForeground);
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.88em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.term.compact.collapsed .term-peek:not([hidden]) {
+  display: block;
+}
+
+.term.compact.collapsed .term-peek:not([hidden])::before {
+  content: "→ ";
+  opacity: 0.6;
+}
+
 .term-title {
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   color: var(--vscode-foreground);
@@ -740,6 +787,10 @@ summary:focus-visible {
   opacity: 1;
 }
 
+.term.expanded .term-screen .xterm .scrollbar {
+  display: none;
+}
+
 .term-screen pre.term-text {
   max-height: 300px;
   margin: 0;
@@ -751,6 +802,29 @@ summary:focus-visible {
   white-space: pre-wrap;
   word-break: break-word;
   background: none;
+}
+
+/* "Show all 240 lines" under a long output, instead of a scroll inside the scroll of the chat. */
+.term-more {
+  display: block;
+  width: 100%;
+  padding: 4px 10px;
+  color: var(--vscode-textLink-foreground);
+  font: inherit;
+  font-size: 0.85em;
+  text-align: left;
+  background: var(--vscode-terminal-background, var(--vscode-editor-background));
+  border: none;
+  border-top: 1px solid color-mix(in srgb, var(--vscode-foreground) 8%, transparent);
+  cursor: pointer;
+}
+
+.term-more:hover {
+  text-decoration: underline;
+}
+
+.term-more[hidden] {
+  display: none;
 }
 
 .term-hint {
@@ -4713,21 +4787,28 @@ html body .notice.error {
 
 /* Jump to new content without moving the text you read. */
 
+/* New content below while you read above: a small button at the right edge, out of the way of the text. */
 .jump {
   position: relative;
-  top: -10px;
+  top: -8px;
   z-index: 5;
-  align-self: center;
-  margin-top: -28px;
-  padding: 3px 12px;
-  color: var(--phew-on-accent);
+  align-self: flex-end;
+  margin: -26px 14px 0 0;
+  padding: 2px 10px;
+  color: var(--vscode-foreground);
   font: inherit;
-  font-size: 0.9em;
-  background: var(--phew-accent);
-  border: none;
+  font-size: 0.8em;
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  border: 1px solid color-mix(in srgb, var(--phew-accent) 55%, transparent);
   border-radius: 999px;
-  box-shadow: 0 2px 10px rgb(0 0 0 / 25%);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 22%);
   cursor: pointer;
+  opacity: 0.92;
+}
+
+.jump:hover {
+  opacity: 1;
+  border-color: var(--phew-accent);
 }
 
 .jump[hidden] {
@@ -4979,7 +5060,7 @@ html body .verify.failed > summary {
 /* Hover actions of your message float below the bubble and take no space. */
 
 html body.style-bubbles .message.user {
-  margin-bottom: 26px;
+  margin-bottom: 20px;
 }
 
 html body.style-bubbles .message.user > .message-actions {

@@ -455,7 +455,8 @@ async function run() {
       await config.update(
         "models",
         [
-          ...config.get("models"),
+          // The settings of the test profile stay between runs: an old "keyed" model has an old port.
+          ...config.get("models").filter((model) => model.id !== "keyed"),
           {
             id: "keyed",
             name: "Keyed",
@@ -468,6 +469,8 @@ async function run() {
         vscode.ConfigurationTarget.Global,
       );
       await config.update("activeModel", "keyed", vscode.ConfigurationTarget.Global);
+      // A chat of its own, so no task of an earlier step is still running in it.
+      sessions.newSession();
       await api.run({ text: "Say hello with the keyed model.", mode: "ask" });
       assert.equal(lastAssistant(sessions.active), "Done.", "the task finished with a renewed key");
       assert.deepEqual(keyedAuth.slice(0, 2), ["Bearer tok-1", "Bearer tok-2"], "Phew renewed the key after the 401");

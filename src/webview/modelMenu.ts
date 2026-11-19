@@ -1,4 +1,4 @@
-import { modelTitle, providerLabels } from "../core/modelLabels";
+import { modelMaker, modelTitle, providerLabels } from "../core/modelLabels";
 import { icon } from "../shared/icons";
 import type { ModelOption, WebviewMessage } from "../shared/protocol";
 
@@ -31,11 +31,13 @@ function iconNode(name: string): Element {
   return template.content.firstElementChild as Element;
 }
 
-export function providerBadge(provider: ModelOption["provider"]): HTMLElement {
-  const style = providerStyle[provider];
-  const badge = el("span", "provider-badge", style.badge);
-  badge.style.setProperty("--provider-color", style.color);
-  badge.title = style.label;
+/** The badge of the maker of the model: Claude through Copilot shows the Anthropic badge, with the way in the title. */
+export function providerBadge(model: Pick<ModelOption, "provider" | "model" | "name">): HTMLElement {
+  const maker = modelMaker(model);
+  const badge = el("span", "provider-badge", maker.badge);
+  badge.style.setProperty("--provider-color", maker.color);
+  const via = /copilot/i.test(model.name) ? "GitHub Copilot" : providerStyle[model.provider].label;
+  badge.title = maker.label === via ? maker.label : `${maker.label}, via ${via}`;
   return badge;
 }
 
@@ -83,7 +85,7 @@ export function createModelMenu(options: {
     const end = el("span", "model-end");
     if (model.active) end.append(iconNode("check"));
     else if (index < 9 && !filter) end.append(el("kbd", undefined, String(index + 1)));
-    item.append(providerBadge(model.provider), text, end);
+    item.append(providerBadge(model), text, end);
     item.addEventListener("click", () => choose(model.id));
     return item;
   };

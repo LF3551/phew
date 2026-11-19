@@ -166,6 +166,7 @@ export function readSettings(scope?: vscode.Uri): Settings {
       messageActions: oneOf(config.get("appearance.messageActions"), ["hover", "always"] as const, "hover"),
       avatars: config.get<boolean>("appearance.avatars") === true,
       mascot: oneOf(config.get("appearance.mascot"), ["lively", "calm", "still"] as const, "lively"),
+      clock: oneOf(config.get("appearance.clock"), ["auto", "24h", "12h"] as const, "auto"),
     },
     notifyOnComplete: oneOf(
       config.get("notifications.onComplete"),

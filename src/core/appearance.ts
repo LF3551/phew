@@ -11,6 +11,8 @@ export interface Appearance {
   readonly lineHeight: number | null;
   readonly codeFontSize: number | null;
   readonly timestamps: Visibility;
+  /** The clock of message times: the language of VS Code, or always 24 or 12 hours. */
+  readonly clock: "auto" | "24h" | "12h";
   readonly messageActions: "hover" | "always";
   readonly avatars: boolean;
   /** How much the mascot moves: blinks and gaze, only blinks, or nothing. */
@@ -25,6 +27,7 @@ export const defaultAppearance: Appearance = {
   lineHeight: null,
   codeFontSize: null,
   timestamps: "hover",
+  clock: "auto",
   messageActions: "hover",
   avatars: true,
   mascot: "lively",

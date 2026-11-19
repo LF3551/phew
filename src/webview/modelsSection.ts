@@ -1,3 +1,4 @@
+import { modelMaker } from "../core/modelLabels";
 import { iconNode, sectionHeader } from "./settingsParts";
 /** The Models section of the settings page: connected models and a guided form to connect a new one. */
 
@@ -245,10 +246,10 @@ export class ModelsSection {
     // One clear row: the provider, the name, the facts, and the actions by weight; the rest is behind ⋯.
     const card = el("div", `model-card${model.active ? " active" : ""}`);
     const header = el("div", "model-header");
-    const style = providerStyle(model.provider);
+    const style = modelMaker({ provider: providerKind(model.provider), model: model.model });
     const badge = el("span", "provider-badge", style.badge);
     badge.style.setProperty("--provider-color", style.color);
-    badge.title = model.provider;
+    badge.title = style.label === model.provider ? style.label : `${style.label}, via ${model.provider}`;
     const title = el("div", "model-title");
     const suffix = ` · ${model.model}`;
     const name =
@@ -769,10 +770,11 @@ export class ModelsSection {
 }
 
 /** The badge of a provider, by its display name: the same letters and colors as the model menu of the chat. */
-function providerStyle(provider: string): { badge: string; color: string } {
+/** The settings page gets the provider name; the badge needs its protocol. */
+function providerKind(provider: string): "openai" | "anthropic" | "gemini" | "vscode" {
   const name = provider.toLowerCase();
-  if (name.includes("anthropic")) return { badge: "A", color: "#d97757" };
-  if (name.includes("gemini") || name.includes("google")) return { badge: "G", color: "#4285f4" };
-  if (name.includes("vs code")) return { badge: "VS", color: "#3794ff" };
-  return { badge: "O", color: "#10a37f" };
+  if (name.includes("anthropic")) return "anthropic";
+  if (name.includes("gemini") || name.includes("google")) return "gemini";
+  if (name.includes("vs code")) return "vscode";
+  return "openai";
 }

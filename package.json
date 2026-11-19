@@ -1053,6 +1053,21 @@
             "default": "hover",
             "markdownDescription": "When the chat shows the time of messages."
           },
+          "phew.appearance.clock": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "24h",
+              "12h"
+            ],
+            "enumDescriptions": [
+              "Follow the language of VS Code.",
+              "Always 24 hours, for example 13:47.",
+              "Always 12 hours, for example 1:47 PM."
+            ],
+            "default": "auto",
+            "markdownDescription": "The clock of message times."
+          },
           "phew.appearance.messageActions": {
             "type": "string",
             "enum": [

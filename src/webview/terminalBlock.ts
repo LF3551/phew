@@ -30,6 +30,11 @@ if (pageNonce) {
 }
 
 const maximumRows = 16;
+/** "Show all lines" opens the terminal up to this height; longer output is in the terminal of the chat. */
+const expandedRows = 200;
+/** A short result shows in one line: the output fits in a glance. */
+const compactLines = 2;
+const compactChars = 160;
 /** Older terminals become plain text, so a long chat stays light. */
 const liveTerminals = 12;
 
@@ -51,6 +56,17 @@ interface CommandView {
   readonly meta: HTMLElement;
   readonly screen: HTMLElement;
   readonly hint: HTMLElement;
+  /** The output in one line, for a short result. */
+  readonly peek: HTMLElement;
+  /** The state after the mascot settles: a check, a cross, or a pause. */
+  readonly state: HTMLElement;
+  /** "Show all 240 lines" under a long output. */
+  readonly more: HTMLButtonElement;
+  /** True once the user opened or closed the command; Phew stops folding it by itself. */
+  touched: boolean;
+  /** The height of the terminal in rows; "Show all lines" raises it. */
+  rows: number;
+  settle?: ReturnType<typeof setTimeout>;
   term?: Terminal;
   fit?: FitAddon;
   search?: SearchAddon;
@@ -138,15 +154,24 @@ function terminalTheme(): ITheme {
 function renderStatus(view: CommandView): void {
   const elapsed = (view.finished ?? Date.now()) - view.started;
   const time = seconds(elapsed);
-  view.verb.textContent = view.result ? view.result.label : "Running";
+  const label = view.result ? view.result.label : "Running";
+  view.verb.textContent = label;
+  // With a description, the line reads as plain words; the state goes to the right ("Failed · exit 1 · 2.3 s").
+  const described = Boolean(view.description);
+  view.verb.hidden = described;
   view.root.dataset.tone = view.result?.tone ?? "running";
-  // A short result on the right: the time, the lines, and the errors of a failed command.
+  // A short result on the right: the state, the time, the lines, and the errors of a failed command.
   const lines = view.text ? view.text.replace(/\s+$/, "").split("\n").length : 0;
-  const parts = [time];
-  if (view.result && lines > 0) parts.push(`${lines.toLocaleString("en-US")} ${lines === 1 ? "line" : "lines"}`);
+  const parts = described && view.result?.tone !== "ok" ? [label, time] : [time];
+  // A folded short result shows itself in the line; its line count says nothing new.
+  if (view.result && lines > 0 && !view.root.classList.contains("compact"))
+    parts.push(`${lines.toLocaleString("en-US")} ${lines === 1 ? "line" : "lines"}`);
   const errors = view.result?.tone === "error" ? countErrors(view.text) : 0;
   if (errors > 0) parts.push(`${errors} ${errors === 1 ? "error" : "errors"}`);
   view.summary.textContent = parts.join(" · ");
+  view.state.replaceChildren(
+    iconNode(view.result?.tone === "ok" ? "check" : view.result?.tone === "error" ? "close" : "stop"),
+  );
   view.fix.hidden = view.result?.tone !== "error" || /^Denied|^Stopped/.test(view.result.label);
   view.answer.hidden = view.result?.tone !== "waiting" || view.result.label !== "Waiting for input";
   view.root.title = [view.description, view.result ? `${view.result.label} after ${time}` : `Running for ${time}`]
@@ -209,19 +234,25 @@ function resize(view: CommandView): void {
       .trim()
   )
     used--;
-  const rows = Math.max(1, Math.min(maximumRows, used));
+  const rows = Math.max(1, Math.min(view.rows, used));
   if (cols && (cols !== term.cols || rows !== term.rows)) term.resize(Math.max(20, cols), rows);
   else if (rows !== term.rows) term.resize(term.cols, rows);
   // All output fits: show it from the top. Longer output follows the newest lines.
-  if (used <= maximumRows) term.scrollToTop();
+  if (used <= view.rows) term.scrollToTop();
   else term.scrollToBottom();
+  // A long output: the box shows its end, and one click shows all of it, without a scroll inside a scroll.
+  view.root.classList.toggle("expanded", view.rows >= expandedRows);
+  const hiddenLines = used - rows;
+  view.more.hidden = hiddenLines <= 0 || view.rows >= expandedRows;
+  if (!view.more.hidden)
+    view.more.textContent = `Show all ${used.toLocaleString("en-US")} lines (${hiddenLines.toLocaleString("en-US")} above)`;
   view.screen.hidden = used <= 1 && !buffer.getLine(0)?.translateToString(true).trim() && view.finished !== undefined;
 }
 
 function createTerminal(view: CommandView, id: string, post: (message: WebviewMessage) => void): void {
   const style = getComputedStyle(document.body);
   const term = new Terminal({
-    rows: maximumRows,
+    rows: view.rows,
     cols: 80,
     convertEol: false,
     cursorBlink: true,
@@ -338,6 +369,7 @@ function toText(view: CommandView): void {
   view.fit = undefined;
   const pre = el("pre", "term-text", view.text.replace(/\s+$/, ""));
   view.screen.replaceChildren(pre);
+  view.more.hidden = true;
   view.screen.hidden = !view.text.trim();
 }
 
@@ -425,10 +457,13 @@ export function renderCommandTerminal(
     chevron.classList.add("term-chevron");
     const face = mascot("idle", look);
     face.classList.add("term-mascot");
+    const state = el("span", "term-state");
+    state.setAttribute("aria-hidden", "true");
     const verb = el("span", "term-verb");
     const title = el("span", "term-title");
     const commandLine = el("code", "term-line");
-    toggle.append(chevron, face, verb, title, commandLine);
+    const peek = el("code", "term-peek");
+    toggle.append(chevron, face, state, verb, title, commandLine, peek);
     const actions = el("span", "term-actions");
     const summary = el("span", "term-summary");
     // A failed command: one click asks the assistant to find the cause and fix it.
@@ -452,6 +487,9 @@ export function renderCommandTerminal(
     const screen = el("div", "term-screen");
     const hint = el("div", "term-hint");
     hint.hidden = true;
+    const more = el("button", "term-more");
+    more.type = "button";
+    more.hidden = true;
     // Your turn: an answer field under a program that waits for input; the key hides what you type.
     const answer = el("form", "term-answer");
     answer.hidden = true;
@@ -481,7 +519,7 @@ export function renderCommandTerminal(
       post({ type: "commandInput", id, data: `${answerInput.value}\r` });
       answerInput.value = "";
     });
-    body.append(top, screen, hint, answer);
+    body.append(top, screen, more, hint, answer);
     root.append(head, body);
     const created: CommandView = {
       root,
@@ -500,6 +538,11 @@ export function renderCommandTerminal(
       meta,
       screen,
       hint,
+      peek,
+      state,
+      more,
+      touched: false,
+      rows: maximumRows,
       text: "",
       started: update.at ?? Date.now(),
       lastOutput: update.at ?? Date.now(),
@@ -507,7 +550,13 @@ export function renderCommandTerminal(
       renderActions: () => undefined,
       post,
     };
+    more.addEventListener("click", () => {
+      created.rows = expandedRows;
+      created.touched = true;
+      resize(created);
+    });
     toggle.addEventListener("click", () => {
+      created.touched = true;
       root.classList.toggle("collapsed");
       toggle.setAttribute("aria-expanded", String(!root.classList.contains("collapsed")));
       if (!root.classList.contains("collapsed")) requestAnimationFrame(() => resize(created));
@@ -572,6 +621,7 @@ export function renderCommandTerminal(
     else if (/did not allow/.test(update.detail ?? "")) current.result = { label: "Denied", tone: "muted" };
     else current.result = { label: status ? status[0]?.toUpperCase() + status.slice(1) : "Ran", tone: "muted" };
     current.hint.hidden = status !== "waiting for input";
+    fold(current, update.command, update.at);
     if (current.term && !current.live) {
       current.term.options.cursorBlink = false;
       current.term.options.disableStdin = true;
@@ -592,6 +642,35 @@ export function renderCommandTerminal(
   current.renderActions();
   renderStatus(current);
   return current.root;
+}
+
+/**
+ * A finished command settles: the mascot gives way to a check or a cross, and a short result folds into
+ * one line ("Print the folder  /home/agent"), so a chat of small commands stays calm. Long or failed output
+ * stays open. A command that the user opened or closed keeps its state.
+ */
+function fold(view: CommandView, command: string, at: number | undefined): void {
+  const tone = view.result?.tone;
+  const finishedLongAgo = at !== undefined && Date.now() - at > 5000;
+  if (view.settle === undefined && (tone === "ok" || tone === "error" || tone === "muted")) {
+    view.settle = setTimeout(() => view.root.classList.add("settled"), finishedLongAgo ? 0 : 2500);
+  }
+  const output = view.text.replace(/\s+$/, "");
+  const lines = output ? output.split("\n").length : 0;
+  const short =
+    tone === "ok" &&
+    !view.live &&
+    lines <= compactLines &&
+    output.length <= compactChars &&
+    !command.includes("\n") &&
+    command.length <= 120;
+  view.peek.textContent = short ? output.replace(/\s*\n\s*/g, "  ") : "";
+  view.peek.hidden = !short || !output;
+  view.root.classList.toggle("compact", short);
+  if (short && !view.touched) {
+    view.root.classList.add("collapsed");
+    view.root.querySelector(".term-toggle")?.setAttribute("aria-expanded", "false");
+  }
 }
 
 /** Marks where a running command runs, which terminal, and why it ran without asking. */

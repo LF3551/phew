@@ -78,6 +78,14 @@ export function renderChatHtml(options: ChatHtmlOptions): string {
           <button type="button" role="radio" data-value="never">Never</button>
         </div>
       </div>
+      <div class="look-row">
+        <span class="look-label">Clock</span>
+        <div class="segmented small" id="clockChoice" role="radiogroup" aria-label="Clock of message times">
+          <button type="button" role="radio" data-value="auto" title="Follow the language of VS Code">Auto</button>
+          <button type="button" role="radio" data-value="24h">24h</button>
+          <button type="button" role="radio" data-value="12h">12h</button>
+        </div>
+      </div>
     </div>
     <div class="look-group">
       <div class="look-label">Accent <span class="look-value" id="accentName">Theme</span></div>

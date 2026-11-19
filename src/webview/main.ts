@@ -138,11 +138,21 @@ function copyIconButton(title: string, text: () => string, what: string): HTMLBu
   return node;
 }
 
+/** "13:47" or "01:47 PM", by the clock in Appearance. */
+function clockTime(date: Date): string {
+  const clock = state?.appearance.clock ?? "auto";
+  return date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    ...(clock === "auto" ? {} : { hour12: clock === "12h" }),
+  });
+}
+
 function time(at: number | undefined): HTMLElement {
   const node = element("time", "time");
   if (!at) return node;
   const date = new Date(at);
-  node.textContent = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  node.textContent = clockTime(date);
   node.title = date.toLocaleString();
   node.dateTime = date.toISOString();
   return node;
@@ -377,7 +387,7 @@ function applyState(next: ViewState): void {
     const { title } = modelTitle(activeModel);
     const short =
       activeModel.provider === "vscode" && /^auto$/i.test(activeModel.model) ? "Auto" : next.modelId || title;
-    modelButton.replaceChildren(providerBadge(activeModel.provider), element("span", "model-label", short));
+    modelButton.replaceChildren(providerBadge(activeModel), element("span", "model-label", short));
   } else modelButton.textContent = next.configured ? next.modelId || next.model : "Connect a model";
   modelButton.classList.toggle("mode-locked", next.modeModel !== undefined);
   modelButton.title = next.configured
@@ -462,6 +472,9 @@ function applyAppearance(next: ViewState): void {
   };
   choose("#styleChoice button", (button) => button.dataset.style === look.style);
   choose("#timestampChoice button", (button) => button.dataset.value === look.timestamps);
+  choose("#clockChoice button", (button) => button.dataset.value === look.clock);
+  for (const node of document.querySelectorAll<HTMLTimeElement>("time.time[datetime]"))
+    node.textContent = clockTime(new Date(node.dateTime));
   choose("#mascotChoice button", (button) => button.dataset.value === look.mascot);
   const accent = look.accentColor.toLowerCase();
   const preset = accentPresets.find((item) => item.color.toLowerCase() === accent);
@@ -480,6 +493,7 @@ function applyAppearance(next: ViewState): void {
     !look.accentColor &&
     !next.fontSize &&
     look.timestamps === defaultAppearance.timestamps &&
+    look.clock === defaultAppearance.clock &&
     look.mascot === defaultAppearance.mascot;
 }
 
@@ -1903,6 +1917,7 @@ for (const preset of [{ name: "Theme", color: "" }, ...accentPresets]) {
 }
 for (const [id, key] of [
   ["timestampChoice", "timestamps"],
+  ["clockChoice", "clock"],
   ["mascotChoice", "mascot"],
 ] as const) {
   for (const option of document.querySelectorAll<HTMLButtonElement>(`#${id} button`)) {

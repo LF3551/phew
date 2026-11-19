@@ -162,6 +162,7 @@ function state(overrides = {}) {
       messageActions: "hover",
       avatars: false,
       mascot: "still",
+      clock: "auto",
     },
     assistant: { name: "Phew", avatar: "", persona: "partner", customPersona: "", userName: "", language: "match" },
     onboarding: false,
@@ -194,8 +195,66 @@ const testOutput =
   "   \x1b[31mAssertionError: expected 'timeout' to be 'ok'\x1b[0m\r\n" +
   "\r\n Test Files  \x1b[1;31m1 failed\x1b[0m | \x1b[1;32m2 passed\x1b[0m (3)\r\n";
 
+/** A finished command as the host sends it: the call, then the result with its output. */
+function commandMessages(id, command, description, output, at) {
+  const base = { type: "tool", id, name: "run_command", summary: `run_command ${command}`, command, description, at };
+  return [
+    { ...base, status: "running" },
+    { type: "toolOutput", id, text: "", where: "terminal", terminal: "1" },
+    { ...base, status: "done", where: "terminal", detail: `$ ${command}\n[exit code 0]\n${output}`, at: at + 4600 },
+  ];
+}
+
 /** Each scene: the card text, the chat title, and what the fake host sends. */
 const scenes = {
+  chat: {
+    title: "A calm chat",
+    text: "Short commands fold into one line with their result. Long output shows its end, and one click shows all of it.",
+    chatTitle: "Check the server",
+    alt: "A chat with three commands: pwd and uptime folded into one line each with their result, and a loop of 20 steps with Show all lines",
+    messages: [
+      {
+        type: "state",
+        state: {
+          ...state({ title: "Check the server" }),
+          appearance: { ...state().appearance, clock: "24h", timestamps: "always" },
+        },
+      },
+      { type: "user", id: "u1", text: "Where am I?", checkpointId: "c1", at: now - 300000 },
+      ...commandMessages("t1", "pwd", "Print current working directory", "/home/agent", now - 290000),
+      { type: "assistantStart", id: "a1" },
+      { type: "assistantEnd", id: "a1", text: "You are in `/home/agent`.", at: now - 285000 },
+      { type: "user", id: "u2", text: "Run uptime in the terminal", checkpointId: "c2", at: now - 200000 },
+      ...commandMessages(
+        "t2",
+        "uptime",
+        "Show system uptime and load",
+        " 11:55:19 up  5:04,  0 users,  load average: 0.08, 0.16, 0.19",
+        now - 190000,
+      ),
+      { type: "assistantStart", id: "a2" },
+      {
+        type: "assistantEnd",
+        id: "a2",
+        text: "The system has been up for 5 hours 4 minutes, and the load is low.",
+        at: now - 185000,
+      },
+      {
+        type: "user",
+        id: "u3",
+        text: 'Run: for i in $(seq 1 20); do echo "step $i of 20"; sleep 1; done',
+        checkpointId: "c3",
+        at: now - 100000,
+      },
+      ...commandMessages(
+        "t3",
+        'for i in $(seq 1 20); do echo "шаг $i из 20 — $(date +%T)"; sleep 1; done',
+        "Run 20-step loop with timestamps",
+        "шаг 1 из 20 — 12:00:31\nшаг 2 из 20 — 12:00:32\nшаг 3 из 20 — 12:00:33\nшаг 4 из 20 — 12:00:34\nшаг 5 из 20 — 12:00:35\nшаг 6 из 20 — 12:00:36\nшаг 7 из 20 — 12:00:37\nшаг 8 из 20 — 12:00:38\nшаг 9 из 20 — 12:00:39\nшаг 10 из 20 — 12:00:40\nшаг 11 из 20 — 12:00:41\nшаг 12 из 20 — 12:00:42\nшаг 13 из 20 — 12:00:43\nшаг 14 из 20 — 12:00:44\nшаг 15 из 20 — 12:00:45\nшаг 16 из 20 — 12:00:46\nшаг 17 из 20 — 12:00:47\nшаг 18 из 20 — 12:00:48\nшаг 19 из 20 — 12:00:49\nшаг 20 из 20 — 12:00:50",
+        now - 90000,
+      ),
+    ],
+  },
   connect: {
     title: "Start in a minute",
     text: "Phew shows what is ready on your computer and what is free to start. One click opens the setup with your choice.",
@@ -498,6 +557,35 @@ for (const [name, scene] of Object.entries(scenes)) {
   await page.waitForTimeout(400);
   await scene.after?.(page);
   await page.waitForTimeout(400);
+  // END=1 shows the end of the chat; EXPAND=1 also clicks "Show all lines".
+  if (process.env.END)
+    await page.evaluate(() => {
+      const transcript = document.getElementById("transcript");
+      transcript.scrollTop = transcript.scrollHeight;
+    });
+  if (process.env.EXPAND) {
+    await page.click(".term-more:not([hidden])").catch(() => undefined);
+    await page.waitForTimeout(300);
+    await page.evaluate(() => {
+      const transcript = document.getElementById("transcript");
+      transcript.scrollTop = transcript.scrollHeight;
+    });
+    await page.waitForTimeout(300);
+  }
+  // MEASURE=1 prints the height of each part of the chat and the space above it, to tune the spacing.
+  if (process.env.MEASURE)
+    console.log(
+      await page.evaluate(() =>
+        [...document.getElementById("transcript").children]
+          .filter((node) => !node.hidden && node.id !== "welcome")
+          .map((node, index, all) => {
+            const box = node.getBoundingClientRect();
+            const above = index ? Math.round(box.top - all[index - 1].getBoundingClientRect().bottom) : 0;
+            return `${node.className.split(" ").slice(0, 3).join(".")} h=${Math.round(box.height)} above=${above}`;
+          })
+          .join("\n"),
+      ),
+    );
   const chatImage = path.join(work, `${name}-chat.png`);
   await page.screenshot({ path: chatImage });
   if (errors.length) console.warn(`${name}: ${errors.join("\n")}`);

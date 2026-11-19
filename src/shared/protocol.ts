@@ -363,7 +363,7 @@ export type WebviewMessage =
   | { readonly type: "resetAppearance" }
   | { readonly type: "saveImage"; readonly dataUrl: string; readonly fileName: string };
 
-export type AppearanceKey = "style" | "accentColor" | "fontSize" | "timestamps" | "mascot";
+export type AppearanceKey = "style" | "accentColor" | "fontSize" | "timestamps" | "clock" | "mascot";
 
 export const maximumPromptLength = 100_000;
 const idPattern = /^[A-Za-z0-9_-]{1,64}$/;
@@ -535,6 +535,8 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
       if (key === "style" && ["bubbles", "classic", "compact"].includes(String(value)))
         return { type: "setAppearance", key, value: value as string };
       if (key === "timestamps" && ["hover", "always", "never"].includes(String(value)))
+        return { type: "setAppearance", key, value: value as string };
+      if (key === "clock" && ["auto", "24h", "12h"].includes(String(value)))
         return { type: "setAppearance", key, value: value as string };
       if (key === "mascot" && ["lively", "calm", "still"].includes(String(value)))
         return { type: "setAppearance", key, value: value as string };
