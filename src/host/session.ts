@@ -27,6 +27,7 @@ import { emptyPlan, type Plan, planPrompt } from "../core/plan";
 import { initRequest } from "../core/projectBrief";
 import { buildSystemPrompt } from "../core/prompts";
 import { RootSet } from "../core/roots";
+import { rulesForFile } from "../core/rules";
 import { skillsPrompt } from "../core/skills";
 import { type FileChange, fileChange } from "../core/summary";
 import type { ModelProfile } from "../providers/profile";
@@ -44,7 +45,7 @@ import type { MemoryStore } from "./memoryStore";
 import type { ModelManager } from "./models";
 import { projectBrief } from "./projectBrief";
 import type { ReviewManager } from "./reviewManager";
-import { loadRules } from "./rulesLoader";
+import { loadRuleSet } from "./rulesLoader";
 import { readSettings, type Settings } from "./settings";
 import { ShellRegistry, type TerminalInfo } from "./shellRegistry";
 import { ptyLoadError } from "./shellSession";
@@ -1119,6 +1120,8 @@ export class AgentSession {
   ): Promise<AgentResult> {
     const client = await this.deps.models.client(profile);
     const roots = this.roots;
+    const ruleSet = await loadRuleSet(this.root.uri);
+    const deliveredRules = new Set<string>();
     const tools = new ToolHost({
       root: this.root,
       roots,
@@ -1129,6 +1132,7 @@ export class AgentSession {
       mcp: this.deps.mcp,
       index: this.deps.index,
       memory: this.deps.memory,
+      rulesFor: (path) => rulesForFile(ruleSet.scoped, path, deliveredRules),
       skills: this.deps.skills,
       plan: {
         get: () => this.currentPlan,
@@ -1172,7 +1176,7 @@ export class AgentSession {
       platform: `${os.platform()} ${os.release()}`,
       shell: vscode.env.shell || "default",
       date: new Date().toISOString().slice(0, 10),
-      rules: await loadRules(this.root.uri),
+      rules: ruleSet.prompt,
       verifyCommand: settings.verifyCommand || undefined,
       mcpTools: tools.mcpToolNames,
       memory: memory.map((note) => `- ${note}`).join("\n"),

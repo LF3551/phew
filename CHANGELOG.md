@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Added
 
 - **Project overview at the start of every chat.** Phew gathers the stack, the package manager, the commands that matter (check, test, lint, build) from `package.json`, `Makefile`, `pyproject.toml`, Go, Rust, Java, .NET, and C/C++ projects, the main folders with their purpose, the first sentence of the README, and the Git branch. The agent starts with this instead of exploring first. In an untrusted workspace the README is left out.
+- **Rules that fit the file.** Rules for some files reach the agent with the file: when it reads or changes a matching file, the rule comes with the tool result, once per task. Phew understands `applyTo` (Copilot `.github/instructions/*.instructions.md`), `paths` (Claude `.claude/rules`), `globs`, `alwaysApply`, and `description` (Cursor `.cursor/rules/*.mdc`), `trigger` (Antigravity `.agents/rules`, Windsurf `.windsurf/rules`), and `inclusion` (Kiro `.kiro/steering`). An `AGENTS.md`, `CLAUDE.md`, or `GEMINI.md` in a subfolder applies to that folder. Rules with only a description are listed, and the agent reads them when the task fits. Your personal rules for all projects live in `~/.phew/AGENTS.md` and `~/.phew/rules/`.
 - **`/init`** writes or improves `AGENTS.md` from what the project shows: commands, layout, conventions, testing, and gotchas. You review the file in the editor and keep or undo it; the handoff block of an existing file stays.
 
 ## [0.5.0] - 2026-11-19

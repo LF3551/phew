@@ -246,6 +246,23 @@ async function run() {
       /Project overview[\s\S]*About: Integration workspace: A tiny project where Phew fixes math\.js\.[\s\S]*`npm test` → node check\.js/,
       "the agent gets the project brief at the start",
     );
+    const prompt = first.messages[0].content;
+    assert.match(prompt, /- \.github\/instructions\/math\.instructions\.md: \*\*\/math\.js/, "scoped rules are listed");
+    assert.match(prompt, /- lib\/AGENTS\.md: lib\/\*\*/, "a nested AGENTS.md is listed for its folder");
+    assert.match(prompt, /- \.cursor\/rules\/release\.mdc: Release checklist/, "a rule by description is listed");
+    assert.doesNotMatch(prompt, /MATH-RULE|LIB-RULE|RELEASE-RULE/, "their text is not in the system prompt");
+    const ruleCounts = requests.map(
+      (request) =>
+        request.messages.filter((message) => message.role === "tool" && message.content.includes("MATH-RULE")).length,
+    );
+    assert.ok(
+      ruleCounts.some((count) => count === 1),
+      "the rule for math.js comes with the tool result",
+    );
+    assert.ok(
+      ruleCounts.every((count) => count <= 1),
+      "and only once in a task",
+    );
     assert.deepEqual(
       api.reviews.pendingFiles.map((uri) => path.basename(uri.fsPath)),
       ["math.js"],

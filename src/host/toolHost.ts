@@ -74,6 +74,8 @@ export interface ToolHostOptions {
   readonly index: CodeIndexManager;
   readonly memory: MemoryStore;
   readonly log: vscode.LogOutputChannel;
+  /** Rules for some files: they come with the result of a tool that reads or changes a matching file. */
+  readonly rulesFor?: (path: string) => string | undefined;
 }
 
 /** Executes the tool calls of the agent inside one root folder. */
@@ -217,12 +219,31 @@ export class ToolHost {
       default:
         result = await this.callMcp(call.name, args, signal);
     }
+    // A rule for this file comes with the result, once per task.
+    if (
+      this.options.rulesFor &&
+      (call.name === "read_file" || call.name === "edit_file" || call.name === "write_file")
+    ) {
+      const file = this.relativeToRoot(stringArgument(args, "path"));
+      const rules = file ? this.options.rulesFor(file) : undefined;
+      if (rules) result = { ...result, content: `${rules}\n\n${result.content}` };
+    }
     const content = this.options.settings.redactSecrets
       ? redactSecrets(result.content)
       : { text: result.content, found: [] };
     if (content.found.length > 0)
       this.options.log.warn(`[audit] redacted ${content.found.join(", ")} from ${call.name}`);
     return { ...result, content: truncateMiddle(content.text, maximumToolOutput) };
+  }
+
+  /** A path of the main folder of the chat, relative to it; undefined for other folders. */
+  private relativeToRoot(input: string | undefined): string | undefined {
+    if (!input) return undefined;
+    const absolute = this.options.roots.resolve(input);
+    if (!absolute) return undefined;
+    const root = this.rootPath.replace(/[\\/]+$/, "");
+    if (!absolute.startsWith(`${root}/`) && !absolute.startsWith(`${root}\\`)) return undefined;
+    return absolute.slice(root.length + 1).replace(/\\/g, "/");
   }
 
   private resolve(input: string, allowSensitive = false): { uri: vscode.Uri; relative: string } {

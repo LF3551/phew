@@ -18,6 +18,19 @@ writeFileSync(
   path.join(main, "package.json"),
   JSON.stringify({ name: "it", private: true, scripts: { test: "node check.js" } }, null, 2),
 );
+// Rules for some files: a Copilot instructions file for math.js, a nested AGENTS.md, and a Cursor rule by description.
+mkdirSync(path.join(main, ".github", "instructions"), { recursive: true });
+writeFileSync(
+  path.join(main, ".github", "instructions", "math.instructions.md"),
+  "---\napplyTo: '**/math.js'\n---\nMATH-RULE: keep add pure.\n",
+);
+mkdirSync(path.join(main, "lib"), { recursive: true });
+writeFileSync(path.join(main, "lib", "AGENTS.md"), "LIB-RULE: lib code has no side effects.\n");
+mkdirSync(path.join(main, ".cursor", "rules"), { recursive: true });
+writeFileSync(
+  path.join(main, ".cursor", "rules", "release.mdc"),
+  "---\ndescription: Release checklist\nalwaysApply: false\n---\nRELEASE-RULE\n",
+);
 writeFileSync(path.join(main, "README.md"), "# Integration workspace\n\nA tiny project where Phew fixes math.js.\n");
 writeFileSync(
   path.join(main, "check.js"),
