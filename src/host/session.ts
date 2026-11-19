@@ -20,6 +20,7 @@ import {
 import { CostMeter, formatCost, formatTokens } from "../core/cost";
 import { titleFromText } from "../core/export";
 import { exitCodeOf, type JournalEvent } from "../core/journal";
+import { learnRequest, memoryPrompt } from "../core/memory";
 import { canChange, findMode, type Mode, type ModeDefinition } from "../core/modes";
 import { limitForChat, limitForModel } from "../core/outputLimit";
 import { personaPrompt } from "../core/persona";
@@ -456,7 +457,7 @@ export class AgentSession {
    * compacts the history. While a task runs, other messages wait in the queue and reach the agent at its next step.
    */
   async submit(text: string, attachments: readonly Attachment[] = [], interrupt = false): Promise<void> {
-    const command = /^\/(btw|goal|compact|handoff|continue|init)\b\s*([\s\S]*)$/i.exec(text.trim());
+    const command = /^\/(btw|goal|compact|handoff|continue|init|learn)\b\s*([\s\S]*)$/i.exec(text.trim());
     if (command) {
       const [, name, rest] = command;
       const lower = name.toLowerCase();
@@ -465,6 +466,12 @@ export class AgentSession {
       else if (lower === "handoff") await this.writeHandoff(true);
       else if (lower === "continue") await this.continueFrom(rest.trim() || undefined);
       else if (lower === "init") await this.init(rest.trim());
+      else if (lower === "learn")
+        await this.run({
+          text: learnRequest(rest.trim()),
+          kind: "chat",
+          display: rest.trim() ? `/learn ${rest.trim()}` : "/learn",
+        });
       else await this.compactNow();
       return;
     }
@@ -1166,7 +1173,7 @@ export class AgentSession {
     this.toolIdsByCall.clear();
     this.callIdsByTool.clear();
     const definitions = await tools.definitions();
-    const memory = settings.memoryEnabled ? await this.deps.memory.read(this.root.uri) : [];
+    const memory = settings.memoryEnabled ? await this.deps.memory.notes(this.root.uri) : { project: [], personal: [] };
     const skills = settings.skillsEnabled
       ? await this.deps.skills.list(roots.roots.map((root) => vscode.Uri.file(root.path)))
       : [];
@@ -1179,7 +1186,7 @@ export class AgentSession {
       rules: ruleSet.prompt,
       verifyCommand: settings.verifyCommand || undefined,
       mcpTools: tools.mcpToolNames,
-      memory: memory.map((note) => `- ${note}`).join("\n"),
+      memory: memoryPrompt(memory.project, memory.personal),
       brief: await projectBrief(this.root.uri),
     });
     const extra = [

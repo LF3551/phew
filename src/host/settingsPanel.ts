@@ -222,7 +222,14 @@ export class SettingsPanel implements vscode.Disposable {
   private async handle(raw: unknown): Promise<void> {
     if (typeof raw !== "object" || raw === null) return;
     if (await this.handleModels(raw as Record<string, unknown>)) return;
-    const message = raw as { type?: unknown; key?: unknown; value?: unknown; command?: unknown; id?: unknown };
+    const message = raw as {
+      type?: unknown;
+      key?: unknown;
+      value?: unknown;
+      command?: unknown;
+      id?: unknown;
+      args?: unknown;
+    };
     switch (message.type) {
       case "ready":
         await this.refresh();
@@ -246,7 +253,10 @@ export class SettingsPanel implements vscode.Disposable {
       }
       case "command":
         if (typeof message.command === "string" && commands.has(message.command)) {
-          await vscode.commands.executeCommand(message.command);
+          const args = Array.isArray(message.args)
+            ? (message.args as unknown[]).filter((arg): arg is string => typeof arg === "string" && arg.length <= 40)
+            : [];
+          await vscode.commands.executeCommand(message.command, ...args);
           await this.refresh();
         }
         return;
@@ -324,6 +334,7 @@ export class SettingsPanel implements vscode.Disposable {
         ? `${status.files} files, ${status.chunks} chunks${status.building ? ", updating…" : ""}`
         : "No folder",
       memory: folder ? await this.memory.read(folder.uri) : [],
+      personalMemory: await this.memory.read(folder?.uri ?? vscode.Uri.file("/"), "personal"),
       stats: this.stats.details(settings.minutesPerBug),
     });
   }

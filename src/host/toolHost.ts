@@ -197,6 +197,9 @@ export class ToolHost {
       case "remember":
         result = await this.remember(args);
         break;
+      case "forget":
+        result = await this.forget(args);
+        break;
       case "ask_user":
         result = await this.askUser(args, signal);
         break;
@@ -676,10 +679,36 @@ export class ToolHost {
     if (!vscode.workspace.isTrusted)
       return { content: "The workspace is not trusted, so Phew does not write the memory." };
     const note = stringArgument(args, "note") as string;
-    const added = await this.options.memory.add(this.options.root.uri, note);
-    this.options.log.info(`[audit] memory ${added ? "added" : "skipped"}: ${note.slice(0, 120)}`);
+    const scope = stringArgument(args, "scope") === "personal" ? "personal" : "project";
+    const source = this.relativeToRoot(stringArgument(args, "source"));
+    const replaces = stringArgument(args, "replaces");
+    const result = await this.options.memory.add(this.options.root.uri, note, {
+      scope,
+      ...(source ? { source } : {}),
+      ...(replaces ? { replaces } : {}),
+    });
+    this.options.log.info(`[audit] memory ${scope} ${result.added ? "saved" : "confirmed"}: ${note.slice(0, 120)}`);
+    const where = scope === "personal" ? "your personal memory" : "the project memory";
     return {
-      content: added ? "Saved to the project memory." : "The memory already has this note, or the note is empty.",
+      content: result.replaced
+        ? `Replaced the old note in ${where}.`
+        : result.added
+          ? `Saved to ${where}.`
+          : `${where[0]?.toUpperCase()}${where.slice(1)} already has this note; it is confirmed for today.`,
+    };
+  }
+
+  private async forget(args: Record<string, unknown>): Promise<ToolResult> {
+    if (!this.options.settings.memoryEnabled) return { content: "Memory is turned off." };
+    if (!vscode.workspace.isTrusted)
+      return { content: "The workspace is not trusted, so Phew does not change memory." };
+    const note = stringArgument(args, "note") as string;
+    const scope = await this.options.memory.forget(this.options.root.uri, note);
+    this.options.log.info(`[audit] memory forget ${scope ?? "nothing"}: ${note.slice(0, 120)}`);
+    return {
+      content: scope
+        ? `Removed the note from ${scope === "personal" ? "your personal memory" : "the project memory"}.`
+        : "No single note matches. Use the exact text of the note.",
     };
   }
 

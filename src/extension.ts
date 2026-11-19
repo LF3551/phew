@@ -348,9 +348,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<PhewTe
     vscode.commands.registerCommand("phew.worktreeActions", () => manager.worktreeActions()),
 
     // Memory, index, and completions
-    vscode.commands.registerCommand("phew.openMemory", async () => {
+    vscode.commands.registerCommand("phew.openMemory", async (scope?: unknown) => {
       const target = root();
-      if (target) await memory.open(target);
+      if (scope === "personal") await memory.open(target ?? vscode.Uri.file("/"), "personal");
+      else if (target) await memory.open(target);
     }),
     vscode.commands.registerCommand("phew.rebuildIndex", async () => {
       const target = root();

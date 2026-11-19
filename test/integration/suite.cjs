@@ -247,6 +247,11 @@ async function run() {
       "the agent gets the project brief at the start",
     );
     const prompt = first.messages[0].content;
+    assert.match(
+      prompt,
+      /Project memory, facts saved in earlier chats:\n- add\(\) lives in math\.js \(from math\.js\)\. math\.js changed after this note: check it\.\n- Run node check\.js to test/,
+      "memory comes with its source, and a changed source asks for a check",
+    );
     assert.match(prompt, /- \.github\/instructions\/math\.instructions\.md: \*\*\/math\.js/, "scoped rules are listed");
     assert.match(prompt, /- lib\/AGENTS\.md: lib\/\*\*/, "a nested AGENTS.md is listed for its folder");
     assert.match(prompt, /- \.cursor\/rules\/release\.mdc: Release checklist/, "a rule by description is listed");

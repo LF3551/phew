@@ -52,9 +52,7 @@ export function buildSystemPrompt(context: PromptContext): string {
     sections.push(`MCP tools from connected servers: ${context.mcpTools.join(", ")}.`);
   }
   if (context.memory && context.memory.trim().length > 0) {
-    sections.push(
-      `Project memory. These facts were saved earlier. Use the remember tool to add new durable facts:\n\n${context.memory}`,
-    );
+    sections.push(context.memory);
   }
   if (context.rules.trim().length > 0) {
     sections.push(

@@ -17,6 +17,7 @@ const labels: Record<string, readonly [running: string, done: string, category: 
   update_plan: ["Updating the plan", "Updated the plan", "other"],
   load_skill: ["Loading the skill", "Loaded the skill", "other"],
   remember: ["Remembering", "Remembered", "other"],
+  forget: ["Forgetting", "Forgot", "other"],
 };
 
 /** The tool name and its target from a summary such as "read_file src/app.ts". */
@@ -30,7 +31,7 @@ export function toolLabel(name: string, summary: string, running: boolean): stri
   if (known) {
     const verb = running ? known[0] : known[1];
     // Targets of plan and question tools are long sentences; the verb alone reads better.
-    return target && !["update_plan", "ask_user", "remember"].includes(name) ? `${verb} ${target}` : verb;
+    return target && !["update_plan", "ask_user", "remember", "forget"].includes(name) ? `${verb} ${target}` : verb;
   }
   const mcp = /^mcp__(.+?)__(.+)$/.exec(name);
   const tool = mcp ? `${mcp[2]} (${mcp[1]})` : name;

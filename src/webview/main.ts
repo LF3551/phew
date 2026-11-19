@@ -1229,6 +1229,7 @@ function currentMention(): string | undefined {
 
 const slashCommands = [
   { command: "/init", detail: "Write AGENTS.md so any agent understands this project" },
+  { command: "/learn", detail: "Save what this chat taught, after you choose" },
   { command: "/continue", detail: "Continue from the latest handoff note" },
   { command: "/handoff", detail: "Write a handoff note so any agent can continue" },
   { command: "/btw", detail: "Ask a side question while the agent works" },

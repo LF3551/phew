@@ -18,6 +18,12 @@ writeFileSync(
   path.join(main, "package.json"),
   JSON.stringify({ name: "it", private: true, scripts: { test: "node check.js" } }, null, 2),
 );
+// Project memory: a fact about math.js, saved long before the file was written, so the agent checks it.
+mkdirSync(path.join(main, ".phew"), { recursive: true });
+writeFileSync(
+  path.join(main, ".phew", "memory.md"),
+  "# Phew project memory\n\n- add() lives in math.js <!-- source: math.js; added: 2000-01-01 -->\n- Run node check.js to test\n",
+);
 // Rules for some files: a Copilot instructions file for math.js, a nested AGENTS.md, and a Cursor rule by description.
 mkdirSync(path.join(main, ".github", "instructions"), { recursive: true });
 writeFileSync(

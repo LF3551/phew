@@ -231,8 +231,28 @@ export const memoryTools: readonly ToolDefinition[] = [
   {
     name: "remember",
     description:
-      "Save a short, durable fact about this project to the project memory, for example a build command or a convention. Do not save secrets or temporary details.",
-    parameters: object({ note: { type: "string", description: "One concise fact, at most 300 characters." } }, [
+      "Save a short, durable fact to memory: a fact about this project (scope project, for example a build command, a convention, or a pitfall), or a preference of the user for every project (scope personal). Use replaces to correct an older note. Do not save secrets or temporary details.",
+    parameters: object(
+      {
+        note: { type: "string", description: "One concise fact, at most 300 characters." },
+        scope: {
+          type: "string",
+          enum: ["project", "personal"],
+          description: "project (default): about this code; personal: how the user likes to work, in every project.",
+        },
+        source: {
+          type: "string",
+          description: "The file that shows the fact, relative to the workspace, so later chats can check it.",
+        },
+        replaces: { type: "string", description: "The text of an older note that this note corrects." },
+      },
+      ["note"],
+    ),
+  },
+  {
+    name: "forget",
+    description: "Remove a note from memory when it is wrong or no longer true.",
+    parameters: object({ note: { type: "string", description: "The text of the note, or words that only it has." } }, [
       "note",
     ]),
   },
@@ -245,6 +265,7 @@ const groupOf: Readonly<Record<string, ToolGroup>> = {
   run_command: "command",
   read_terminal: "command",
   remember: "memory",
+  forget: "memory",
 };
 
 /** The tool group of a built-in tool. MCP tools belong to the `mcp` group. */

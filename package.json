@@ -1403,7 +1403,7 @@
           "phew.memory.enabled": {
             "type": "boolean",
             "default": true,
-            "markdownDescription": "Let the agent remember durable project facts in `.phew/memory.md` and read them in every chat."
+            "markdownDescription": "Let the agent remember durable facts and read them in every chat: facts about the project in `.phew/memory.md` (with the file each fact comes from, so a changed file asks for a check), and your preferences for every project in `~/.phew/memory.md`. `/learn` saves what a chat taught, after you choose."
           },
           "phew.modes": {
             "type": "array",

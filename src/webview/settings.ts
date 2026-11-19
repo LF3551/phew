@@ -29,6 +29,7 @@ interface Init {
   identity: string;
   index: string;
   memory: string[];
+  personalMemory: string[];
   stats: string;
 }
 
@@ -278,15 +279,26 @@ function render(data: Init): void {
         button("Rebuild index", () => vscode.postMessage({ type: "command", command: "phew.rebuildIndex" })),
       );
     if (category.title.startsWith("Memory")) {
-      const memory = el("div", "identity");
-      memory.append(el("strong", undefined, `Project memory (${data.memory.length} notes)`));
-      const list = el("ul");
-      for (const note of data.memory.slice(-10)) list.append(el("li", undefined, note));
-      memory.append(
-        list,
-        button("Open memory file", () => vscode.postMessage({ type: "command", command: "phew.openMemory" })),
-      );
-      section.append(memory);
+      // Two memories: facts of this project (in the project), and your preferences (in your home folder).
+      for (const [title, notes, scope, where] of [
+        ["Project memory", data.memory, "project", ".phew/memory.md, can be shared in Git"],
+        ["Personal memory", data.personalMemory ?? [], "personal", "~/.phew/memory.md, for every project"],
+      ] as const) {
+        const memory = el("div", "identity");
+        memory.append(
+          el("strong", undefined, `${title} (${notes.length} ${notes.length === 1 ? "note" : "notes"})`),
+          el("p", "hint", where),
+        );
+        const list = el("ul");
+        for (const note of notes.slice(-10)) list.append(el("li", undefined, note));
+        if (notes.length > 0) memory.append(list);
+        memory.append(
+          button(`Open ${title.toLowerCase()}`, () =>
+            vscode.postMessage({ type: "command", command: "phew.openMemory", args: [scope] }),
+          ),
+        );
+        section.append(memory);
+      }
     }
     for (const [key, property] of Object.entries(category.properties)) {
       // The Models section above manages these two; settings.json still has them.
