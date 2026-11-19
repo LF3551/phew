@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-19
+
 ### Added
 
 - **Each chat has its own model.** The menu under the input changes the model of this chat only, so two chats, or two windows, can work at the same time with different models or with two keys of one provider, such as **Claude (work)** and **Claude (personal)**. The last choice is the default for new chats. A chat keeps its model when it is saved, and an older chat takes the default at its next task. **Phew: Switch Model**, a new model, and **Use** on the settings page change the chat in front and the default.
@@ -247,7 +249,8 @@ The first public preview of Phew.
 - Phew Wrapped: a weekly or monthly card with bugs fixed, time saved, tasks, and the streak, which you can save as an image, and eight local achievements.
 - A getting started walkthrough and a settings page.
 
-[Unreleased]: https://github.com/LF3551/phew/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/LF3551/phew/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/LF3551/phew/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/LF3551/phew/compare/v0.5.0...v1.0.0
 [0.5.0]: https://github.com/LF3551/phew/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/LF3551/phew/compare/v0.3.0...v0.4.0
