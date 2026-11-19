@@ -158,9 +158,11 @@ export function renderChatHtml(options: ChatHtmlOptions): string {
   <div class="review-banner" id="reviewBanner" hidden>
     <div class="review-row">
       <button type="button" class="review-toggle" id="reviewToggle" aria-expanded="false" aria-controls="reviewList">${icon("chevron")}<span id="reviewText"></span><span class="review-stats" id="reviewStats"></span></button>
-      <button type="button" class="link" id="reviewNext" title="Go to the next change in the editor">Review</button>
-      <button type="button" class="secondary small-button" id="reviewUndoAll">Undo all</button>
-      <button type="button" class="primary small-button" id="reviewKeepAll">Keep all</button>
+      <span class="review-actions">
+        <button type="button" class="link" id="reviewNext" title="Go to the next change in the editor">Review</button>
+        <button type="button" class="secondary small-button" id="reviewUndoAll">Undo all</button>
+        <button type="button" class="primary small-button" id="reviewKeepAll">Keep all</button>
+      </span>
     </div>
     <ul class="review-list" id="reviewList" hidden></ul>
   </div>

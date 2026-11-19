@@ -17,6 +17,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Light themes: text in the colors of Phew (diff lines, warnings, the checks, commands, the badges of models, and "No API key" on the settings page) now has a contrast of at least 4.5.
+- High contrast themes: buttons have the border of the theme, so they read as buttons.
+- A narrow side bar: the Send button keeps its round shape, the model shows its badge and arrow, the mode its icon, and the toolbar wraps to a second row instead of going past the edge. The bar of files to review and the find bar fit, and the line of a failed command keeps its description.
+- A wide tab: steps, commands, checks, and the summary card stay in the reading column with the messages.
+- A long address in an error notice wraps instead of running past the edge.
+- Keyboard: Escape returns the focus to the button that opened a menu, also for the approvals panel, and the terminals list moves the focus into it.
+- Screen readers: every setting on the settings page has its name and description; the mode and model buttons keep their names on a narrow side bar.
 - Rule patterns are matched part by part, so a pattern such as `**/*/**/*/**/*.ts` can no longer make reading a file hang for seconds; a broken pattern such as `[z-a]` matches nothing instead of breaking `read_file` and `edit_file`; character classes such as `*.[jt]s` work; and `lib/**` means what is inside `lib`. Checked against minimatch on 104 000 cases.
 - The packaging tool uses a fixed version of minimatch (a moderate advisory in a development dependency; the extension itself was not affected).
 

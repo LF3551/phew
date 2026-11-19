@@ -437,7 +437,11 @@ function applyState(next: ViewState): void {
     const short =
       activeModel.provider === "vscode" && /^auto$/i.test(activeModel.model) ? "Auto" : next.modelId || title;
     modelButton.replaceChildren(providerBadge(activeModel), element("span", "model-label", short));
-  } else modelButton.textContent = next.configured ? next.modelId || next.model : "Connect a model";
+    modelButton.setAttribute("aria-label", `Model: ${short}`);
+  } else {
+    modelButton.textContent = next.configured ? next.modelId || next.model : "Connect a model";
+    modelButton.removeAttribute("aria-label");
+  }
   modelButton.classList.toggle("mode-locked", next.modeModel !== undefined);
   modelButton.title = next.configured
     ? `${next.model} (${next.provider})${next.modeModel ? ` · set by the ${currentModeName(next)} mode` : ""}. Click to switch.`
@@ -2073,7 +2077,13 @@ document.addEventListener("click", (event) => {
   if (!inside && !target.closest(".popover")) closePopovers();
 });
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") closePopovers();
+  if (event.key !== "Escape") return;
+  // Focus goes back to the button that opened the menu, so keyboard users keep their place.
+  const open = [...document.querySelectorAll<HTMLElement>(".popover")].find(
+    (popover) => !popover.hidden && popover.contains(document.activeElement),
+  );
+  closePopovers();
+  if (open) document.querySelector<HTMLElement>(`[aria-controls="${open.id}"]`)?.focus();
 });
 $("attachButton").addEventListener("click", () => attachMenu.toggle());
 $("appearanceButton").addEventListener("click", () => togglePopover("appearance"));

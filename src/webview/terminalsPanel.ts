@@ -116,7 +116,11 @@ export function createTerminalsPanel(options: {
     options.closeOthers(panel);
     panel.hidden = !open;
     button.setAttribute("aria-expanded", String(open));
-    if (open) render();
+    if (open) {
+      render();
+      // The list is a dialog: focus moves into it, and Escape brings it back to the button.
+      panel.querySelector<HTMLElement>("button")?.focus();
+    }
   });
 
   return {

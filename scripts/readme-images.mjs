@@ -187,13 +187,6 @@ function state(overrides = {}) {
 }
 
 const now = Date.now();
-const testOutput =
-  "\x1b[1m> shop@1.4.0 test\x1b[0m\r\n> vitest run\r\n\r\n" +
-  " \x1b[32m✓\x1b[0m src/cart.test.ts \x1b[2m(14 tests)\x1b[0m\r\n" +
-  " \x1b[32m✓\x1b[0m src/api.test.ts \x1b[2m(9 tests)\x1b[0m\r\n" +
-  " \x1b[31m✗\x1b[0m src/login.test.ts \x1b[2m> signs in with a slow network\x1b[0m\r\n" +
-  "   \x1b[31mAssertionError: expected 'timeout' to be 'ok'\x1b[0m\r\n" +
-  "\r\n Test Files  \x1b[1;31m1 failed\x1b[0m | \x1b[1;32m2 passed\x1b[0m (3)\r\n";
 
 /** A finished command as the host sends it: the call, then the result with its output. */
 function commandMessages(id, command, description, output, at) {

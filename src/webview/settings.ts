@@ -201,6 +201,7 @@ function settingRow(key: string, property: Property, data: Init): HTMLElement {
   const label = el("span", "name", name);
   // The key of the setting, for settings.json, shows on hover instead of taking a line.
   label.title = key;
+  label.id = `name-${key.replace(/[^\w-]/g, "-")}`;
   header.append(label);
   if (data.modified.includes(key)) {
     header.append(el("span", "badge", "Modified"));
@@ -211,8 +212,18 @@ function settingRow(key: string, property: Property, data: Init): HTMLElement {
   }
   // Two columns: what the setting does on the left, its control on the right; long controls take the full row.
   const info = el("div", "setting-info");
-  info.append(header, description(property.markdownDescription ?? property.description));
+  const about = description(property.markdownDescription ?? property.description);
+  about.id = `about-${key.replace(/[^\w-]/g, "-")}`;
+  info.append(header, about);
   const input = control(key, property, data.values[key]);
+  // Screen readers say the name and the description of the setting with each of its controls.
+  const fields = [input, ...input.querySelectorAll<HTMLElement>("input, select, textarea, [role=switch]")].filter(
+    (item) => item.matches("input, select, textarea, [role=switch]"),
+  );
+  for (const field of fields) {
+    if (!field.hasAttribute("aria-label")) field.setAttribute("aria-labelledby", label.id);
+    field.setAttribute("aria-describedby", about.id);
+  }
   const wide =
     input.tagName === "TEXTAREA" || input.querySelector?.("textarea") !== null || input.classList.contains("color-row");
   row.classList.toggle("wide", wide);

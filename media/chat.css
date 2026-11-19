@@ -238,7 +238,7 @@ summary:focus-visible {
 
 .approval .reason {
   margin: 0 0 6px;
-  color: var(--vscode-editorWarning-foreground);
+  color: var(--phew-warning);
 }
 
 .approval .detail {
@@ -858,11 +858,11 @@ summary:focus-visible {
 }
 
 .hunk .add {
-  color: var(--vscode-gitDecoration-addedResourceForeground, #3fb950);
+  color: var(--phew-success);
 }
 
 .hunk .del {
-  color: var(--vscode-gitDecoration-deletedResourceForeground, #f85149);
+  color: var(--phew-error);
 }
 
 .hunk .meta {
@@ -1815,6 +1815,7 @@ button[data-copy-state="failed"][data-copy-state] {
 
 kbd {
   padding: 0 4px;
+  color: var(--vscode-keybindingLabel-foreground, var(--vscode-foreground));
   background: var(--vscode-keybindingLabel-background, #8883);
   border: 1px solid var(--vscode-keybindingLabel-border, #8886);
   border-radius: 3px;
@@ -2300,7 +2301,7 @@ select.pill {
 }
 
 .mode-end kbd {
-  color: var(--vscode-descriptionForeground);
+  color: var(--vscode-keybindingLabel-foreground, var(--vscode-foreground));
   font-size: 0.8em;
   opacity: 0.8;
 }
@@ -2419,7 +2420,7 @@ select.pill {
 }
 
 .attach-end kbd {
-  color: var(--vscode-descriptionForeground);
+  color: var(--vscode-keybindingLabel-foreground, var(--vscode-foreground));
   font-size: 0.8em;
   opacity: 0.85;
 }
@@ -2819,7 +2820,8 @@ body.dragging-files .drop-zone {
   height: 26px;
   padding: 0 3px;
   box-sizing: border-box;
-  color: var(--provider-color);
+  /* The maker's color, pulled toward the text of the theme, so the letter stays readable in light and dark. */
+  color: color-mix(in srgb, var(--provider-color) 62%, var(--vscode-foreground));
   font-size: 0.72em;
   font-weight: 800;
   letter-spacing: -0.02em;
@@ -2859,7 +2861,7 @@ body.dragging-files .drop-zone {
 }
 
 .model-end kbd {
-  color: var(--vscode-descriptionForeground);
+  color: var(--vscode-keybindingLabel-foreground, var(--vscode-foreground));
   font-size: 0.8em;
   opacity: 0.85;
 }
@@ -3176,7 +3178,7 @@ button.pill.model::after {
 .restricted {
   margin: 0 0 6px;
   padding: 4px 8px;
-  color: var(--vscode-editorWarning-foreground);
+  color: var(--phew-warning);
   font-size: 0.85em;
 }
 
@@ -4432,7 +4434,7 @@ body {
   --phew-on-accent: #072a30;
   --phew-success: #3fb68b;
   --phew-warning: #d9a441;
-  --phew-error: #e5676b;
+  --phew-error: #ee7a7e;
   --phew-accent: var(--phew-drop);
   /* Your messages take a soft tint of the accent, so a new accent recolors them too. */
   --phew-user-bg: color-mix(
@@ -4443,12 +4445,13 @@ body {
   --phew-reading: 46rem;
 }
 
+/* Darker in light themes, so text in these colors keeps a contrast of 4.5 on light and tinted backgrounds. */
 body.vscode-light {
-  --phew-drop: #0b7f91;
+  --phew-drop: #0a6f80;
   --phew-on-accent: #fff;
-  --phew-success: #1f8a63;
-  --phew-warning: #9a6b0f;
-  --phew-error: #c2393e;
+  --phew-success: #166c4d;
+  --phew-warning: #855900;
+  --phew-error: #b3262c;
 }
 
 body.vscode-high-contrast,
@@ -5363,8 +5366,15 @@ html body.style-bubbles .message.user > .message-actions {
   display: none;
 }
 
+.find-bar {
+  max-width: calc(100% - 24px);
+  box-sizing: border-box;
+}
+
 .find-bar input {
+  flex: 1 1 160px;
   width: 160px;
+  min-width: 60px;
   padding: 3px 6px;
   color: var(--vscode-input-foreground);
   font: inherit;
@@ -5384,7 +5394,8 @@ html body.style-bubbles .message.user > .message-actions {
 }
 
 .find-count {
-  min-width: 64px;
+  flex: none;
+  min-width: 0;
   padding: 0 4px;
   color: var(--vscode-descriptionForeground);
   font-size: 0.82em;
@@ -5456,4 +5467,108 @@ html body.style-bubbles .message.user > .message-actions {
 
 .chip-open:hover {
   text-decoration: underline;
+}
+
+/* The toolbar under the input: buttons keep their size, only the model name gets shorter. On a side bar too
+   narrow for one row, the buttons wrap to a second row instead of going past the edge. */
+.box-toolbar {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
+/* The toolbar under the input: buttons keep their size, only the model name gets shorter. */
+.box-toolbar > button,
+.box-toolbar > .context-ring {
+  flex: none;
+}
+
+.box-toolbar > button.pill.model {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+button.pill.model .model-label {
+  min-width: 0;
+}
+
+button.pill.model::after,
+button.pill.model .provider-badge {
+  flex: none;
+}
+
+/* A narrow side bar: the ring of the context without the number, and the model as its badge and arrow. */
+@media (max-width: 420px) {
+  .box-toolbar #contextLabel,
+  button.pill.model .model-label {
+    display: none;
+  }
+
+  .box-toolbar > button.pill.model {
+    flex: none;
+  }
+}
+
+/* A very narrow side bar: the mode as its icon. */
+@media (max-width: 300px) {
+  .mode-pill .mode-name {
+    display: none;
+  }
+}
+
+/* Send stays at the right edge, also on a wrapped second row. */
+.box-toolbar > .send {
+  margin-left: auto;
+}
+
+/* An open terminals list: the count takes the text color, readable on the pressed button. */
+.terminals-button[aria-expanded="true"] .terminals-badge {
+  color: var(--vscode-foreground);
+}
+
+/* Steps, commands, checks, and the summary card stay in the reading column of a wide tab, like the messages. */
+html body .transcript > :is(.tool, .tool-group, .verify, .task-card) {
+  margin-right: auto;
+  margin-left: auto;
+}
+
+/* A long address or path in a notice wraps instead of running past the edge. */
+html body .notice {
+  overflow-wrap: anywhere;
+}
+
+/* High contrast: buttons get the border of the theme, so they read as buttons on the black or white page. */
+body:is(.vscode-high-contrast, .vscode-high-contrast-light) :is(.primary, .secondary, .small-button, .chip) {
+  border: 1px solid var(--vscode-button-border, var(--vscode-contrastBorder, currentColor));
+}
+
+/* The bar of files to review on a narrow side bar: the buttons wrap below the count, never over it. */
+.review-row {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
+.review-toggle {
+  flex: 1 1 150px;
+  white-space: nowrap;
+}
+
+/* The line of a command on a narrow side bar: the description keeps its room, and the state shortens. */
+.term-toggle {
+  min-width: 45%;
+}
+
+.term-summary {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.review-actions {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
 }

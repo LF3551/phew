@@ -89,6 +89,9 @@ export function createModeMenu(options: {
       parts.push(lock);
     }
     button.replaceChildren(...parts);
+    // The name hides on a narrow side bar; the button keeps it for screen readers and the tooltip.
+    button.setAttribute("aria-label", `Mode: ${mode.name}${mode.changes ? "" : ", read only"}`);
+    button.title = `Mode: ${mode.name}. Shift+Tab switches the mode.`;
     button.style.setProperty("--mode-color", style.color);
     composer.style.setProperty("--mode-color", style.color);
     composer.dataset.mode = mode.id;

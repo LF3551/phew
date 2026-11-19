@@ -26,8 +26,11 @@ body {
   line-height: 1.5;
 }
 
+/* Darker in light themes, so small text in these colors stays readable. */
 body.vscode-light {
-  --accent: #0b7f91;
+  --accent: #0a6f80;
+  --error: #b3262c;
+  --warn: #855900;
 }
 
 [hidden] {
@@ -652,7 +655,7 @@ button .icon {
   justify-content: center;
   width: 34px;
   height: 34px;
-  color: var(--provider-color);
+  color: color-mix(in srgb, var(--provider-color) 62%, var(--vscode-foreground));
   font-size: 12px;
   font-weight: 800;
   background: color-mix(in srgb, var(--provider-color) 16%, transparent);
