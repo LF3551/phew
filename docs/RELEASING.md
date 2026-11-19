@@ -15,6 +15,7 @@ Releases run in GitHub Actions with one click. No tokens are stored: the stores 
    - commits `chore: release x.y.z`, tags `vx.y.z`, and pushes both to `main`;
    - creates the GitHub release with the changelog section as notes (0.x versions are pre-releases);
    - publishes to the Visual Studio Marketplace and Open VSX, when they are turned on (see below).
+   - starts the **Website** workflow, so the website shows the new version.
 
 From the command line: `gh workflow run Release --ref main -f bump=patch`.
 

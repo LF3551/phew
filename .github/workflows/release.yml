@@ -168,3 +168,18 @@ jobs:
         with:
           node-version: 22
       - run: npx --yes ovsx@1.4.0 publish "phew-${{ needs.prepare.outputs.version }}.vsix" --trusted-publishing
+
+  website:
+    name: Website
+    needs: [prepare, github]
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      # The release commit comes from the GITHUB_TOKEN, which starts no other workflow by itself;
+      # the website asks for its build, so it shows the new version.
+      - run: gh workflow run Website --repo "${{ github.repository }}" --ref main
+        env:
+          GH_TOKEN: ${{ github.token }}
