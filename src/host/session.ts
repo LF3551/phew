@@ -46,6 +46,7 @@ import type { McpManager } from "./mcpManager";
 import type { MemoryStore } from "./memoryStore";
 import type { ModelManager } from "./models";
 import { projectBrief } from "./projectBrief";
+import type { RatingService } from "./rating";
 import type { ReviewManager } from "./reviewManager";
 import { loadRuleSet } from "./rulesLoader";
 import { readSettings, type Settings } from "./settings";
@@ -81,6 +82,8 @@ export interface SessionDependencies {
   readonly diffs: DiffContentProvider;
   readonly mcp: McpManager;
   readonly stats: StatsStore;
+  /** Asks for a rating after a task that went well, now and then. */
+  readonly rating?: RatingService;
   readonly models: ModelManager;
   readonly reviews: ReviewManager;
   readonly index: CodeIndexManager;
@@ -135,7 +138,17 @@ export class Transcript {
   /** Adds a message and returns it with a time stamp. */
   add(message: HostMessage): HostMessage {
     const stamped: HostMessage = message.at ? message : { ...message, at: Date.now() };
-    const transient = ["state", "sessions", "mentions", "addAttachment", "focusInput", "openPanel", "queue", "sound"];
+    const transient = [
+      "state",
+      "sessions",
+      "mentions",
+      "addAttachment",
+      "focusInput",
+      "openPanel",
+      "queue",
+      "sound",
+      "ratingAsk",
+    ];
     if (transient.includes(stamped.type)) return stamped;
     if (stamped.type === "assistantDiscard") {
       this.items = this.items.filter(
@@ -1420,6 +1433,14 @@ export class AgentSession {
             : {}),
           pending: this.deps.reviews.pendingFiles.length,
         });
+    }
+    // A task that went well is a good moment to ask for a rating, now and then; never during work.
+    if (!aborted && this.deps.rating) {
+      const store = await this.deps.rating.maybeAsk(
+        success && (filesChanged > 0 || result?.verified === true),
+        settings.askForRating,
+      );
+      if (store) this.emit({ type: "ratingAsk", store });
     }
     this.emit({
       type: "taskEnd",

@@ -363,6 +363,11 @@
         "category": "Phew"
       },
       {
+        "command": "phew.rate",
+        "title": "Rate Phew",
+        "category": "Phew"
+      },
+      {
         "command": "phew.showLog",
         "title": "Show Log",
         "category": "Phew"
@@ -1641,6 +1646,11 @@
             "type": "boolean",
             "default": true,
             "markdownDescription": "Show a short **Phew! Done.** animation when a task changes files successfully."
+          },
+          "phew.ui.askForRating": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "Now and then, after a task that went well, show a small card that asks you to rate Phew or send feedback: after 5 tasks on 3 different days, at most once a month and three times in total. **Phew: Rate Phew** opens the store at any time."
           },
           "phew.stats.minutesPerBug": {
             "type": "number",

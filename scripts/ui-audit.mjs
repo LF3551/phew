@@ -706,6 +706,7 @@ const states = {
       },
     ]),
   ),
+  rating: { messages: [...kitchen, { type: "ratingAsk", store: "the Visual Studio Marketplace" }] },
   "classic-style": {
     messages: [
       {

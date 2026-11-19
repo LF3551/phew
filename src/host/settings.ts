@@ -59,6 +59,8 @@ export interface Settings {
   readonly skillsEnabled: boolean;
   readonly skillPaths: readonly string[];
   readonly celebrate: boolean;
+  /** Ask for a rating now and then, after a task that went well. */
+  readonly askForRating: boolean;
   readonly minutesPerBug: number;
   readonly offerTerminalFix: boolean;
   readonly restoreLastChat: boolean;
@@ -193,6 +195,7 @@ export function readSettings(scope?: vscode.Uri): Settings {
     skillsEnabled: config.get<boolean>("skills.enabled") !== false,
     skillPaths: strings(config.get("skills.paths")),
     celebrate: config.get<boolean>("ui.celebrate") !== false,
+    askForRating: config.get<boolean>("ui.askForRating") !== false,
     minutesPerBug: positive(config.get("stats.minutesPerBug"), 15, 600),
     offerTerminalFix: config.get<boolean>("terminal.offerFix") !== false,
     restoreLastChat: config.get<boolean>("chat.restoreLastChat") !== false,

@@ -800,6 +800,46 @@ function renderReviewList(next: ViewState): void {
   );
 }
 
+/**
+ * A quiet card under a task that went well: rate Phew or send feedback, side by side. Any answer closes it;
+ * Rate and Send feedback say thank you first.
+ */
+function addRatingCard(store: string): void {
+  const card = element("section", "rating-card");
+  card.setAttribute("aria-label", "Rate Phew");
+  const text = element("div", "rating-text");
+  text.append(
+    element("strong", undefined, "Does Phew help you?"),
+    element(
+      "span",
+      undefined,
+      `A rating on ${store} helps other developers find it. Ideas and problems are welcome too.`,
+    ),
+  );
+  const answer = (value: "rate" | "feedback" | "later" | "never") => {
+    vscode.postMessage({ type: "ratingAnswer", answer: value });
+    if (value === "rate" || value === "feedback") {
+      card.replaceChildren(
+        element(
+          "span",
+          "rating-thanks",
+          value === "rate" ? "Thank you! ♥" : "Thank you for helping to make Phew better.",
+        ),
+      );
+      setTimeout(() => card.remove(), 4000);
+    } else card.remove();
+  };
+  const actions = element("div", "rating-actions");
+  actions.append(
+    button("Rate Phew", "primary", () => answer("rate"), `Opens ${store} in your browser`),
+    button("Send feedback", "secondary", () => answer("feedback"), "Opens a new issue on GitHub"),
+    button("Not now", "link", () => answer("later")),
+    button("Don't ask again", "link", () => answer("never")),
+  );
+  card.append(text, actions);
+  append(card);
+}
+
 function updateReviewBanner(): void {
   const pending = state?.reviewFiles ?? 0;
   $("reviewBanner").hidden = pending === 0 || (cardVisible && latestCard?.isConnected === true);
@@ -1780,6 +1820,9 @@ function handle(message: HostMessage): void {
       sessions = [...message.sessions];
       history = [...message.history];
       if (!panel.hidden) renderPanel();
+      break;
+    case "ratingAsk":
+      addRatingCard(message.store);
       break;
     case "historyMatches":
       contentMatches = {

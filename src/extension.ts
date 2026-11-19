@@ -17,6 +17,7 @@ import { McpManager } from "./host/mcpManager";
 import { MemoryStore } from "./host/memoryStore";
 import { ModelManager } from "./host/models";
 import { fileProblemsRequest, fixProblemCommand, PhewItCodeActionProvider, problemContext } from "./host/phewIt";
+import { RatingService } from "./host/rating";
 import { ReviewManager } from "./host/reviewManager";
 import type { TaskRequest } from "./host/session";
 import { SessionManager } from "./host/sessionManager";
@@ -42,6 +43,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<PhewTe
   const log = vscode.window.createOutputChannel("Phew", { log: true });
   const diffs = new DiffContentProvider();
   const stats = new StatsStore(context.globalState);
+  const rating = new RatingService(context.globalState, stats);
   const models = new ModelManager(context.secrets, log);
   const mcp = new McpManager(context.secrets, String(context.extension.packageJSON.version));
   const skills = new SkillStore();
@@ -85,7 +87,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<PhewTe
 
   const handoffs = new HandoffService(context.workspaceState, log, () => sessions?.postState());
   const manager = new SessionManager(
-    { context, log, diffs, mcp, stats, models, reviews, index, memory, skills, terminal, handoffs },
+    { context, log, diffs, mcp, stats, rating, models, reviews, index, memory, skills, terminal, handoffs },
     (running) => {
       updateStatus();
       chatView?.showActivity(running > 0, activityBadge(manager.activity, readSettings().assistant.name));
@@ -348,6 +350,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<PhewTe
     vscode.commands.registerCommand("phew.worktreeActions", () => manager.worktreeActions()),
 
     // Memory, index, and completions
+    vscode.commands.registerCommand("phew.rate", () => rating.answer("rate")),
     vscode.commands.registerCommand("phew.openMemory", async (scope?: unknown) => {
       const target = root();
       if (scope === "personal") await memory.open(target ?? vscode.Uri.file("/"), "personal");

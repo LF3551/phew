@@ -279,6 +279,11 @@ export class SessionManager implements vscode.Disposable {
     return matches;
   }
 
+  /** The answer of the rating card in the chat. */
+  async answerRating(answer: "rate" | "feedback" | "later" | "never"): Promise<void> {
+    await this.deps.rating?.answer(answer);
+  }
+
   /** A file under review, by its URI from the chat; undefined for any other file. */
   reviewUri(value: string): vscode.Uri | undefined {
     return this.deps.reviews.pendingFiles.find((uri) => uri.toString() === value);

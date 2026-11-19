@@ -242,6 +242,12 @@ The website lives in `site/` and uses the pictures in `docs/images`; the **Websi
 
 See [docs/RELEASING.md](docs/RELEASING.md).
 
+## Like Phew?
+
+A rating helps other developers find it: [rate Phew on the Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=alekseialeinikov.phew&ssr=false#review-details) or [on Open VSX](https://open-vsx.org/extension/alekseialeinikov/phew/reviews), or star the repository. Ideas and problems are welcome as [issues](https://github.com/LF3551/phew/issues).
+
+Phew asks for a rating itself only rarely: a small card under a task that went well, after 5 tasks on 3 different days, at most once a month and three times in total, and never again after you rate it or choose **Don't ask again** (`phew.ui.askForRating`). **Phew: Rate Phew** opens the store at any time.
+
 ## Contributing
 
 Contributions are welcome.

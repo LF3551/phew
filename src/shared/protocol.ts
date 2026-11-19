@@ -184,6 +184,8 @@ export type ApprovalKind = "command" | "edit" | "mcp" | "question";
 export type HostMessage = (
   | { readonly type: "state"; readonly state: ViewState }
   | { readonly type: "setupOptions"; readonly options: readonly SetupOption[] }
+  /** A quiet card under a task that went well: rate Phew in the store, or send feedback. */
+  | { readonly type: "ratingAsk"; readonly store: string }
   /** Full-text search in the history: the chats whose messages match, with a piece of the text. */
   | {
       readonly type: "historyMatches";
@@ -322,6 +324,7 @@ export type WebviewMessage =
   | { readonly type: "configureModel" }
   | { readonly type: "setupOptions" }
   | { readonly type: "retryRequest" }
+  | { readonly type: "ratingAnswer"; readonly answer: "rate" | "feedback" | "later" | "never" }
   | { readonly type: "searchHistory"; readonly query: string }
   | { readonly type: "forkChat"; readonly checkpointId: string }
   | { readonly type: "editMessage"; readonly checkpointId: string }
@@ -573,6 +576,10 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
         return { type: "setAppearance", key, value };
       return undefined;
     }
+    case "ratingAnswer":
+      return ["rate", "feedback", "later", "never"].includes(String(message.answer))
+        ? { type: "ratingAnswer", answer: message.answer as "rate" | "feedback" | "later" | "never" }
+        : undefined;
     case "searchHistory":
       return typeof message.query === "string" && message.query.length <= 200
         ? { type: "searchHistory", query: message.query }
