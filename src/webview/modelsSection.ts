@@ -599,6 +599,14 @@ export class ModelsSection {
           row.append(link);
         }
         form.append(row);
+        if (provider.id === "copilot-token")
+          form.append(
+            el(
+              "p",
+              "hint",
+              "Create the token with Get a key: Resource owner is your personal account, and under Permissions → Account, add Copilot Requests. The same token works in GitHub Copilot CLI.",
+            ),
+          );
         form.append(
           el(
             "p",
