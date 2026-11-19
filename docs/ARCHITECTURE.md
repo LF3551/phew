@@ -42,7 +42,9 @@ Pure TypeScript without the `vscode` module, so unit tests run in Node.js.
 | `commandPolicy.ts` | Dangerous command detection and auto-approve and deny lists. |
 | `secrets.ts` | Sensitive file detection and secret redaction. |
 | `cost.ts` | Token and cost tracking and budget limits. |
-| `rules.ts` | Project rule files and their combination. |
+| `rules.ts` | Rules: the files and folders of Phew and other agents, their front matter (`applyTo`, `paths`, `globs`, `alwaysApply`, `trigger`, `inclusion`), path patterns, and how each rule reaches the agent (always, with a matching file, by description, or only when attached). |
+| `projectBrief.ts` | The project overview for the start of each chat (stack, commands, layout, README, branch) and the request of `/init`. |
+| `memory.ts` | Memory notes with their source and day, personal and project scope, corrections, the memory part of the prompt, and the request of `/learn`. |
 | `mcp.ts` | Minimal Model Context Protocol client over newline-delimited JSON-RPC. |
 | `sse.ts` | Server-Sent Events parser for streamed model responses. |
 | `stats.ts` | Local statistics. |
@@ -83,7 +85,8 @@ Pure TypeScript without the `vscode` module, so unit tests run in Node.js.
 | `terminalWatcher.ts` | Remembers failed terminal commands through shell integration. |
 | `chatView.ts` | The webview view provider and the transcript that rebuilds a hidden view. |
 | `providerSetup.ts` | Provider, model, and API key setup. The key goes to SecretStorage. |
-| `rulesLoader.ts`, `settings.ts`, `statsStore.ts`, `html.ts` | Rules, settings, statistics, and the webview document. |
+| `rulesLoader.ts`, `settings.ts`, `statsStore.ts`, `html.ts` | Rules (personal from `~/.phew`, project rules only in trusted workspaces, nested `AGENTS.md` files), settings, statistics, and the webview document. Scoped rules come with the result of `read_file`, `edit_file`, and `write_file` through `ToolHost`, once per task. |
+| `projectBrief.ts`, `memoryStore.ts` | The project overview, cached for a minute (no README in untrusted workspaces), and the memory files with the check of their sources. |
 
 ## `src/webview`
 

@@ -4,6 +4,12 @@
  */
 
 const notes: Readonly<Record<string, readonly string[]>> = {
+  "0.6": [
+    "Each chat starts with an overview of the project: the stack, the commands, and the layout. /init writes AGENTS.md.",
+    "Rules come with the files they are for, from AGENTS.md in subfolders and the rules of Copilot, Claude, Cursor, and others.",
+    "Memory keeps the file of each fact and asks for a check when it changed. Personal preferences apply in every project.",
+    "Type @ to bring an earlier chat into this one. /learn saves what a chat taught.",
+  ],
   "0.5": [
     "The files to review sit above the input, with Keep and Undo for each file.",
     "Find in the chat with Ctrl+F, search all chats by their messages, and fork any message.",

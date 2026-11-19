@@ -67,7 +67,11 @@
 - **Rich context.** The paperclip adds the current file, the selection, the problems, the Git changes, or the last terminal output in one click, and shows what exactly it adds. Type `@` to attach any file. Paste or drop screenshots. Use **Add to Chat** in the editor, the explorer, and the terminal.
 - **Parallel agents.** **New Agent in Worktree** works on a new branch in a separate folder while you keep coding.
 - **Commits your way.** Generate commit messages in the Source Control view. See the author and signing that commits use, and set Conventional Commits, `Signed-off-by`, GPG or SSH signing, a different author, and trailers. Phew never adds co-authors by itself.
-- **Code index and memory.** Phew finds relevant code by meaning and remembers durable project facts in `.phew/memory.md`.
+- **Knows your project from the first message.** Every chat starts with a short overview that Phew gathers itself: the stack, the commands for checks, tests, lint, and build, the main folders, and the branch. `/init` writes an `AGENTS.md` from what the project shows, for you to keep or undo.
+- **Rules that fit the file.** Phew reads `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, and the rules of Copilot (`.github/instructions`, `applyTo`), Claude (`.claude/rules`, `paths`), Cursor (`.cursor/rules`, `globs`), Antigravity, Windsurf, and Kiro. A rule for some files comes to the agent when it reads or changes such a file; an `AGENTS.md` in a subfolder applies to that folder. Your personal rules for every project live in `~/.phew/AGENTS.md`.
+- **Memory that stays true.** The agent remembers project facts in `.phew/memory.md` with the file each fact comes from, and checks a fact again when that file changed. Your preferences live in `~/.phew/memory.md` for every project. The agent corrects and forgets notes, and `/learn` saves what a chat taught after you choose.
+- **Chats that know each other.** Type `@` and pick an earlier chat: the agent gets what was asked, answered, and changed there. A new chat knows about unfinished work of other sessions.
+- **Code index.** Phew finds relevant code by meaning.
 - **Agent Skills.** Phew uses `SKILL.md` skills from `.phew/skills`, `.agents/skills`, `.claude/skills`, and `.opencode/skills`, in the project and in your home folder, the same format as Claude Code.
 - **Several folders.** In a multi-root workspace, the agent works across all folders.
 - **MCP done right.** Phew reads `.vscode/mcp.json`, `.mcp.json` (Claude Code), and its own settings, supports local and remote (HTTP) servers with OAuth sign-in, and lets you choose the tools of each server and read the logs (**Phew: Manage MCP Servers…**).
@@ -175,6 +179,7 @@ Ask, Plan, and Review are read-only: the mode switch shows a lock for them.
 | `↑` in the input | Reuse an earlier request |
 | `Shift+Tab` in the input | Switch the mode |
 | `/btw`, `/goal`, `/compact` | Side question, goal of the chat, compact the chat |
+| `/init`, `/learn` | Write AGENTS.md for this project; save what this chat taught |
 | `Ctrl+F` in the chat | Find in the chat |
 
 On macOS, use `Cmd` instead of `Ctrl`.
