@@ -4,6 +4,12 @@
  */
 
 const notes: Readonly<Record<string, readonly string[]>> = {
+  "1.2": [
+    "Agents name their terminals, close the ones they no longer need, and hear when a server ends. All agents in the list of terminals shows every chat.",
+    "Ports of servers show in the list: click one to open it in the browser. When a port is taken, the agent learns which chat has it.",
+    "A terminal that a prompt theme confuses starts again without it, and the chat says so.",
+    "Phew: Report a Problem writes a bug report without secrets or private paths, for you to read before it opens on GitHub.",
+  ],
   "1.1": [
     "Each chat keeps its own model, so two chats or two windows can work with different models or keys at once.",
     "Subagents: the agent sends research tasks to helpers that read in parallel, each with its own model, and report back.",
