@@ -514,7 +514,12 @@ export class ToolHost {
       !/[$#%>❯]\s*$/.test(question) &&
       !requested.includes("\n") &&
       requested.length <= 40;
-    const decision = isAnswer ? ({ kind: "allow" } as const) : decideCommand(command, this.options.settings.commands);
+    const decision = isAnswer
+      ? ({ kind: "allow" } as const)
+      : decideCommand(command, {
+          ...this.options.settings.commands,
+          sensitiveNames: this.options.settings.sensitiveNames,
+        });
     if (decision.kind === "deny") throw new Error(decision.reason);
     const isCommit = notes.length > 0 || /^\s*git\s+(-[Cc]\s+\S+\s+)*commit\b/.test(command);
     // Why it runs, for the chat: the rule that allowed it, or the decision of the user.

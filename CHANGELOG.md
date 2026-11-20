@@ -5,6 +5,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Security
+
+- A command that names a file with secrets now always asks first, like a dangerous command, in every mode and even when its program is on the allowlist: for example `cat ~/.aws/credentials`, `grep token .npmrc`, `curl -F file=@.env`, `git show HEAD:.env`, or anything in `~/.ssh`. These are the files that the read tool refuses, with the names of `phew.privacy.sensitiveNames`. Before, a reading command such as `cat` could show them to the model in Smart mode.
+
 ## [1.1.2] - 2026-11-20
 
 ### Changed

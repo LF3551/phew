@@ -40,7 +40,7 @@ Phew does not download or run code from the internet by itself. The terminal lib
 
 1. Each file change of the agent can be reviewed: **Keep** and **Undo** in the editor by default, or **Ask first** to approve hunks before they are written. Each request is a checkpoint that **Restore checkpoint** reverts.
 2. Commands that change something ask first in the default **Smart** mode. Dangerous commands, such as `git push --force`, `rm -rf`, `sudo`, or `terraform apply`, always ask, and `phew.commands.deny` blocks commands for good.
-3. Phew does not read sensitive files, such as `.env` files and keys, and removes secrets from tool output before it goes to the model.
+3. Phew does not read sensitive files, such as `.env` files and keys, and removes secrets from tool output before it goes to the model. A command that names such a file, for example `cat ~/.aws/credentials`, always asks first, in every mode and even when its program is allowed.
 4. Phew changes files, runs commands, starts MCP servers, and reads project rules only in a trusted workspace. In Restricted Mode it only answers questions.
 5. API keys stay in the VS Code secret storage. Model profiles and key commands come only from the user settings, so a workspace cannot redirect a key or run a command. Plain HTTP is allowed only for localhost and private networks.
 6. Passwords that a command asks for go from you to the program, never to the model.

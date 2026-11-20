@@ -1,3 +1,4 @@
+import { isSensitivePath } from "./secrets";
 /** How Phew treats a shell command that the agent wants to run. */
 export type CommandDecision =
   | { readonly kind: "allow" }
@@ -17,6 +18,28 @@ export interface CommandPolicySettings {
   readonly autoApprove: readonly string[];
   /** Command prefixes that never run. */
   readonly deny: readonly string[];
+  /** More file names that hold secrets, from the privacy settings. */
+  readonly sensitiveNames?: readonly string[];
+}
+
+/**
+ * The first file that a command names and that probably holds secrets, such as `~/.aws/credentials`, `.env`, or
+ * an SSH key: the same files that the read tool refuses. Quoted paths, `--file=.env`, `@.env`, and `HEAD:.env`
+ * count too.
+ */
+export function secretFileIn(command: string, extraNames: readonly string[] = []): string | undefined {
+  const words = command
+    .split(/[\s|;&<>()]+/)
+    .map((word) => word.replace(/^['"]+|['"]+$/g, ""))
+    // `--file=.env`, and `HEAD:.env` of git show or `host:~/.ssh/id_rsa` of scp.
+    .flatMap((word) => [word, ...word.split(/[=:]/).slice(1)])
+    .map((word) => word.replace(/^@/, ""))
+    .filter((word) => word && !word.startsWith("-"));
+  for (const word of words) {
+    const path = word.replace(/^(~|\$HOME|\$\{HOME\})\//, "").replace(/^\.\//, "");
+    if (path && isSensitivePath(path, extraNames)) return word;
+  }
+  return undefined;
 }
 
 interface DangerRule {
@@ -288,6 +311,9 @@ export function decideCommand(rawCommand: string, settings: CommandPolicySetting
   }
   const danger = findDanger(command);
   if (danger) return { kind: "ask", reason: `Dangerous command: ${danger}.` };
+  // Like a dangerous command, a command that touches a file with secrets always asks, whatever the mode.
+  const secret = secretFileIn(command, settings.sensitiveNames);
+  if (secret) return { kind: "ask", reason: `The command uses ${secret}, which may hold secrets.` };
   const mode = settings.mode ?? "allowlist";
   if (mode === "ask") return { kind: "ask" };
   if (mode === "safe") return { kind: "allow" };
