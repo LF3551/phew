@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-11-20
+
 ### Security
 
 - A command that names a file with secrets now always asks first, like a dangerous command, in every mode and even when its program is on the allowlist: for example `cat ~/.aws/credentials`, `grep token .npmrc`, `curl -F file=@.env`, `git show HEAD:.env`, or anything in `~/.ssh`. These are the files that the read tool refuses, with the names of `phew.privacy.sensitiveNames`. Before, a reading command such as `cat` could show them to the model in Smart mode.
@@ -266,7 +268,8 @@ The first public preview of Phew.
 - Phew Wrapped: a weekly or monthly card with bugs fixed, time saved, tasks, and the streak, which you can save as an image, and eight local achievements.
 - A getting started walkthrough and a settings page.
 
-[Unreleased]: https://github.com/LF3551/phew/compare/v1.1.2...HEAD
+[Unreleased]: https://github.com/LF3551/phew/compare/v1.1.3...HEAD
+[1.1.3]: https://github.com/LF3551/phew/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/LF3551/phew/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/LF3551/phew/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/LF3551/phew/compare/v1.0.0...v1.1.0
