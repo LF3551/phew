@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-11-20
+
 ### Changed
 
 - Clearer, neutral wording in the README, the guide, and the settings: the examples use a work key and a personal key, and the lists of rule, skill, and MCP files name the paths.
@@ -260,7 +262,8 @@ The first public preview of Phew.
 - Phew Wrapped: a weekly or monthly card with bugs fixed, time saved, tasks, and the streak, which you can save as an image, and eight local achievements.
 - A getting started walkthrough and a settings page.
 
-[Unreleased]: https://github.com/LF3551/phew/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/LF3551/phew/compare/v1.1.2...HEAD
+[1.1.2]: https://github.com/LF3551/phew/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/LF3551/phew/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/LF3551/phew/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/LF3551/phew/compare/v0.5.0...v1.0.0
