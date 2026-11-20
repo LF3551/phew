@@ -83,7 +83,7 @@ export const providerPresets: readonly ProviderPreset[] = [
     keyEnv: "ANTHROPIC_API_KEY",
     keyUrl: "https://console.anthropic.com/settings/keys",
     modelHint: "claude-sonnet-4-5",
-    description: "Claude models through the native Messages API.",
+    description: "Models through the native Anthropic Messages API.",
   },
   {
     id: "gemini",

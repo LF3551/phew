@@ -11,7 +11,7 @@ Phew works with the model that you choose:
 - **Gateways:** OpenRouter, LiteLLM, or any OpenAI-compatible API.
 - **Local:** Ollama, LM Studio, vLLM. Your code stays on your computer.
 
-Connect a provider twice for two keys, for example **Claude (work)** and **Claude (personal)**.
+Connect a provider twice for two keys, for example a work key and a personal key.
 Each chat keeps its own model, so chats and windows work side by side.
 A model can name a **fallback model** that goes on with the task when its quota or credit runs out.
 

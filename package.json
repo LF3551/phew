@@ -834,7 +834,7 @@
           "phew.chat.showThinking": {
             "type": "boolean",
             "default": true,
-            "markdownDescription": "Show the reasoning of models that stream it, for example DeepSeek, Claude with extended thinking, or Gemini with thoughts."
+            "markdownDescription": "Show the reasoning of models that stream it, for example DeepSeek, Gemini with thoughts, or other models with extended thinking."
           },
           "phew.chat.sendWith": {
             "type": "string",
@@ -1626,7 +1626,7 @@
           "phew.mcp.readWorkspaceConfigs": {
             "type": "boolean",
             "default": true,
-            "markdownDescription": "Also use the servers from `.vscode/mcp.json` and `.mcp.json` (Claude Code) of trusted workspaces."
+            "markdownDescription": "Also use the servers from `.vscode/mcp.json` and `.mcp.json` of trusted workspaces."
           },
           "phew.mcp.disabledServers": {
             "type": "array",

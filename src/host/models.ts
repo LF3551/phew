@@ -706,7 +706,7 @@ async function pickPreset(): Promise<ProviderPreset | undefined> {
   }
   const pick = await vscode.window.showQuickPick(items, {
     title: "Phew: Add a model (1/4) — choose a provider",
-    placeHolder: "Type to search, for example Claude, Gemini, Ollama, or Azure",
+    placeHolder: "Type to search, for example Gemini, Ollama, or Azure",
     matchOnDescription: true,
     matchOnDetail: true,
     ignoreFocusOut: true,

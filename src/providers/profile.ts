@@ -12,7 +12,7 @@ export const authStyles: readonly AuthStyle[] = ["bearer", "api-key", "x-api-key
 export interface ModelProfile {
   /** Stable identifier. The API key in the secret storage uses it. */
   readonly id: string;
-  /** Display name, for example "Claude Sonnet (work)". */
+  /** Display name, for example "Work key". */
   readonly name: string;
   readonly provider: ProviderKind;
   /** API base URL. Not used by the `vscode` provider. */

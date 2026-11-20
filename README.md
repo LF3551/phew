@@ -71,13 +71,13 @@
   The list of chats shows which agent needs you, which one failed or went quiet, and which one is done.
 - **Commits your way.** Generate commit messages in the Source Control view. See the author and signing that commits use, and set Conventional Commits, `Signed-off-by`, GPG or SSH signing, a different author, and trailers. Phew never adds co-authors by itself.
 - **Knows your project from the first message.** Every chat starts with a short overview that Phew gathers itself: the stack, the commands for checks, tests, lint, and build, the main folders, and the branch. `/init` writes an `AGENTS.md` from what the project shows, for you to keep or undo.
-- **Rules that fit the file.** Phew reads `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, and the rules of Copilot (`.github/instructions`, `applyTo`), Claude (`.claude/rules`, `paths`), Cursor (`.cursor/rules`, `globs`), Antigravity, Windsurf, and Kiro. A rule for some files comes to the agent when it reads or changes such a file; an `AGENTS.md` in a subfolder applies to that folder. Your personal rules for every project live in `~/.phew/AGENTS.md`.
+- **Rules that fit the file.** Phew reads `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, and the rule files of other agents (`.github/instructions`, `.claude/rules`, `.cursor/rules`, `.agents/rules`, `.windsurf/rules`, and `.kiro/steering`). A rule for some files comes to the agent when it reads or changes such a file; an `AGENTS.md` in a subfolder applies to that folder. Your personal rules for every project live in `~/.phew/AGENTS.md`.
 - **Memory that stays true.** The agent remembers project facts in `.phew/memory.md` with the file each fact comes from, and checks a fact again when that file changed. Your preferences live in `~/.phew/memory.md` for every project. The agent corrects and forgets notes, and `/learn` saves what a chat taught after you choose.
 - **Chats that know each other.** Type `@` and pick an earlier chat: the agent gets what was asked, answered, and changed there. A new chat knows about unfinished work of other sessions.
 - **Code index.** Phew finds relevant code by meaning.
-- **Agent Skills.** Phew uses `SKILL.md` skills from `.phew/skills`, `.agents/skills`, `.claude/skills`, and `.opencode/skills`, in the project and in your home folder, the same format as Claude Code.
+- **Agent Skills.** Phew uses `SKILL.md` skills from `.phew/skills`, `.agents/skills`, `.claude/skills`, and `.opencode/skills`, in the project and in your home folder, in the open Agent Skills format.
 - **Several folders.** In a multi-root workspace, the agent works across all folders.
-- **MCP done right.** Phew reads `.vscode/mcp.json`, `.mcp.json` (Claude Code), and its own settings, supports local and remote (HTTP) servers with OAuth sign-in, and lets you choose the tools of each server and read the logs (**Phew: Manage MCP Servers…**).
+- **MCP done right.** Phew reads `.vscode/mcp.json`, `.mcp.json`, and its own settings, supports local and remote (HTTP) servers with OAuth sign-in, and lets you choose the tools of each server and read the logs (**Phew: Manage MCP Servers…**).
 - **Autocomplete and Next Edit.** Inline completions and a predicted next edit, with any model.
 - **Modes.** Ask, Plan, Code, Debug, Review, and your own modes, each with its color. `Shift+Tab` switches the mode.
 - **Any model, one click away.** The model menu opens above the input and shows the provider and the context size of each model.
@@ -98,7 +98,7 @@
 ## Continue anywhere
 
 - **Handoff notes.** After each task that changes files, Phew writes a short note in `.phew/handoff/`: the goal, decisions and why, dead ends not to repeat, next steps, and how to verify. Changed files, commands, and check results come from a journal, not from the model.
-- **Any agent can continue.** With your consent, Phew points `AGENTS.md` (and `CLAUDE.md` and `GEMINI.md`) to the latest note, so Codex, Copilot, Cursor, Claude Code, and others pick up where Phew stopped.
+- **Any agent can continue.** With your consent, Phew points `AGENTS.md` (and `CLAUDE.md` and `GEMINI.md`) to the latest note, so other coding agents pick up where Phew stopped.
 - **Knows what changed.** `/continue` compares the note with the code: new commits, another branch, or files that someone changed after the note. The agent rereads those first.
 - **Open format.** Plain Markdown with a small header. See [docs/HANDOFF.md](docs/HANDOFF.md).
 
