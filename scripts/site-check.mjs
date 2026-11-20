@@ -20,7 +20,8 @@ const walk = (folder) => {
   for (const name of readdirSync(folder)) {
     const path = join(folder, name);
     if (statSync(path).isDirectory()) walk(path);
-    else if (name.endsWith(".html")) pages.push(relative(out, path));
+    // The ownership files of search engines are not pages.
+    else if (name.endsWith(".html") && !/^google[0-9a-f]+\.html$/.test(name)) pages.push(relative(out, path));
   }
 };
 walk(out);

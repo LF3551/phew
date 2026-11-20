@@ -163,6 +163,8 @@ for (const item of ["fonts", "images", "main.js", "style.css"])
   cpSync(join(source, item), join(out, item), { recursive: true });
 for (const file of ["icon.svg", "icon-512.png", "social-preview.png"])
   cpSync(join(root, "resources", file), join(out, file));
+// Files that prove ownership to search engines, such as google….html, go to the root as they are.
+for (const file of readdirSync(join(source, "verify"))) cpSync(join(source, "verify", file), join(out, file));
 
 // The home page.
 const home = fill(read("index.html"), { guides: guideCards(guides) });
