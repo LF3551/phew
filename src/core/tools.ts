@@ -139,7 +139,7 @@ export const changeTools: readonly ToolDefinition[] = [
         terminal: {
           type: "string",
           description:
-            'Which terminal of this chat: "1" by default, "new" to open another one (for example for a server while you run tests), or the number of one that you opened before. A chat has a limited number of terminals: reuse them, and close the ones you no longer need.',
+            'Which terminal of this chat. Leave it out for normal commands: they run in a free terminal. Use "new" only for a program that must keep running while you run other commands, such as a server or a watcher, and give it a label. Use a number to go back to a terminal that you opened. A chat has a limited number of terminals: close the ones you no longer need.',
         },
         label: {
           type: "string",

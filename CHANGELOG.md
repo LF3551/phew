@@ -7,6 +7,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- **Fewer extra terminals.** A plain command with `terminal: "new"` runs in a free extra terminal instead of opening one more, so "run it again" no longer adds terminal after terminal; terminal 1 keeps its folder and variables. The tool now says that "new" is for programs that keep running, with a name.
+- The short result of a folded command is as wide as its text, not a bar to the edge, and a command faster than a second shows its time in milliseconds ("40 ms", not "0.0 s").
+- The agent answers in the language of the latest message of the user and switches with the user, without remarks about the language.
 - **Fewer tokens for the same work.**
   - **Prompt caching with Anthropic:** the tools, the system prompt, and the conversation so far are marked for the cache, so each later step of a task reads them at 10% of the price. A gateway that rejects the marks gets the request again without them. The cost of a task now counts cached input at its own price with every provider (Anthropic, OpenAI, the Responses API, and Gemini), and a model can have its own price for cached input (`price.cachedInput`). The log shows the cached share of each task.
   - **Old tool outputs leave the context:** large outputs of reading, searching, commands, terminals, and MCP tools older than the last four steps are replaced with a short note that says what they were, so the agent can run them again. It happens in batches, when enough old output has piled up, so the prompt cache keeps working. Answers of the user, skills, the plan, memory, and reports of subagents stay.

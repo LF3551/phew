@@ -66,7 +66,7 @@ describe("assistant persona", () => {
     expect(prompt).toContain("Always answer in Russian");
     const plain = personaPrompt(defaultAssistant);
     expect(plain).not.toContain("Your name is");
-    expect(plain).toContain("language that the user writes in");
+    expect(plain).toContain("language of the latest message of the user; when the user switches language, switch too");
     const custom = personaPrompt(parseAssistant({ persona: "custom", customPersona: "Speak like a pirate." }));
     expect(custom).toContain("Speak like a pirate.");
   });

@@ -112,7 +112,19 @@ export class ShellRegistry implements vscode.Disposable {
     // Without a name, a command goes to the first terminal that does not host a server in the background,
     // so it is never typed into a running server; a program that waits for input (ssh) still gets it.
     const free = [...this.shells].find(([, shell]) => !shell.hostsBackgroundJob)?.[0];
-    let id = wanted && wanted !== "new" ? wanted : wanted !== "new" && free ? free : undefined;
+    // "new" without a name, while an extra terminal is free, needs no new shell: it runs in that one. Terminal 1
+    // keeps its folder and variables for the next commands, so it never becomes the "new" one.
+    const idleFree = [...this.shells].find(
+      ([id, shell]) => id !== "1" && shell.info.state === "idle" && !shell.hostsBackgroundJob,
+    )?.[0];
+    let id =
+      wanted && wanted !== "new"
+        ? wanted
+        : wanted !== "new" && free
+          ? free
+          : wanted === "new" && !label && idleFree
+            ? idleFree
+            : undefined;
     let reused = false;
     if (!id) {
       // A new terminal, within the limit: at the limit, the terminal that is idle the longest is used again.

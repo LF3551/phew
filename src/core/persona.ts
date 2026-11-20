@@ -133,7 +133,7 @@ export function personaPrompt(assistant: Assistant): string {
     assistant.persona === "custom" ? assistant.customPersona : personaInfo[assistant.persona].prompt,
     assistant.userName ? `Call the user ${assistant.userName}.` : "",
     assistant.language === "match"
-      ? "Answer in the language that the user writes in."
+      ? "Answer in the language of the latest message of the user; when the user switches language, switch too. Never mention the choice of language."
       : `Always answer in ${assistant.language}, but keep code, identifiers, and commit messages in English unless the user asks otherwise.`,
   ];
   return lines.filter(Boolean).join("\n");

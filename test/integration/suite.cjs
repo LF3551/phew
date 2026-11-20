@@ -135,6 +135,10 @@ async function script(data) {
     ];
     return steps[step] ?? { content: `RESULT ${lastToolResult(messages)}` };
   }
+  if (task.startsWith("New thrice")) {
+    if (step < 3) return call("run_command", { command: `echo run-${step}`, description: "Echo", terminal: "new" });
+    return { content: "RESULT done" };
+  }
   if (task.startsWith("Too many terminals")) {
     const steps = [
       call("run_command", { command: "sleep 60", description: "Sleep", background: true, terminal: "new", label: "a" }),
@@ -1179,6 +1183,16 @@ async function run() {
                 item.type === "notice" && /"worker": sh -c 'sleep 7; exit 4' ended with exit code 4/.test(item.text),
             ),
           "the person sees it in the chat",
+        );
+        // A plain command with "new" again and again reuses the free extra terminal, and keeps terminal 1 as it is.
+        sessions.newSession();
+        const thrice = sessions.active;
+        await sessions.useModel("fake");
+        await thrice.run({ text: "New thrice", kind: "chat", mode: "code" });
+        assert.deepEqual(
+          thrice.terminals.map((terminal) => terminal.id),
+          ["1", "2"],
+          "three commands with new open one extra terminal, not three",
         );
         // 5. A limit of terminals per chat, and closing a terminal.
         await vscode.workspace.getConfiguration("phew").update("commands.maxTerminals", 2, global);

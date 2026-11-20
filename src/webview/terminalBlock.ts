@@ -125,6 +125,8 @@ const plain = (text: string) =>
 
 function seconds(ms: number): string {
   const total = Math.max(0, ms / 1000);
+  // A quick command reads "40 ms", not "0.0 s", which looks like a fault.
+  if (total < 1) return `${Math.max(1, Math.round(ms))} ms`;
   if (total < 10) return `${total.toFixed(1)} s`;
   if (total < 60) return `${Math.round(total)} s`;
   return `${Math.floor(total / 60)} min ${Math.round(total % 60)} s`;
