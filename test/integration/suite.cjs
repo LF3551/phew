@@ -88,6 +88,14 @@ async function script(data) {
       ? call("edit_file", { path: "math.js", old_text: "a - b", new_text: "a + b" })
       : { content: "**Fix:** use +." };
   }
+  if (task.startsWith("Shell heals") || task.startsWith("Shell without marks"))
+    return step === 0
+      ? call("run_command", {
+          // Read-only, so it runs without an approval; ls of a missing folder exits with 2.
+          command: "echo healed-42 && ls /phew-missing-folder",
+          description: "Print and fail",
+        })
+      : { content: `RESULT ${lastToolResult(messages)}` };
   if (task.startsWith("Delegate research"))
     return step === 0
       ? calls(
@@ -960,6 +968,59 @@ async function run() {
     await config.update("activeModel", "fake", global);
 
     if (process.platform !== "win32") {
+      console.log("[it] the terminal heals itself");
+      // A startup file that hangs, like a prompt theme that asks a question: no marks in time. Phew starts the
+      // shell again without it, and the exit code is exact again.
+      const healDir = fs.mkdtempSync(path.join(os.tmpdir(), "phew-heal-"));
+      const fakeBash = (folder, body) => {
+        fs.mkdirSync(path.join(healDir, folder));
+        const file = path.join(healDir, folder, "bash");
+        fs.writeFileSync(file, `#!/bin/sh\n${body}\n`, { mode: 0o755 });
+        return file;
+      };
+      fs.writeFileSync(path.join(healDir, "slow-rc"), "sleep 60\n");
+      const slowBash = fakeBash("slow", `export PHEW_BASH_RC='${path.join(healDir, "slow-rc")}'\nexec /bin/bash "$@"`);
+      // A "bash" that is a plain sh: it never sends marks, also without startup files.
+      const markless = fakeBash("plain", "exec /bin/sh -i");
+      const healNotices = (session) =>
+        session.transcript
+          .all()
+          .filter((item) => item.type === "notice")
+          .map((item) => item.text);
+      try {
+        await vscode.workspace.getConfiguration("phew").update("commands.shell", slowBash, global);
+        sessions.newSession();
+        const healing = sessions.active;
+        await sessions.useModel("fake");
+        await healing.run({ text: "Shell heals", kind: "chat", mode: "code" });
+        const healedResult = lastAssistant(healing);
+        assert.match(healedResult, /healed-42/, "the command ran in the healed terminal");
+        assert.match(healedResult, /exit code 2/, "with its exact exit code");
+        assert.match(healedResult, /runs without \.bashrc/, "the model learns that the startup file is missing");
+        assert.ok(
+          healNotices(healing).some((text) => /started without \.bashrc/.test(text)),
+          "the chat says it in one line",
+        );
+        assert.equal(healing.terminals[0]?.state, "idle", "the healed terminal is ready for the next command");
+
+        await vscode.workspace.getConfiguration("phew").update("commands.shell", markless, global);
+        sessions.newSession();
+        const noMarks = sessions.active;
+        await sessions.useModel("fake");
+        await noMarks.run({ text: "Shell without marks", kind: "chat", mode: "code" });
+        const plainResult = lastAssistant(noMarks);
+        assert.match(plainResult, /healed-42/, "the command ran in a process");
+        assert.match(plainResult, /exit code 2/, "with its exact exit code");
+        assert.match(plainResult, /run in processes, not in a terminal/, "the model learns it");
+        assert.ok(
+          healNotices(noMarks).some((text) => /run in processes/.test(text)),
+          "the chat says it in one line",
+        );
+      } finally {
+        await vscode.workspace.getConfiguration("phew").update("commands.shell", undefined, global);
+        fs.rmSync(healDir, { recursive: true, force: true });
+      }
+
       console.log("[it] key command");
       // A short-lived token from a command: the first one has expired, so Phew runs the command again.
       const counter = path.join(os.tmpdir(), `phew-key-${process.pid}`);
@@ -995,7 +1056,7 @@ async function run() {
     }
 
     console.log(
-      "PHEW_INTEGRATION_OK: fix, review, commit, checkpoint, ask_user, skills, MCP HTTP, multi-root, plan, queue, btw, parallel chats, rename, approvals, context, Phew it!, handoff, summary, suggestions, fork and edit, rating, retry, models of chats, fallback, chat status, quiet model, subagents, worktree agent model, memory from many chats, key command",
+      "PHEW_INTEGRATION_OK: fix, review, commit, checkpoint, ask_user, skills, MCP HTTP, multi-root, plan, queue, btw, parallel chats, rename, approvals, context, Phew it!, handoff, summary, suggestions, fork and edit, rating, retry, models of chats, fallback, chat status, quiet model, subagents, worktree agent model, memory from many chats, self-healing terminal, key command",
     );
   } finally {
     server.close();

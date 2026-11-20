@@ -31,6 +31,8 @@ export class ShellRegistry implements vscode.Disposable {
     private readonly shellPath: () => string | undefined,
     private readonly onChange: () => void,
     private readonly loadStartupFiles: () => boolean = () => true,
+    /** One line for the chat when a terminal heals itself. */
+    private readonly onHeal?: (message: string) => void,
   ) {}
 
   /** False when node-pty does not load on this system; then commands run in processes. */
@@ -64,6 +66,7 @@ export class ShellRegistry implements vscode.Disposable {
       session.terminalId = id;
       session.extensionRoot = this.extensionPath ?? "";
       session.loadStartupFiles = this.loadStartupFiles;
+      session.onHeal = this.onHeal;
       this.shells.set(id, session);
     }
     return { id, session, fresh };

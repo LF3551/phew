@@ -973,6 +973,7 @@ export class AgentSession {
         () => readSettings().commandsShell || undefined,
         () => this.deps.onChange(this),
         () => readSettings().commandsStartupFiles,
+        (message) => this.notice("info", message),
       );
       this.shellRegistry.restoredChat = this.restoredFromStore;
     }

@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import * as vscode from "vscode";
 import { OutputKeeper } from "../core/outputLimit";
+import { healNote, healNotice, nextHealStep, type ShellHealth, startupFilesOf } from "../core/shellHealth";
 import { lastLine, looksLikePrompt, plainTerminalText, type ShellMark, ShellMarkParser } from "../core/shellMarks";
 import { type ShellLaunch, shellLaunch, userShell } from "./shellScripts";
 
@@ -80,6 +81,20 @@ export interface RunOptions {
   readonly background?: boolean;
 }
 
+/**
+ * Shells that needed healing in this window: started without startup files, or not usable at all. The next
+ * terminals start the right way at once, without waiting for marks again.
+ */
+const healedShells = new Map<string, "without-startup" | "processes">();
+
+/** Forgets what self-healing learned, for tests and after the user changes the shell settings. */
+export function forgetShellHealing(): void {
+  healedShells.clear();
+}
+
+/** How long to wait for the first mark: startup files can be slow, a shell without them is quick. */
+const markWaitMs = (startup: boolean) => (startup ? 8000 : 6000);
+
 const defaultCols = 110;
 const defaultRows = 30;
 /** How long a quiet program must be before Phew decides that it waits for input. */
@@ -131,6 +146,12 @@ export class ShellSession implements vscode.Disposable {
   private promptCapture: string | undefined;
   /** Whether the shell loads the user's startup files, and the environment that marks commands of the agent. */
   loadStartupFiles: () => boolean = () => true;
+  /** Tells the chat in one line what self-healing did. */
+  onHeal: ((message: string) => void) | undefined;
+  private health: ShellHealth | "unknown" = "unknown";
+  private healed: "without-startup" | "processes" | undefined;
+  private healNoted = false;
+  private starting = false;
   /** The number of the terminal in its chat, for PHEW_TERMINAL. */
   terminalId = "1";
   /** The question of a program that waits for an answer, for example "Continue? [y/N]". */
@@ -359,10 +380,83 @@ export class ShellSession implements vscode.Disposable {
   }
 
   /** Starts the shell once; resolves at its first prompt, or soon for shells without marks. */
+  /**
+   * Starts the shell once and heals it when it sends no marks: first without the startup files of the user, then,
+   * when that does not help either, the commands of the chat run in processes. Resolves when the shell is ready.
+   */
   private start(): Promise<void> {
-    if (this.ready && this.pty) return this.ready;
+    // While a shell starts or heals, every command waits for the same start.
+    if (this.ready && (this.pty || this.starting || this.health === "broken")) return this.ready;
+    this.starting = true;
+    this.ready = this.startAndHeal().finally(() => {
+      this.starting = false;
+    });
+    return this.ready;
+  }
+
+  private async startAndHeal(): Promise<void> {
     this.ensureTerminal();
-    const launch = shellLaunch(userShell(this.shellPath()), this.loadStartupFiles());
+    const shell = userShell(this.shellPath());
+    const remembered = healedShells.get(shell);
+    if (remembered === "processes") {
+      this.health = "broken";
+      return;
+    }
+    const startup = this.loadStartupFiles() && remembered !== "without-startup";
+    const launch = await this.spawnShell(shell, startup);
+    const step = nextHealStep({ integrated: launch.integrated, markSeen: launch.marked, startupFiles: startup });
+    if (step === "plain" || step === "ok") {
+      this.health = step === "ok" ? "marked" : "plain";
+      return;
+    }
+    if (step === "retry-without-startup") {
+      this.quietKill();
+      this.show(`\r\n\x1b[2m[Phew restarts the shell without ${startupFilesOf(shell)}: it sent no marks.]\x1b[0m\r\n`);
+      const retry = await this.spawnShell(shell, false);
+      if (retry.marked) {
+        this.health = "marked";
+        healedShells.set(shell, "without-startup");
+        this.healed = "without-startup";
+        this.onHeal?.(healNotice("without-startup", shell));
+        return;
+      }
+    }
+    this.quietKill();
+    this.show("\r\n\x1b[2m[The shell sends no marks, so the commands of this chat run in processes.]\x1b[0m\r\n");
+    this.health = "broken";
+    this.healed = "processes";
+    healedShells.set(shell, "processes");
+    this.onHeal?.(healNotice("processes", shell));
+  }
+
+  /** True when commands can run in this terminal; false when they must run in processes. */
+  async usable(): Promise<boolean> {
+    await this.start();
+    return this.health !== "broken";
+  }
+
+  /** What healing changed, for the result of the next command; said once. */
+  takeHealNote(): string | undefined {
+    if (!this.healed || this.healNoted) return undefined;
+    this.healNoted = true;
+    return healNote(this.healed, userShell(this.shellPath()));
+  }
+
+  /** Ends the shell without telling waiting commands that it closed: Phew starts another one at once. */
+  private quietKill(): void {
+    const pty = this.pty;
+    this.pty = undefined;
+    this.parser = new ShellMarkParser();
+    try {
+      pty?.kill();
+    } catch {
+      // It already exited.
+    }
+  }
+
+  /** Starts a shell and waits for its first prompt mark, or gives up after a while. */
+  private spawnShell(shell: string, startup: boolean): Promise<{ integrated: boolean; marked: boolean }> {
+    const launch = shellLaunch(shell, startup);
     this.launch = launch;
     const cwd = this.cwd && existsSync(this.cwd) ? this.cwd : this.startFolder();
     const pty = this.pty$.spawn(launch.file, launch.args, {
@@ -421,23 +515,23 @@ export class ShellSession implements vscode.Disposable {
       for (const watcher of this.watchers) watcher({ text: "\u0000closed" });
       this.onChange();
     });
-    this.ready = new Promise<void>((resolve) => {
+    return new Promise((resolve) => {
       let done = false;
-      const finish = () => {
+      const finish = (marked: boolean) => {
         if (done) return;
         done = true;
+        clearTimeout(timer);
         this.listeners.delete(listener);
         this.busy = false;
-        resolve();
+        resolve({ integrated: launch.integrated, marked });
       };
       const listener = (piece: { mark?: ShellMark }) => {
-        if (piece.mark?.kind === "prompt") finish();
+        if (piece.mark?.kind === "prompt") finish(true);
       };
       this.listeners.add(listener);
-      // Shells without marks, or slow startup files: go on after a while.
-      setTimeout(finish, launch.integrated ? 8000 : 1200);
+      // Shells without marks go on soon; a shell with marks gets time for slow startup files.
+      const timer = setTimeout(() => finish(false), launch.integrated ? markWaitMs(startup) : 1200);
     });
-    return this.ready;
   }
 
   /** Keys from the user in the terminal panel or in the terminal inside the chat go straight to the shell. */

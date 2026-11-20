@@ -493,7 +493,7 @@ export class ToolHost {
     const background = args.background === true;
     const shells = this.options.settings.commandsTerminal !== "off" ? this.options.shells : undefined;
     const picked = shells?.pick(stringArgument(args, "terminal", false));
-    const shellSession = picked?.session;
+    let shellSession = picked?.session;
     if (!requested) {
       if (!interrupt) throw new Error("The command is empty.");
       shellSession?.interrupt();
@@ -563,6 +563,11 @@ export class ToolHost {
     const onAbort = () => own.abort();
     signal.addEventListener("abort", onAbort, { once: true });
     this.runningCommands.set(callId, own);
+    // A shell that sends no marks even without startup files heals into processes: the exit code stays exact.
+    const healing = shellSession;
+    if (shellSession && !(await shellSession.usable())) shellSession = undefined;
+    const healNote = healing?.takeHealNote();
+    const withHealNote = (content: string) => (healNote ? `${content}\n${healNote}` : content);
     if (shellSession) {
       // The command runs in the real shell of the chat, which the user sees and can type into.
       try {
@@ -598,7 +603,7 @@ export class ToolHost {
         const prefix = notes.length > 0 ? `${notes.join(" ")}\n` : "";
         // With several terminals the model learns which one ran the command and what the others do.
         const where = shells && shells.size > 1 ? `\nRan in terminal ${picked?.id}. ${shells.summary()}` : "";
-        return { content: prefix + describeShellResult(command, outcome, timeoutSeconds) + note + where };
+        return { content: withHealNote(prefix + describeShellResult(command, outcome, timeoutSeconds) + note + where) };
       } finally {
         this.runningCommands.delete(callId);
         signal.removeEventListener("abort", onAbort);
@@ -664,7 +669,7 @@ export class ToolHost {
       };
     }
     const prefix = notes.length > 0 ? `${notes.join(" ")}\n` : "";
-    return { content: prefix + describeResult(command, result) + cwdNote };
+    return { content: withHealNote(prefix + describeResult(command, result) + cwdNote) };
   }
 
   private async askUser(args: Record<string, unknown>, signal: AbortSignal): Promise<ToolResult> {
