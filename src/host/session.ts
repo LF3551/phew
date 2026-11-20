@@ -225,6 +225,16 @@ export class Transcript {
 }
 
 /** One conversation with the agent. Several sessions can run at the same time. */
+/** A short fingerprint of a text, to see in the log whether the system prompt changed. */
+function fingerprint(text: string): string {
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index++) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0").slice(0, 6);
+}
+
 export class AgentSession {
   readonly broker: ApprovalBroker;
   transcript: Transcript;
@@ -255,6 +265,8 @@ export class AgentSession {
   private sessionTokens: number;
   private sessionCost: number;
   private lastInputTokens = 0;
+  /** The size of the parts of the last request and a fingerprint of its system prompt, for the log. */
+  private requestShape: { system: number; tools: number; fingerprint: string } | undefined;
   /** The model of this chat; older chats get one at their next task. */
   private modelId: string | undefined;
   private lastEventAt = Date.now();
@@ -1535,6 +1547,12 @@ export class AgentSession {
       planPrompt(this.currentPlan),
     ].filter(Boolean);
     const systemPrompt = [basePrompt, ...extra].join("\n\n");
+    // What fills the request, for the log: a change of the system prompt between messages breaks the cache.
+    this.requestShape = {
+      system: Math.round(systemPrompt.length / 4),
+      tools: Math.round(JSON.stringify(definitions).length / 4),
+      fingerprint: fingerprint(systemPrompt),
+    };
     const window = profile.contextWindow ?? settings.defaultContextWindow;
 
     let assistantId: string | undefined;
@@ -1819,6 +1837,9 @@ export class AgentSession {
       celebrate: settings.celebrate && success && filesChanged > 0,
       reviewFiles: this.deps.reviews.pendingFiles.length,
     });
+    this.deps.log.info(
+      `Request: system ≈${this.requestShape?.system ?? 0} tokens (#${this.requestShape?.fingerprint ?? "-"}), tools ≈${this.requestShape?.tools ?? 0}, history ≈${Math.round(estimateTokens(this.history))}; cache read ${meter.cachedTokens}, written ${meter.cacheWriteTokens}.`,
+    );
     this.deps.log.info(
       `Task ${status}: steps=${result?.steps ?? 0} files=${filesChanged} tokens=${meter.tokens}${meter.cachedTokens > 0 ? ` cached=${Math.round((meter.cachedTokens / Math.max(1, meter.inputTokens)) * 100)}%` : ""}${meter.cost !== undefined ? ` cost=${formatCost(meter.cost)}` : ""}`,
     );

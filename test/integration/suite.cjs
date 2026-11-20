@@ -1021,6 +1021,26 @@ async function run() {
     await config.update("models", baseModels, global);
     await config.update("activeModel", "fake", global);
 
+    console.log("[it] a stable start of the request");
+    // The prompt cache only helps when the start of the request stays the same from message to message.
+    sessions.newSession();
+    const steady = sessions.active;
+    await sessions.useModel("fake");
+    await steady.run({ text: "Hello there", kind: "chat", mode: "code" });
+    await steady.run({ text: "Test again", kind: "chat", mode: "code" });
+    const systemOf = (text) =>
+      requests.findLast((request) =>
+        request.messages.some((message) => message.role === "user" && message.content === text),
+      )?.messages[0]?.content;
+    const firstSystem = systemOf("Hello there");
+    const secondSystem = systemOf("Test again");
+    if (firstSystem !== secondSystem) {
+      const at = [...firstSystem].findIndex((char, index) => char !== secondSystem[index]);
+      assert.fail(
+        `the system prompt changed between two messages at ${at}:\n${JSON.stringify(firstSystem.slice(Math.max(0, at - 80), at + 120))}\n${JSON.stringify(secondSystem.slice(Math.max(0, at - 80), at + 120))}`,
+      );
+    }
+
     console.log("[it] fewer tokens");
     // A large file read without a range gives its outline and its first lines.
     const bigFile = path.join(mainFolder, "big-module.ts");

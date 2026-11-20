@@ -46,6 +46,7 @@ export class CostMeter {
   private input = 0;
   private output = 0;
   private cached = 0;
+  private written = 0;
   private spent = 0;
   /** A price was known for some of the tokens. */
   private priced: boolean;
@@ -68,6 +69,7 @@ export class CostMeter {
     this.input += input;
     this.output += output;
     this.cached += Math.min(Math.max(0, usage.cacheReadTokens ?? 0), input);
+    this.written += Math.max(0, usage.cacheWriteTokens ?? 0);
     if (this.price) this.spent += usageCost(usage, this.price);
     else if (input + output > 0) this.unpriced = true;
   }
@@ -108,6 +110,11 @@ export class CostMeter {
   /** Input tokens that came from the prompt cache. */
   get cachedTokens(): number {
     return this.cached;
+  }
+
+  /** Input tokens written to the prompt cache. */
+  get cacheWriteTokens(): number {
+    return this.written;
   }
 
   /** Cost in US dollars, or undefined when the price of some tokens is not known. */
