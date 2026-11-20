@@ -136,11 +136,12 @@ interface GeminiState {
   calls: ToolCall[];
   inputTokens: number;
   outputTokens: number;
+  cacheReadTokens: number;
   finishReason?: string;
 }
 
 export function newGeminiState(): GeminiState {
-  return { content: "", reasoning: "", calls: [], inputTokens: 0, outputTokens: 0 };
+  return { content: "", reasoning: "", calls: [], inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 };
 }
 
 /** Applies one streamed Gemini response chunk. */
@@ -153,7 +154,12 @@ export function applyGeminiChunk(
   if (typeof chunk !== "object" || chunk === null) return;
   const data = chunk as {
     candidates?: { content?: { parts?: Record<string, unknown>[] }; finishReason?: unknown }[];
-    usageMetadata?: { promptTokenCount?: unknown; candidatesTokenCount?: unknown; thoughtsTokenCount?: unknown };
+    usageMetadata?: {
+      promptTokenCount?: unknown;
+      candidatesTokenCount?: unknown;
+      thoughtsTokenCount?: unknown;
+      cachedContentTokenCount?: unknown;
+    };
     promptFeedback?: { blockReason?: unknown };
     error?: { message?: unknown };
   };
@@ -163,6 +169,7 @@ export function applyGeminiChunk(
   }
   if (data.usageMetadata) {
     state.inputTokens = Number(data.usageMetadata.promptTokenCount) || state.inputTokens;
+    state.cacheReadTokens = Number(data.usageMetadata.cachedContentTokenCount) || state.cacheReadTokens;
     state.outputTokens =
       (Number(data.usageMetadata.candidatesTokenCount) || 0) + (Number(data.usageMetadata.thoughtsTokenCount) || 0) ||
       state.outputTokens;
@@ -195,7 +202,13 @@ export function finishGemini(state: GeminiState): CompletionResult {
   return {
     content: state.content,
     toolCalls: state.calls,
-    usage: { inputTokens: state.inputTokens, outputTokens: state.outputTokens },
+    usage: {
+      inputTokens: state.inputTokens,
+      outputTokens: state.outputTokens,
+      // Gemini caches repeated prompts by itself, at 25% of the input price.
+      cacheReadTokens: state.cacheReadTokens,
+      cacheReadFactor: 0.25,
+    },
     finishReason: state.finishReason,
     ...(state.reasoning ? { reasoning: { text: state.reasoning } } : {}),
   };

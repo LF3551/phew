@@ -1,4 +1,5 @@
 import type { ChatMessage, CompletionRequest, CompletionResult, ModelClient, ToolCall } from "../core/chat";
+import type { Usage } from "../core/cost";
 import { type FetchFunction, postJson, readSse } from "./http";
 import { endpoint, type ModelProfile, requestHeaders } from "./profile";
 
@@ -54,7 +55,7 @@ interface ResponsesState {
   content: string;
   reasoning: string;
   calls: Map<string, { id: string; callId: string; name: string; arguments: string; order: number }>;
-  usage?: { inputTokens: number; outputTokens: number };
+  usage?: Usage;
   status?: string;
 }
 
@@ -70,7 +71,7 @@ interface ResponsesEvent {
   item?: { type?: unknown; id?: unknown; call_id?: unknown; name?: unknown; arguments?: unknown };
   response?: {
     status?: unknown;
-    usage?: { input_tokens?: unknown; output_tokens?: unknown };
+    usage?: { input_tokens?: unknown; output_tokens?: unknown; input_tokens_details?: { cached_tokens?: unknown } };
     error?: { message?: unknown } | null;
   };
   error?: { message?: unknown } | null;
@@ -126,7 +127,12 @@ export function applyResponsesEvent(
       state.status = String(data.response?.status ?? "");
       const usage = data.response?.usage;
       if (usage && typeof usage.input_tokens === "number") {
-        state.usage = { inputTokens: usage.input_tokens, outputTokens: Number(usage.output_tokens) || 0 };
+        state.usage = {
+          inputTokens: usage.input_tokens,
+          outputTokens: Number(usage.output_tokens) || 0,
+          cacheReadTokens: Number(usage.input_tokens_details?.cached_tokens) || 0,
+          cacheReadFactor: 0.25,
+        };
       }
       break;
     }

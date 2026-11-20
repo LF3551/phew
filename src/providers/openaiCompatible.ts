@@ -1,4 +1,5 @@
 import type { ChatMessage, CompletionRequest, CompletionResult, ModelClient, ToolCall } from "../core/chat";
+import type { Usage } from "../core/cost";
 import { type FetchFunction, fetchWithRetry, finalError, postJson, readSse } from "./http";
 import { endpoint, type ModelProfile, requestHeaders } from "./profile";
 
@@ -57,7 +58,7 @@ interface StreamState {
   content: string;
   reasoning: string;
   calls: Map<number, { id: string; name: string; arguments: string }>;
-  usage?: { inputTokens: number; outputTokens: number };
+  usage?: Usage;
   finishReason?: string;
 }
 
@@ -75,7 +76,11 @@ export function applyChunk(
   if (typeof chunk !== "object" || chunk === null) return;
   const data = chunk as {
     choices?: { delta?: Record<string, unknown>; message?: Record<string, unknown>; finish_reason?: unknown }[];
-    usage?: { prompt_tokens?: unknown; completion_tokens?: unknown } | null;
+    usage?: {
+      prompt_tokens?: unknown;
+      completion_tokens?: unknown;
+      prompt_tokens_details?: { cached_tokens?: unknown } | null;
+    } | null;
     error?: { message?: unknown } | string;
   };
   if (data.error) {
@@ -86,6 +91,9 @@ export function applyChunk(
     state.usage = {
       inputTokens: data.usage.prompt_tokens,
       outputTokens: typeof data.usage.completion_tokens === "number" ? data.usage.completion_tokens : 0,
+      // OpenAI caches long prompts by itself; older models give 50% off, newer ones more.
+      cacheReadTokens: Number(data.usage.prompt_tokens_details?.cached_tokens) || 0,
+      cacheReadFactor: 0.5,
     };
   }
   for (const choice of data.choices ?? []) {

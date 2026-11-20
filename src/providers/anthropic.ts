@@ -10,6 +10,9 @@ type Block =
   | { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
   | { type: "tool_result"; tool_use_id: string; content: string };
 
+/** A block, with the mark of the prompt cache on the last block of a request. */
+type CachedBlock = Block & { cache_control?: { type: "ephemeral" } };
+
 export interface AnthropicMessage {
   role: "user" | "assistant";
   content: Block[];
@@ -22,6 +25,20 @@ export const defaultAnthropicMaxTokens = 8192;
  * Converts the conversation to the Anthropic Messages format.
  * The system prompt is separate, tool results are user content blocks, and roles must alternate.
  */
+const ephemeral = { type: "ephemeral" } as const;
+
+/** Marks the last block of the last message for the prompt cache, without changing the messages. */
+export function withCacheMark(messages: readonly AnthropicMessage[]): AnthropicMessage[] {
+  const last = messages.at(-1);
+  if (!last || last.content.length === 0) return [...messages];
+  const blocks = [...last.content];
+  const end = blocks[blocks.length - 1] as Block;
+  // Thinking blocks cannot carry a cache mark.
+  if (end.type === "thinking" || end.type === "redacted_thinking") return [...messages];
+  blocks[blocks.length - 1] = { ...end, cache_control: ephemeral } as CachedBlock;
+  return [...messages.slice(0, -1), { ...last, content: blocks }];
+}
+
 export function toAnthropic(messages: readonly ChatMessage[]): { system: string; messages: AnthropicMessage[] } {
   const system: string[] = [];
   const result: AnthropicMessage[] = [];
@@ -79,11 +96,23 @@ interface AnthropicState {
   blocks: Map<number, { id: string; name: string; json: string }>;
   inputTokens: number;
   outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
   stopReason?: string;
 }
 
 export function newAnthropicState(): AnthropicState {
-  return { content: "", thinking: "", signature: "", redacted: [], blocks: new Map(), inputTokens: 0, outputTokens: 0 };
+  return {
+    content: "",
+    thinking: "",
+    signature: "",
+    redacted: [],
+    blocks: new Map(),
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+  };
 }
 
 interface AnthropicEvent {
@@ -115,10 +144,9 @@ export function applyAnthropicEvent(
   switch (data.type) {
     case "message_start": {
       const usage = data.message?.usage ?? {};
-      state.inputTokens =
-        (Number(usage.input_tokens) || 0) +
-        (Number(usage.cache_creation_input_tokens) || 0) +
-        (Number(usage.cache_read_input_tokens) || 0);
+      state.cacheWriteTokens = Number(usage.cache_creation_input_tokens) || 0;
+      state.cacheReadTokens = Number(usage.cache_read_input_tokens) || 0;
+      state.inputTokens = (Number(usage.input_tokens) || 0) + state.cacheWriteTokens + state.cacheReadTokens;
       state.outputTokens = Number(usage.output_tokens) || 0;
       break;
     }
@@ -174,7 +202,15 @@ export function finishAnthropic(state: AnthropicState): CompletionResult {
   return {
     content: state.content,
     toolCalls,
-    usage: { inputTokens: state.inputTokens, outputTokens: state.outputTokens },
+    usage: {
+      inputTokens: state.inputTokens,
+      outputTokens: state.outputTokens,
+      cacheReadTokens: state.cacheReadTokens,
+      cacheWriteTokens: state.cacheWriteTokens,
+      // Anthropic: a cache read costs 10% of the input price, a write (5 minutes) 125%.
+      cacheReadFactor: 0.1,
+      cacheWriteFactor: 1.25,
+    },
     finishReason: state.stopReason,
     ...(reasoning ? { reasoning } : {}),
   };
@@ -189,23 +225,27 @@ export class AnthropicClient implements ModelClient {
     private readonly retries = 0,
   ) {}
 
+  /** Prompt caching; off after a gateway rejected cache_control once. */
+  private caching = true;
+
   body(request: CompletionRequest): Record<string, unknown> {
     const { system, messages } = toAnthropic(request.messages);
+    const caching = this.caching;
+    const tools = request.tools.map((tool, index) => ({
+      name: tool.name,
+      description: tool.description,
+      input_schema: tool.parameters,
+      // The tools rarely change: they are the first part of the cache.
+      ...(caching && index === request.tools.length - 1 ? { cache_control: ephemeral } : {}),
+    }));
     return {
       model: this.profile.model,
       max_tokens: this.profile.maxTokens ?? defaultAnthropicMaxTokens,
       stream: true,
-      ...(system ? { system } : {}),
-      messages,
-      ...(request.tools.length > 0
-        ? {
-            tools: request.tools.map((tool) => ({
-              name: tool.name,
-              description: tool.description,
-              input_schema: tool.parameters,
-            })),
-          }
-        : {}),
+      ...(system ? { system: caching ? [{ type: "text", text: system, cache_control: ephemeral }] : system } : {}),
+      // The end of the conversation: the next step reads all of it from the cache and pays 10% for it.
+      messages: caching ? withCacheMark(messages) : messages,
+      ...(tools.length > 0 ? { tools } : {}),
       ...(this.profile.temperature !== undefined ? { temperature: Math.min(this.profile.temperature, 1) } : {}),
       ...this.profile.extraBody,
     };
@@ -217,15 +257,25 @@ export class AnthropicClient implements ModelClient {
       "anthropic-version": this.profile.headers["anthropic-version"] ?? anthropicVersion,
       Accept: "text/event-stream",
     };
-    const response = await postJson(
-      this.fetchFunction,
-      this.profile.name,
-      endpoint(this.profile.baseUrl, "messages", this.profile.query),
-      headers,
-      this.body(request),
-      request.signal,
-      { retries: this.retries, onRetry: request.onRetry },
-    );
+    const send = () =>
+      postJson(
+        this.fetchFunction,
+        this.profile.name,
+        endpoint(this.profile.baseUrl, "messages", this.profile.query),
+        headers,
+        this.body(request),
+        request.signal,
+        { retries: this.retries, onRetry: request.onRetry },
+      );
+    let response: Response;
+    try {
+      response = await send();
+    } catch (error) {
+      // A gateway that does not know prompt caching: the same request again without it, and never again.
+      if (!this.caching || !(error instanceof Error) || !/cache_control/i.test(error.message)) throw error;
+      this.caching = false;
+      response = await send();
+    }
     const state = newAnthropicState();
     await readSse(response, (event) => applyAnthropicEvent(state, event, onText, request.onReasoning));
     return finishAnthropic(state);

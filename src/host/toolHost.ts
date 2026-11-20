@@ -17,6 +17,7 @@ import { adjustAgentGitCommand, describeCommitIdentity } from "../core/commit";
 import { detectEol } from "../core/diff";
 import { LineEditor } from "../core/lineEditor";
 import type { ModeDefinition } from "../core/modes";
+import { largeFileView, outlineFromLines } from "../core/outline";
 import { limitForModel } from "../core/outputLimit";
 import { type Plan, parsePlanUpdate, parseQuestion } from "../core/plan";
 import type { RootSet } from "../core/roots";
@@ -293,6 +294,13 @@ export class ToolHost {
     if (text === null) throw new Error(`The file ${relative} does not exist.`);
     if (text.includes("\0")) throw new Error(`The file ${relative} is binary.`);
     const lines = text.split(/\r?\n/);
+    // A large file without a range: its outline and first lines, so the agent reads only the part it needs.
+    if (
+      numberArgument(args, "start_line") === undefined &&
+      numberArgument(args, "end_line") === undefined &&
+      lines.length > outlineFromLines
+    )
+      return { content: largeFileView(relative, lines) };
     const start = Math.max(1, Math.floor(numberArgument(args, "start_line") ?? 1));
     const end = Math.min(lines.length, Math.floor(numberArgument(args, "end_line") ?? start + maximumReadLines - 1));
     if (start > lines.length) return { content: `${relative} has only ${lines.length} lines.` };

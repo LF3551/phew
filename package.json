@@ -783,6 +783,11 @@
                     "output": {
                       "type": "number",
                       "minimum": 0
+                    },
+                    "cachedInput": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "US dollars per million input tokens read from the prompt cache. Empty uses the usual share of the provider: 10% for Anthropic, 25% for Gemini and the OpenAI Responses API, 50% for other OpenAI-compatible APIs."
                     }
                   },
                   "description": "Price in US dollars per million tokens."

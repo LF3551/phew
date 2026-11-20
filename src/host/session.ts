@@ -18,6 +18,7 @@ import {
   estimateTokens,
   splitForCompaction,
 } from "../core/compaction";
+import { pruneStaleToolResults } from "../core/contextTrim";
 import { CostMeter, formatCost, formatTokens } from "../core/cost";
 import { titleFromText } from "../core/export";
 import { FallbackClient, fallbackChain, fallbackReason } from "../core/fallback";
@@ -1605,6 +1606,14 @@ export class AgentSession {
         const last = this.history.at(-1);
         if (terminalNote && last && (last.role === "tool" || last.role === "user") && typeof last.content === "string")
           this.history[this.history.length - 1] = { ...last, content: `${last.content}\n\n${terminalNote}` };
+        // Large outputs of old steps leave the context, in batches, so the prompt cache keeps working.
+        const pruned = pruneStaleToolResults(this.history);
+        if (pruned.removed > 0) {
+          this.history.splice(0, this.history.length, ...pruned.history);
+          this.deps.log.info(
+            `Context: removed ${pruned.removed} old tool outputs, about ${Math.round(pruned.savedChars / 4)} tokens.`,
+          );
+        }
         for (const item of this.queue.splice(0)) {
           await this.pushUser(
             item.text,
@@ -1811,7 +1820,7 @@ export class AgentSession {
       reviewFiles: this.deps.reviews.pendingFiles.length,
     });
     this.deps.log.info(
-      `Task ${status}: steps=${result?.steps ?? 0} files=${filesChanged} tokens=${meter.tokens}${meter.cost !== undefined ? ` cost=${formatCost(meter.cost)}` : ""}`,
+      `Task ${status}: steps=${result?.steps ?? 0} files=${filesChanged} tokens=${meter.tokens}${meter.cachedTokens > 0 ? ` cached=${Math.round((meter.cachedTokens / Math.max(1, meter.inputTokens)) * 100)}%` : ""}${meter.cost !== undefined ? ` cost=${formatCost(meter.cost)}` : ""}`,
     );
     if (bugFixed && request.kind === "fix") void vscode.window.setStatusBarMessage("$(check) Phew! Fixed.", 5000);
   }

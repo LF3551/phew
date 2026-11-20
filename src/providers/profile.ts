@@ -42,7 +42,7 @@ export interface ModelProfile {
   /** Maximum output tokens. Anthropic needs a value; other providers use their default when empty. */
   readonly maxTokens?: number;
   /** Price in US dollars per one million tokens, for the cost display and budget. */
-  readonly price?: { readonly input: number; readonly output: number };
+  readonly price?: { readonly input: number; readonly output: number; readonly cachedInput?: number };
   /** Size of the context window in tokens, for the context meter and automatic compaction. */
   readonly contextWindow?: number;
   /** For OpenAI-compatible providers: Chat Completions (`chat`) or the Responses API (`responses`). */
@@ -110,6 +110,7 @@ export function parseProfile(value: unknown): ModelProfile | string {
   const price = record(raw.price);
   const input = finiteNumber(price.input, 0, 1_000_000);
   const output = finiteNumber(price.output, 0, 1_000_000);
+  const cachedInput = finiteNumber(price.cachedInput, 0, 1_000_000);
   const maxTokens = finiteNumber(raw.maxTokens, 1, 10_000_000);
   const contextWindow = finiteNumber(raw.contextWindow, 1000, 100_000_000);
   return {
@@ -135,7 +136,10 @@ export function parseProfile(value: unknown): ModelProfile | string {
     extraBody: record(raw.extraBody),
     temperature: finiteNumber(raw.temperature, 0, 2),
     maxTokens: maxTokens === undefined ? undefined : Math.round(maxTokens),
-    price: input !== undefined && output !== undefined ? { input, output } : undefined,
+    price:
+      input !== undefined && output !== undefined
+        ? { input, output, ...(cachedInput !== undefined ? { cachedInput } : {}) }
+        : undefined,
     contextWindow: contextWindow === undefined ? undefined : Math.round(contextWindow),
     api: kind === "openai" && raw.api === "responses" ? "responses" : undefined,
   };

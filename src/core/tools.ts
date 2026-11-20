@@ -27,7 +27,11 @@ export const readTools: readonly ToolDefinition[] = [
     parameters: object(
       {
         path: { type: "string", description: "Path relative to the workspace root." },
-        start_line: { type: "number", description: "First line to read, starting at 1." },
+        start_line: {
+          type: "number",
+          description:
+            "First line to read, starting at 1. Without a range, a file over 400 lines shows its outline (functions, classes, headings with line numbers) and its first 150 lines.",
+        },
         end_line: { type: "number", description: "Last line to read." },
       },
       ["path"],

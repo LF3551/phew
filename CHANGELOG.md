@@ -5,6 +5,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Changed
+
+- **Fewer tokens for the same work.**
+  - **Prompt caching with Anthropic:** the tools, the system prompt, and the conversation so far are marked for the cache, so each later step of a task reads them at 10% of the price. A gateway that rejects the marks gets the request again without them. The cost of a task now counts cached input at its own price with every provider (Anthropic, OpenAI, the Responses API, and Gemini), and a model can have its own price for cached input (`price.cachedInput`). The log shows the cached share of each task.
+  - **Old tool outputs leave the context:** large outputs of reading, searching, commands, terminals, and MCP tools older than the last four steps are replaced with a short note that says what they were, so the agent can run them again. It happens in batches, when enough old output has piled up, so the prompt cache keeps working. Answers of the user, skills, the plan, memory, and reports of subagents stay.
+  - **Large files read smartly:** reading a file of more than 400 lines without a range gives its outline (functions, classes, types, and headings with their line numbers, for TypeScript, JavaScript, Python, Go, Rust, Java, C#, Kotlin, PHP, Ruby, and Markdown) and its first 150 lines, instead of up to 2,000 lines.
+
 ## [1.2.0] - 2026-11-20
 
 ### Added

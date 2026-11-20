@@ -211,7 +211,7 @@ describe("OpenAI-compatible", () => {
     const result = await client.complete(request(), (delta) => text.push(delta));
     expect(text.join("")).toBe("Hi");
     expect(result.toolCalls).toEqual([{ id: "t", name: "read_file", arguments: '{"path":"a"}' }]);
-    expect(result.usage).toEqual({ inputTokens: 10, outputTokens: 2 });
+    expect(result.usage).toEqual({ inputTokens: 10, outputTokens: 2, cacheReadTokens: 0, cacheReadFactor: 0.5 });
     expect(captured[0].url).toBe("https://api.example.com/v1/chat/completions?api-version=1");
     expect(captured[0].headers.Authorization).toBe("Bearer key");
     expect(captured[0].body).toMatchObject({
@@ -305,7 +305,11 @@ describe("Anthropic", () => {
     });
     expect(captured[0].url).toBe("https://api.anthropic.com/v1/messages");
     expect(captured[0].headers).toMatchObject({ "x-api-key": "key", "anthropic-version": "2023-06-01" });
-    expect(captured[0].body).toMatchObject({ max_tokens: 8192, system: "sys", stream: true });
+    expect(captured[0].body).toMatchObject({
+      max_tokens: 8192,
+      system: [{ type: "text", text: "sys", cache_control: { type: "ephemeral" } }],
+      stream: true,
+    });
     const tools = (captured[0].body as { tools: { input_schema: unknown }[] }).tools;
     expect(tools[0].input_schema).toBeDefined();
   });
@@ -389,7 +393,7 @@ describe("Gemini", () => {
     const result = await client.complete(request(), () => {});
     expect(result.content).toBe("Checking.");
     expect(result.toolCalls[0]).toMatchObject({ name: "read_file", arguments: '{"path":"a.ts"}', signature: "abc" });
-    expect(result.usage).toEqual({ inputTokens: 50, outputTokens: 10 });
+    expect(result.usage).toEqual({ inputTokens: 50, outputTokens: 10, cacheReadTokens: 0, cacheReadFactor: 0.25 });
     expect(captured[0].url).toBe(
       "https://generativelanguage.googleapis.com/v1beta/models/gemini-x:streamGenerateContent?alt=sse",
     );

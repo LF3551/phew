@@ -96,6 +96,15 @@ async function script(data) {
           description: "Print and fail",
         })
       : { content: `RESULT ${lastToolResult(messages)}` };
+  if (task.startsWith("Read the big file"))
+    return step === 0
+      ? call("read_file", { path: "big-module.ts" })
+      : { content: `RESULT ${lastToolResult(messages)}` };
+  if (task.startsWith("Read it all, part by part")) {
+    if (step < 8)
+      return call("read_file", { path: "big-module.ts", start_line: 1 + step * 10, end_line: 400 + step * 10 });
+    return { content: "RESULT done" };
+  }
   if (task.startsWith("Serve web"))
     return step === 0
       ? call("run_command", {
@@ -1008,6 +1017,54 @@ async function run() {
     await config.update("models", baseModels, global);
     await config.update("activeModel", "fake", global);
 
+    console.log("[it] fewer tokens");
+    // A large file read without a range gives its outline and its first lines.
+    const bigFile = path.join(mainFolder, "big-module.ts");
+    fs.writeFileSync(
+      bigFile,
+      Array.from({ length: 1000 }, (_, index) =>
+        index % 100 === 0 ? `export function part${index}(): number {` : `  const value${index} = ${index};`,
+      ).join("\n"),
+    );
+    try {
+      sessions.newSession();
+      const reader = sessions.active;
+      await sessions.useModel("fake");
+      await reader.run({ text: "Read the big file", kind: "chat", mode: "ask" });
+      const view = lastAssistant(reader);
+      assert.match(
+        view,
+        /big-module\.ts has 1000 lines, so here are its outline and its first 150 lines/,
+        JSON.stringify(
+          reader.transcript
+            .all()
+            .filter((item) => item.type === "notice" || item.type === "tool")
+            .map((item) => item.text ?? item.detail ?? item.summary),
+        ),
+      );
+      assert.match(view, / 901\| export function part900\(\): number/, "the outline reaches the end of the file");
+      assert.doesNotMatch(view, /value500/, "the middle of the file is not sent");
+      // A long task: the outputs of old steps leave the context in one batch, the last steps stay whole.
+      sessions.newSession();
+      const longTask = sessions.active;
+      await sessions.useModel("fake");
+      await longTask.run({ text: "Read it all, part by part", kind: "chat", mode: "ask" });
+      const outputs = longTask.conversation
+        .filter((message) => message.role === "tool")
+        .map((message) => message.content);
+      assert.equal(outputs.length, 8, "eight steps");
+      const removed = outputs.filter((content) =>
+        content.startsWith("[Removed to save context: the output of read_file big-module.ts"),
+      );
+      assert.ok(removed.length >= 4, `old outputs were removed: ${removed.length}`);
+      assert.ok(
+        outputs.slice(-4).every((content) => /big-module\.ts \(lines \d+-\d+ of 1000\)/.test(content)),
+        "the last steps stay whole",
+      );
+    } finally {
+      fs.rmSync(bigFile, { force: true });
+    }
+
     if (process.platform !== "win32") {
       console.log("[it] the terminal heals itself");
       // A startup file that hangs, like a prompt theme that asks a question: no marks in time. Phew starts the
@@ -1167,7 +1224,10 @@ async function run() {
         "models",
         [
           // The settings of the test profile stay between runs: an old "keyed" model has an old port.
-          ...config.get("models").filter((model) => model.id !== "keyed"),
+          ...vscode.workspace
+            .getConfiguration("phew")
+            .get("models")
+            .filter((model) => model.id !== "keyed"),
           {
             id: "keyed",
             name: "Keyed",
@@ -1209,7 +1269,7 @@ async function run() {
     assert.ok(!report.includes(os.homedir()), "no home folder");
 
     console.log(
-      "PHEW_INTEGRATION_OK: fix, review, commit, checkpoint, ask_user, skills, MCP HTTP, multi-root, plan, queue, btw, parallel chats, rename, approvals, context, Phew it!, handoff, summary, suggestions, fork and edit, rating, retry, models of chats, fallback, chat status, quiet model, subagents, worktree agent model, memory from many chats, self-healing terminal, terminals for agents and people, report a problem, key command",
+      "PHEW_INTEGRATION_OK: fix, review, commit, checkpoint, ask_user, skills, MCP HTTP, multi-root, plan, queue, btw, parallel chats, rename, approvals, context, Phew it!, handoff, summary, suggestions, fork and edit, rating, retry, models of chats, fallback, chat status, quiet model, subagents, worktree agent model, memory from many chats, self-healing terminal, terminals for agents and people, fewer tokens, report a problem, key command",
     );
   } finally {
     server.close();

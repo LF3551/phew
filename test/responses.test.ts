@@ -65,7 +65,7 @@ test("streams text, reasoning, function calls, and usage", () => {
   expect(finishResponses(state)).toEqual({
     content: "Let me read.",
     toolCalls: [{ id: "call_9", name: "read_file", arguments: '{"path":"a.ts"}' }],
-    usage: { inputTokens: 40, outputTokens: 9 },
+    usage: { inputTokens: 40, outputTokens: 9, cacheReadTokens: 0, cacheReadFactor: 0.25 },
     finishReason: "completed",
     reasoning: { text: "Thinking." },
   });

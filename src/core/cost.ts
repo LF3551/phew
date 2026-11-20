@@ -1,13 +1,23 @@
 /** Token usage that a model provider reports. */
 export interface Usage {
+  /** All input tokens of the request, also the ones read from or written to the prompt cache. */
   readonly inputTokens: number;
   readonly outputTokens: number;
+  /** Input tokens that came from the prompt cache, at a lower price. */
+  readonly cacheReadTokens?: number;
+  /** Input tokens written to the prompt cache (Anthropic), at a slightly higher price. */
+  readonly cacheWriteTokens?: number;
+  /** The usual share of the input price for cached tokens with this provider, when the profile has no own price. */
+  readonly cacheReadFactor?: number;
+  readonly cacheWriteFactor?: number;
 }
 
 /** Price in US dollars per one million tokens. */
 export interface ModelPrice {
   readonly input: number;
   readonly output: number;
+  /** Input tokens from the prompt cache; by default a share of the input price that depends on the provider. */
+  readonly cachedInput?: number;
 }
 
 export interface BudgetLimits {
@@ -17,15 +27,28 @@ export interface BudgetLimits {
   readonly maxTokensPerTask: number;
 }
 
-/** Tracks the tokens and cost of one task. */
+/** The cost of one model response in US dollars, with cached input at its own price. */
+export function usageCost(usage: Usage, price: ModelPrice): number {
+  const input = Math.max(0, usage.inputTokens);
+  const read = Math.min(Math.max(0, usage.cacheReadTokens ?? 0), input);
+  const write = Math.min(Math.max(0, usage.cacheWriteTokens ?? 0), input - read);
+  const plain = input - read - write;
+  const readPrice = price.cachedInput ?? price.input * (usage.cacheReadFactor ?? 1);
+  const writePrice = price.input * (usage.cacheWriteFactor ?? 1);
+  return (
+    (plain * price.input + read * readPrice + write * writePrice + Math.max(0, usage.outputTokens) * price.output) /
+    1_000_000
+  );
+}
+
+/** Tracks the tokens and cost of one task. Each response counts at the price of the model that gave it. */
 export class CostMeter {
   private input = 0;
   private output = 0;
-  /** Tokens since the last change of the price. */
-  private segmentInput = 0;
-  private segmentOutput = 0;
-  /** The cost of the tokens before the last change of the price. */
-  private settled = 0;
+  private cached = 0;
+  private spent = 0;
+  /** A price was known for some of the tokens. */
+  private priced: boolean;
   /** True when some tokens were used by a model without a price, so the total is not known. */
   private unpriced = false;
   /** Input tokens of the last request, which shows how full the context window is. */
@@ -34,7 +57,9 @@ export class CostMeter {
   constructor(
     private price: ModelPrice | undefined,
     private readonly limits: BudgetLimits,
-  ) {}
+  ) {
+    this.priced = price !== undefined;
+  }
 
   add(usage: Usage): void {
     const input = Math.max(0, usage.inputTokens);
@@ -42,8 +67,9 @@ export class CostMeter {
     this.lastInputTokens = input;
     this.input += input;
     this.output += output;
-    this.segmentInput += input;
-    this.segmentOutput += output;
+    this.cached += Math.min(Math.max(0, usage.cacheReadTokens ?? 0), input);
+    if (this.price) this.spent += usageCost(usage, this.price);
+    else if (input + output > 0) this.unpriced = true;
   }
 
   /**
@@ -53,24 +79,18 @@ export class CostMeter {
   absorb(other: CostMeter): void {
     this.input += other.inputTokens;
     this.output += other.outputTokens;
+    this.cached += other.cachedTokens;
     const cost = other.cost;
-    if (cost !== undefined) this.settled += cost;
-    else if (other.tokens > 0) this.unpriced = true;
+    if (cost !== undefined) {
+      this.spent += cost;
+      this.priced = true;
+    } else if (other.tokens > 0) this.unpriced = true;
   }
 
   /** Counts the next tokens with another price, for example after a switch to a fallback model. */
   usePrice(price: ModelPrice | undefined): void {
-    if (this.segmentInput + this.segmentOutput > 0) {
-      if (this.price) this.settled += this.priceOf(this.price);
-      else this.unpriced = true;
-    }
-    this.segmentInput = 0;
-    this.segmentOutput = 0;
     this.price = price;
-  }
-
-  private priceOf(price: ModelPrice): number {
-    return (this.segmentInput * price.input + this.segmentOutput * price.output) / 1_000_000;
+    if (price) this.priced = true;
   }
 
   get tokens(): number {
@@ -85,11 +105,15 @@ export class CostMeter {
     return this.output;
   }
 
-  /** Cost in US dollars, or undefined when the model price is not configured. */
+  /** Input tokens that came from the prompt cache. */
+  get cachedTokens(): number {
+    return this.cached;
+  }
+
+  /** Cost in US dollars, or undefined when the price of some tokens is not known. */
   get cost(): number | undefined {
-    if (this.unpriced) return undefined;
-    if (!this.price) return this.segmentInput + this.segmentOutput > 0 || this.settled === 0 ? undefined : this.settled;
-    return this.settled + this.priceOf(this.price);
+    if (this.unpriced || !this.priced) return undefined;
+    return this.spent;
   }
 
   /** Returns a reason when the task is over budget. */

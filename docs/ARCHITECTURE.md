@@ -45,6 +45,9 @@ Pure TypeScript without the `vscode` module, so unit tests run in Node.js.
 | `subagents.ts` | The `delegate` tool, its arguments, the read-only tools of a subagent, its prompt, the report for the agent of the chat, and the limit of subagents at once. |
 | `report.ts` | The bug report of Report a Problem: its facts, the removal of secrets and private paths, and the fields of the GitHub bug form. |
 | `shellHealth.ts` | Self-healing of the terminal: the next step when a shell sends no marks, and its words for the chat and the model. |
+| `contextTrim.ts` | Old tool outputs leave the context in batches, with a note of what they were. |
+| `outline.ts` | The outline and the first lines of a large file, for read_file without a range. |
+| `terminals.ts` | Names, ports, port conflicts, events, the limit, and idle closing of the terminals of a chat. |
 | `chatStatus.ts` | The state of a chat in the list (needs input, model quiet, on a fallback, running, failed, done) and when a model counts as quiet. |
 | `modelChoice.ts` | Which model answers in a chat: the model of the mode, of the chat, or the default. |
 | `rules.ts` | Rules: the files and folders of Phew and other agents, their front matter (`applyTo`, `paths`, `globs`, `alwaysApply`, `trigger`, `inclusion`), path patterns, and how each rule reaches the agent (always, with a matching file, by description, or only when attached). |
