@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-20
+
 ### Fixed
 
 - **The prompt cache works in a folder with many projects.** With more nested `AGENTS.md`, `CLAUDE.md`, or `GEMINI.md` files than Phew lists (60), each request listed a different subset, so the system prompt changed at every message and only the tools came from the cache. Phew now takes the files closest to the root in a fixed order.
@@ -291,7 +293,8 @@ The first public preview of Phew.
 - Phew Wrapped: a weekly or monthly card with bugs fixed, time saved, tasks, and the streak, which you can save as an image, and eight local achievements.
 - A getting started walkthrough and a settings page.
 
-[Unreleased]: https://github.com/LF3551/phew/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/LF3551/phew/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/LF3551/phew/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/LF3551/phew/compare/v1.1.3...v1.2.0
 [1.1.3]: https://github.com/LF3551/phew/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/LF3551/phew/compare/v1.1.1...v1.1.2
