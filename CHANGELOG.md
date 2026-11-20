@@ -5,6 +5,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Changed
+
+- Clearer, neutral wording in the README, the guide, and the settings: the examples use a work key and a personal key, and the lists of rule, skill, and MCP files name the paths.
+
 ## [1.1.1] - 2026-11-20
 
 ### Changed
