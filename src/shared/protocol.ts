@@ -85,6 +85,16 @@ export interface ViewState {
     readonly cwd?: string;
     readonly state: "idle" | "running" | "waiting" | "stopped";
     readonly command?: string;
+    /** What the terminal is for, such as "dev server". */
+    readonly label?: string;
+    /** The ports that its program listens on. */
+    readonly ports?: readonly number[];
+  }[];
+  /** The terminals of the other open chats, for "All agents" in the list of terminals. */
+  readonly otherTerminals: readonly {
+    readonly chatId: string;
+    readonly title: string;
+    readonly terminals: ViewState["terminals"];
   }[];
   /** All model profiles, for the menu under the input. */
   readonly models: readonly ModelOption[];
@@ -366,7 +376,14 @@ export type WebviewMessage =
   | { readonly type: "showTerminal" }
   | { readonly type: "fixCommand"; readonly id: string }
   | { readonly type: "rerunCommand"; readonly id: string }
-  | { readonly type: "terminalAction"; readonly id: string; readonly action: "show" | "interrupt" | "kill" }
+  | {
+      readonly type: "terminalAction";
+      readonly id: string;
+      readonly action: "show" | "interrupt" | "kill";
+      /** Another chat, from "All agents"; without it, the chat of the view. */
+      readonly chatId?: string;
+    }
+  | { readonly type: "openPort"; readonly port: number }
   | { readonly type: "commandInput"; readonly id: string; readonly data: string }
   | { readonly type: "copyText"; readonly text: string }
   | { readonly type: "setApproval"; readonly key: "review"; readonly value: ReviewSetting }
@@ -633,8 +650,16 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
     case "terminalAction": {
       const terminal = typeof message.id === "string" && /^\d{1,4}$/.test(message.id) ? message.id : undefined;
       const action = message.action;
+      const chatId =
+        typeof message.chatId === "string" && /^[\w-]{1,80}$/.test(message.chatId) ? message.chatId : undefined;
       return terminal && (action === "show" || action === "interrupt" || action === "kill")
-        ? { type: "terminalAction", id: terminal, action }
+        ? { type: "terminalAction", id: terminal, action, ...(chatId ? { chatId } : {}) }
+        : undefined;
+    }
+    case "openPort": {
+      const port = message.port;
+      return typeof port === "number" && Number.isInteger(port) && port >= 1 && port <= 65535
+        ? { type: "openPort", port }
         : undefined;
     }
     case "commandInput": {

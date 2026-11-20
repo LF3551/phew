@@ -2,12 +2,14 @@ import { icon } from "../shared/icons";
 import type { ViewState, WebviewMessage } from "../shared/protocol";
 
 /**
- * The terminals of the chat: how many the agent has, what each one does, its shell, process id, and folder,
- * and Show, Ctrl+C, and Close for each. The button under the input shows the count and turns active while
- * a command runs.
+ * The terminals of the agents. "This chat" lists the terminals of the chat: what each one is for, what runs in it,
+ * its ports, its shell, process id, and folder, with Show, Ctrl+C, and Close. When other chats have terminals too,
+ * "All agents" shows all of them, grouped by chat, so a person sees at a glance what every agent runs. The button
+ * under the input shows the count and turns active while a command runs.
  */
 
-type Terminals = ViewState["terminals"];
+type Terminal = ViewState["terminals"][number];
+type OtherChats = ViewState["otherTerminals"];
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -26,7 +28,7 @@ function iconNode(name: string): Element {
   return template.content.firstElementChild as Element;
 }
 
-const stateLabels: Readonly<Record<Terminals[number]["state"], string>> = {
+const stateLabels: Readonly<Record<Terminal["state"], string>> = {
   idle: "Idle",
   running: "Running",
   waiting: "Waiting for input",
@@ -41,8 +43,10 @@ function shortFolder(folder: string | undefined): string {
   return short.length > 36 ? `…${short.slice(-35)}` : short;
 }
 
+const busy = (terminal: Terminal) => terminal.state === "running" || terminal.state === "waiting";
+
 export interface TerminalsPanel {
-  update(terminals: Terminals): void;
+  update(terminals: readonly Terminal[], others?: OtherChats): void;
 }
 
 export function createTerminalsPanel(options: {
@@ -52,60 +56,128 @@ export function createTerminalsPanel(options: {
   readonly closeOthers: (except: HTMLElement) => void;
 }): TerminalsPanel {
   const { button, panel, post } = options;
-  let terminals: Terminals = [];
+  let terminals: readonly Terminal[] = [];
+  let others: OtherChats = [];
+  let tab: "chat" | "all" = "chat";
   let key = "";
+
+  const row = (terminal: Terminal, chatId?: string): HTMLElement => {
+    const node = el("div", "terminal-row");
+    node.dataset.state = terminal.state;
+    const name = terminal.label ?? terminal.name;
+    const main = el("button", "terminal-main");
+    main.type = "button";
+    main.title = "Show this terminal";
+    main.addEventListener("click", () =>
+      post({ type: "terminalAction", id: terminal.id, action: "show", ...(chatId ? { chatId } : {}) }),
+    );
+    const title = el("span", "terminal-title");
+    title.append(el("span", "terminal-dot"), el("strong", "terminal-name", name));
+    // A named terminal keeps its number small, for "terminal 2" in the chat.
+    if (terminal.label) title.append(el("span", "terminal-id", `#${terminal.id}`));
+    title.append(el("span", "terminal-state", stateLabels[terminal.state]));
+    const details = [terminal.shell, terminal.pid ? `pid ${terminal.pid}` : "", shortFolder(terminal.cwd)]
+      .filter(Boolean)
+      .join(" · ");
+    main.append(title, el("span", "terminal-details", details));
+    if (terminal.command)
+      main.append(el("code", "terminal-command", terminal.command.split("\n")[0]?.slice(0, 80) ?? ""));
+    const body = el("div", "terminal-body");
+    body.append(main);
+    // A port opens the server in the browser.
+    if (terminal.ports && terminal.ports.length > 0) {
+      const ports = el("div", "terminal-ports");
+      for (const port of terminal.ports) {
+        const link = el("button", "terminal-port", `localhost:${port}`);
+        link.type = "button";
+        link.title = `Open http://localhost:${port} in the browser`;
+        link.append(iconNode("export"));
+        link.addEventListener("click", () => post({ type: "openPort", port }));
+        ports.append(link);
+      }
+      body.append(ports);
+    }
+    const actions = el("span", "terminal-actions");
+    const action = (glyph: string, label: string, kind: "interrupt" | "kill", enabled = true) => {
+      const control = el("button", "term-action");
+      control.type = "button";
+      control.title = label;
+      control.setAttribute("aria-label", `${label}: ${name}`);
+      control.disabled = !enabled;
+      control.append(iconNode(glyph));
+      control.addEventListener("click", () =>
+        post({ type: "terminalAction", id: terminal.id, action: kind, ...(chatId ? { chatId } : {}) }),
+      );
+      actions.append(control);
+    };
+    action("stop", "Stop the running command (Ctrl+C)", "interrupt", busy(terminal));
+    action("trash", "Close the terminal and end its processes", "kill");
+    node.append(body, actions);
+    return node;
+  };
 
   const render = () => {
     const children: Node[] = [];
     const head = el("div", "terminals-head");
-    head.append(el("span", "popover-title", "Terminals"), el("span", "terminals-count", String(terminals.length)));
+    const total = terminals.length + others.reduce((sum, chat) => sum + chat.terminals.length, 0);
+    if (others.length > 0) {
+      // Two views when other chats have terminals too.
+      const tabs = el("div", "terminals-tabs");
+      tabs.setAttribute("role", "tablist");
+      tabs.setAttribute("aria-label", "Terminals");
+      for (const [value, label, count] of [
+        ["chat", "This chat", terminals.length],
+        ["all", "All agents", total],
+      ] as const) {
+        const control = el("button", "terminals-tab");
+        control.type = "button";
+        control.setAttribute("role", "tab");
+        control.setAttribute("aria-selected", String(tab === value));
+        control.append(el("span", undefined, label), el("span", "terminals-count", String(count)));
+        control.addEventListener("click", () => {
+          tab = value;
+          render();
+          panel.querySelector<HTMLElement>('.terminals-tab[aria-selected="true"]')?.focus();
+        });
+        tabs.append(control);
+      }
+      head.append(tabs);
+    } else
+      head.append(el("span", "popover-title", "Terminals"), el("span", "terminals-count", String(terminals.length)));
     children.push(head);
-    if (terminals.length === 0) children.push(el("p", "popover-note", "The agent has no terminal in this chat yet."));
-    for (const terminal of terminals) {
-      const row = el("div", "terminal-row");
-      row.dataset.state = terminal.state;
-      const main = el("button", "terminal-main");
-      main.type = "button";
-      main.title = "Show this terminal";
-      main.addEventListener("click", () => post({ type: "terminalAction", id: terminal.id, action: "show" }));
-      const title = el("span", "terminal-title");
-      title.append(
-        el("span", "terminal-dot"),
-        el("strong", undefined, terminal.name),
-        el("span", "terminal-state", stateLabels[terminal.state]),
+
+    const list = el("div", "terminals-list");
+    if (tab === "chat" || others.length === 0) {
+      if (terminals.length === 0) list.append(el("p", "popover-note", "The agent has no terminal in this chat yet."));
+      for (const terminal of terminals) list.append(row(terminal));
+    } else {
+      const groups = [{ chatId: "", title: "This chat", terminals }, ...others].filter(
+        (group) => group.terminals.length > 0,
       );
-      const details = [terminal.shell, terminal.pid ? `pid ${terminal.pid}` : "", shortFolder(terminal.cwd)]
-        .filter(Boolean)
-        .join(" · ");
-      main.append(title, el("span", "terminal-details", details));
-      if (terminal.command)
-        main.append(el("code", "terminal-command", terminal.command.split("\n")[0]?.slice(0, 80) ?? ""));
-      const actions = el("span", "terminal-actions");
-      const action = (name: string, label: string, kind: "interrupt" | "kill", enabled = true) => {
-        const node = el("button", "term-action");
-        node.type = "button";
-        node.title = label;
-        node.setAttribute("aria-label", `${label}: ${terminal.name}`);
-        node.disabled = !enabled;
-        node.append(iconNode(name));
-        node.addEventListener("click", () => post({ type: "terminalAction", id: terminal.id, action: kind }));
-        actions.append(node);
-      };
-      action(
-        "stop",
-        "Stop the running command (Ctrl+C)",
-        "interrupt",
-        terminal.state === "running" || terminal.state === "waiting",
-      );
-      action("trash", "Close the terminal and end its processes", "kill");
-      row.append(main, actions);
-      children.push(row);
+      for (const group of groups) {
+        const header = el("div", "terminal-group");
+        const running = group.terminals.filter(busy).length;
+        header.append(
+          el("span", "terminal-group-title", group.title),
+          el("span", "terminal-group-count", `${group.terminals.length}${running ? ` · ${running} busy` : ""}`),
+        );
+        if (group.chatId) {
+          const open = el("button", "terminal-group-open", "Open chat");
+          open.type = "button";
+          open.setAttribute("aria-label", `Open the chat ${group.title}`);
+          open.addEventListener("click", () => post({ type: "switchSession", id: group.chatId }));
+          header.append(open);
+        }
+        list.append(header);
+        for (const terminal of group.terminals) list.append(row(terminal, group.chatId || undefined));
+      }
     }
+    children.push(list);
     children.push(
       el(
         "p",
         "popover-note terminals-note",
-        "The agent opens another terminal when it needs one, for example for a server. Close ends the shell and every process in it.",
+        "Agents name their terminals and close the ones they no longer need. Close ends every process in the terminal.",
       ),
     );
     panel.replaceChildren(...children);
@@ -124,15 +196,21 @@ export function createTerminalsPanel(options: {
   });
 
   return {
-    update(next) {
-      const nextKey = JSON.stringify(next);
+    update(next, nextOthers = []) {
+      const nextKey = JSON.stringify([next, nextOthers]);
       if (nextKey === key) return;
       key = nextKey;
       terminals = next;
-      const busy = next.filter((terminal) => terminal.state === "running" || terminal.state === "waiting").length;
-      button.hidden = next.length === 0;
-      button.classList.toggle("busy", busy > 0);
-      button.title = `Terminals of this chat: ${next.length}${busy ? `, ${busy} busy` : ""}`;
+      others = nextOthers;
+      if (others.length === 0) tab = "chat";
+      const busyHere = next.filter(busy).length;
+      const elsewhere = nextOthers.reduce((sum, chat) => sum + chat.terminals.length, 0);
+      // The button shows the terminals of this chat; it also shows when only other agents have terminals.
+      button.hidden = next.length === 0 && elsewhere === 0;
+      button.classList.toggle("busy", busyHere > 0);
+      button.title = `Terminals of this chat: ${next.length}${busyHere ? `, ${busyHere} busy` : ""}${
+        elsewhere ? `. Other agents: ${elsewhere}` : ""
+      }`;
       button.setAttribute("aria-label", button.title);
       button.replaceChildren(iconNode("terminal"), el("span", "terminals-badge", String(next.length)));
       if (!panel.hidden) render();

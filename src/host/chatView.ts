@@ -353,7 +353,15 @@ class ChatController implements ChatViewHandle {
         session?.commandInput(message.id, message.data);
         return;
       case "terminalAction":
-        session?.terminalAction(message.id, message.action);
+        // A terminal of another chat, from "All agents", or of this one.
+        (message.chatId ? this.sessions.sessionById(message.chatId) : session)?.terminalAction(
+          message.id,
+          message.action,
+        );
+        return;
+      case "openPort":
+        // Only the own computer: the port of a server that an agent started.
+        await vscode.env.openExternal(vscode.Uri.parse(`http://localhost:${message.port}/`));
         return;
       case "fixCommand":
         await session?.fixCommand(message.id);

@@ -249,14 +249,17 @@ function state(overrides = {}) {
       { id: "1", name: "Terminal 1", pid: 4242, shell: "zsh", cwd: "/home/sam/projects/shop", state: "idle" },
       {
         id: "2",
-        name: "Terminal 2",
+        name: "dev server",
+        label: "dev server",
         pid: 4310,
         shell: "zsh",
         cwd: "/home/sam/projects/shop/packages/web-frontend-with-a-long-name",
         state: "running",
         command: "npm run dev -- --host 0.0.0.0 --port 5173 --strictPort",
+        ports: [5173],
       },
     ],
+    otherTerminals: [],
     models: [
       {
         id: "m1",
@@ -619,6 +622,69 @@ const states = {
   // In the side bar, VS Code shows these buttons in its own title bar; they send a message to the chat.
   "menu-appearance": { messages: [...kitchen, { type: "showAppearance" }] },
   "menu-terminals": { messages: kitchen, click: "#terminalsButton" },
+  // All agents: the terminals of three chats, with names, ports, a long title, and a waiting ssh.
+  "menu-terminals-all": {
+    messages: [
+      ...kitchen,
+      {
+        type: "state",
+        state: state({
+          otherTerminals: [
+            {
+              chatId: "c2",
+              title: "Migrate the billing service to the new payment provider API",
+              terminals: [
+                { id: "1", name: "Terminal 1", pid: 5120, shell: "bash", cwd: "/home/sam/billing", state: "idle" },
+                {
+                  id: "2",
+                  name: "db",
+                  label: "db",
+                  pid: 5188,
+                  shell: "bash",
+                  cwd: "/home/sam/billing",
+                  state: "running",
+                  command: "docker compose up postgres",
+                  ports: [5432],
+                },
+                {
+                  id: "3",
+                  name: "api",
+                  label: "api",
+                  pid: 5230,
+                  shell: "bash",
+                  cwd: "/home/sam/billing/api",
+                  state: "running",
+                  command: "uvicorn app:main --reload --port 8000",
+                  ports: [8000, 8001],
+                },
+              ],
+            },
+            {
+              chatId: "c3",
+              title: "Agent: phew/rate-limits",
+              terminals: [
+                {
+                  id: "1",
+                  name: "staging",
+                  label: "staging",
+                  pid: 6001,
+                  shell: "zsh",
+                  cwd: "/home/sam/worktrees/rate-limits",
+                  state: "waiting",
+                  command: "ssh deploy@staging.example.com",
+                },
+              ],
+            },
+          ],
+        }),
+      },
+    ],
+    after: async (page) => {
+      await page.click("#terminalsButton");
+      await page.click(".terminals-tab:nth-child(2)");
+      await page.waitForTimeout(150);
+    },
+  },
   // The bar of files to review shows when the summary card with the same buttons is out of view.
   "review-open": { messages: kitchen.filter((message) => message.type !== "summary"), click: "#reviewToggle" },
   history: {

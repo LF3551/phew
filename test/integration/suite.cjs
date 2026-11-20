@@ -96,6 +96,47 @@ async function script(data) {
           description: "Print and fail",
         })
       : { content: `RESULT ${lastToolResult(messages)}` };
+  if (task.startsWith("Serve web"))
+    return step === 0
+      ? call("run_command", {
+          command: "python3 -u -m http.server 8791 --bind 127.0.0.1",
+          description: "Serve the site",
+          background: true,
+          terminal: "new",
+          label: "web",
+        })
+      : { content: `RESULT ${lastToolResult(messages)}` };
+  if (task.startsWith("Take the port"))
+    return step === 0
+      ? call("run_command", {
+          command: `node -e "require('net').createServer().listen(8791, '127.0.0.1')"`,
+          description: "Start a second server",
+        })
+      : { content: `RESULT ${lastToolResult(messages)}` };
+  if (task.startsWith("Crash later")) {
+    const steps = [
+      call("run_command", {
+        command: "sh -c 'sleep 7; exit 4'",
+        description: "Start a worker",
+        background: true,
+        terminal: "new",
+        label: "worker",
+      }),
+      call("run_command", { command: "sleep 4", description: "Wait" }),
+    ];
+    return steps[step] ?? { content: `RESULT ${lastToolResult(messages)}` };
+  }
+  if (task.startsWith("Too many terminals")) {
+    const steps = [
+      call("run_command", { command: "sleep 60", description: "Sleep", background: true, terminal: "new", label: "a" }),
+      call("run_command", { command: "sleep 60", description: "Sleep", background: true, terminal: "new", label: "b" }),
+      call("run_command", { command: "echo c", description: "Echo", terminal: "new", label: "c" }),
+      call("close_terminal", { terminal: "2" }),
+    ];
+    if (step < steps.length) return steps[step];
+    const results = messages.filter((message) => message.role === "tool").map((message) => message.content);
+    return { content: `RESULT ${results.join("\n---\n")}` };
+  }
   if (task.startsWith("Delegate research"))
     return step === 0
       ? calls(
@@ -1021,6 +1062,103 @@ async function run() {
         fs.rmSync(healDir, { recursive: true, force: true });
       }
 
+      console.log("[it] terminals that agents and people can follow");
+      // Programs run without asking here, so the test needs no approvals.
+      await vscode.workspace.getConfiguration("phew").update("commands.approval", "safe", global);
+      try {
+        // 1. A named terminal with its port, visible to the agent, to the person, and in VS Code.
+        sessions.newSession();
+        const web = sessions.active;
+        await sessions.useModel("fake");
+        await web.run({ text: "Serve web", kind: "chat", mode: "code" });
+        let served;
+        for (let index = 0; index < 40 && !served; index++) {
+          served = web.terminals.find((terminal) => terminal.label === "web" && terminal.ports?.includes(8791));
+          if (!served) await delay(250);
+        }
+        assert.ok(served, "the terminal has its name and its port");
+        assert.equal(served.name, "web", "the list shows the name");
+        assert.ok(
+          vscode.window.terminals.some((terminal) => terminal.name.endsWith("· web")),
+          "the tab of VS Code ends with the name",
+        );
+        // 2. Another chat cannot start a server on that port: the agent learns which terminal of which chat has it.
+        sessions.newSession();
+        const second = sessions.active;
+        await sessions.useModel("fake");
+        await second.run({ text: "Take the port", kind: "chat", mode: "code" });
+        assert.match(
+          lastAssistant(second),
+          new RegExp(
+            `Port 8791 is taken by terminal ${served.id} "web" of the chat "${web.title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`,
+          ),
+          "the agent learns who has the port",
+        );
+        // 3. All agents: the person sees the terminals of the other chats.
+        const others = sessions.state().otherTerminals;
+        assert.ok(
+          others.some((chat) => chat.chatId === web.id && chat.terminals.some((terminal) => terminal.label === "web")),
+          "All agents lists the terminals of the other chat",
+        );
+        assert.ok(
+          others.every((chat) => chat.terminals.every((terminal) => terminal.idleSince === undefined)),
+          "without the times that only the host needs",
+        );
+        // 4. A program in the background ends between two steps: the agent and the person hear it.
+        sessions.newSession();
+        const crash = sessions.active;
+        await sessions.useModel("fake");
+        await crash.run({ text: "Crash later", kind: "chat", mode: "code" });
+        assert.match(
+          lastAssistant(crash),
+          /\(Terminal update\)\n- Terminal \d "worker": `sh -c 'sleep 7; exit 4'` ended with exit code 4\. Read its output with read_terminal/,
+          "the agent hears that the worker ended",
+        );
+        assert.ok(
+          crash.transcript
+            .all()
+            .some(
+              (item) =>
+                item.type === "notice" && /"worker": sh -c 'sleep 7; exit 4' ended with exit code 4/.test(item.text),
+            ),
+          "the person sees it in the chat",
+        );
+        // 5. A limit of terminals per chat, and closing a terminal.
+        await vscode.workspace.getConfiguration("phew").update("commands.maxTerminals", 2, global);
+        sessions.newSession();
+        const busyChat = sessions.active;
+        await sessions.useModel("fake");
+        await busyChat.run({ text: "Too many terminals", kind: "chat", mode: "code" });
+        const busyResult = lastAssistant(busyChat);
+        assert.match(
+          busyResult,
+          /already has 2 terminals, its limit \(phew\.commands\.maxTerminals\)/,
+          "the limit holds",
+        );
+        assert.match(
+          busyResult,
+          /Terminals of this chat \(2 of 2\): 1 "a" \(running: sleep 60/,
+          "with what each one does",
+        );
+        assert.match(busyResult, /Closed terminal 2 "b" and ended its programs\./, "the agent can close a terminal");
+        assert.deepEqual(
+          busyChat.terminals.map((terminal) => terminal.label),
+          ["a"],
+          "one terminal is left",
+        );
+        // 6. Extra terminals that stay idle close themselves, never terminal 1; the agent hears it.
+        const closed = crash.closeIdleTerminals(Date.now() + 16 * 60_000);
+        assert.deepEqual(closed, ["2"], "the idle extra terminal closed, terminal 1 stayed");
+        assert.deepEqual(
+          crash.terminals.map((terminal) => terminal.id),
+          ["1"],
+          "and left the list",
+        );
+      } finally {
+        await vscode.workspace.getConfiguration("phew").update("commands.approval", undefined, global);
+        await vscode.workspace.getConfiguration("phew").update("commands.maxTerminals", undefined, global);
+      }
+
       console.log("[it] key command");
       // A short-lived token from a command: the first one has expired, so Phew runs the command again.
       const counter = path.join(os.tmpdir(), `phew-key-${process.pid}`);
@@ -1071,7 +1209,7 @@ async function run() {
     assert.ok(!report.includes(os.homedir()), "no home folder");
 
     console.log(
-      "PHEW_INTEGRATION_OK: fix, review, commit, checkpoint, ask_user, skills, MCP HTTP, multi-root, plan, queue, btw, parallel chats, rename, approvals, context, Phew it!, handoff, summary, suggestions, fork and edit, rating, retry, models of chats, fallback, chat status, quiet model, subagents, worktree agent model, memory from many chats, self-healing terminal, report a problem, key command",
+      "PHEW_INTEGRATION_OK: fix, review, commit, checkpoint, ask_user, skills, MCP HTTP, multi-root, plan, queue, btw, parallel chats, rename, approvals, context, Phew it!, handoff, summary, suggestions, fork and edit, rating, retry, models of chats, fallback, chat status, quiet model, subagents, worktree agent model, memory from many chats, self-healing terminal, terminals for agents and people, report a problem, key command",
     );
   } finally {
     server.close();

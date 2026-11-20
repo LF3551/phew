@@ -23,6 +23,8 @@ export interface Settings {
   readonly commandsShell: string;
   /** Whether the terminal of the chat loads the user's startup files (.bashrc, .zshrc, profiles). */
   readonly commandsStartupFiles: boolean;
+  /** How many terminals one chat may have. */
+  readonly commandsMaxTerminals: number;
 
   readonly verifyCommand: string;
   readonly verifyMaxAttempts: number;
@@ -131,6 +133,7 @@ export function readSettings(scope?: vscode.Uri): Settings {
     commandsTerminal: oneOf(config.get("commands.terminal"), ["open", "background", "off"] as const, "open"),
     commandsShell: text(config.get("commands.shell")),
     commandsStartupFiles: config.get<boolean>("commands.shellStartupFiles") !== false,
+    commandsMaxTerminals: Math.max(1, Math.round(positive(config.get("commands.maxTerminals"), 6, 20))),
 
     verifyCommand: text(config.get("verify.command")),
     verifyMaxAttempts: Math.max(1, Math.round(positive(config.get("verify.maxAttempts"), 3, 10))),

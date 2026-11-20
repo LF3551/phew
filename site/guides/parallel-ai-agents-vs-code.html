@@ -36,6 +36,10 @@
         <p>An agent can give research tasks to subagents with the <code>delegate</code> tool: for example, one finds every caller of a function while another maps how a feature works. Up to three run at once by default (<code>phew.subagents.maxParallel</code>). Each one only reads: it cannot change files, run commands, or ask you. Its card in the chat shows the model, the current step, and the report.</p>
         <p>Ask for it in plain words: “Use subagents to find where network errors are handled and how the tests are set up, then plan the fix.”</p>
 
+        <h2>Terminals you can follow</h2>
+        <p>Each chat has its own terminals, and agents never type into each other's shells. An agent names each terminal it opens, such as “dev server” or “tests”, and closes the ones it no longer needs; a chat keeps at most six by default (<code>phew.commands.maxTerminals</code>). The <b>Terminals</b> button under the input shows what runs where, with the ports of servers: click one to open it in the browser. <b>All agents</b> shows the terminals of every chat at once.</p>
+        <p>When a server of one agent holds port 3000, another agent that tries the same port learns which terminal of which chat has it, instead of guessing.</p>
+
         <h2>Different models for different agents</h2>
         <ul>
           <li>Choose a strong model for the chat that writes the code, and a fast one for subagents with <code>phew.subagents.model</code>.</li>

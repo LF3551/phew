@@ -3116,6 +3116,158 @@ button.pill.model.mode-locked .model-label {
   padding: 4px 6px 2px;
 }
 
+/* This chat / All agents: two views when other chats have terminals too. */
+.terminals-tabs {
+  display: flex;
+  flex: 1;
+  gap: 2px;
+  padding: 2px;
+  background: color-mix(in srgb, var(--vscode-foreground) 6%, transparent);
+  border-radius: 7px;
+}
+
+.terminals-tab {
+  display: inline-flex;
+  flex: 1;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 8px;
+  color: var(--vscode-descriptionForeground);
+  font: inherit;
+  font-size: 0.88em;
+  background: none;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.terminals-tab[aria-selected="true"] {
+  color: var(--vscode-foreground);
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--vscode-foreground) 14%, transparent);
+}
+
+.terminals-tab:focus-visible,
+.terminal-port:focus-visible,
+.terminal-group-open:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+
+/* Many terminals scroll; the head and the note stay. */
+.terminals-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: min(60vh, 440px);
+  overflow-y: auto;
+}
+
+.terminal-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.terminal-name {
+  overflow: hidden;
+  min-width: 0;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.terminal-id {
+  flex: none;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.8em;
+  font-variant-numeric: tabular-nums;
+}
+
+.terminal-title .terminal-state {
+  flex: none;
+  margin-left: auto;
+}
+
+.terminal-ports {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 6px 6px;
+}
+
+.terminal-port {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  padding: 1px 7px;
+  color: var(--phew-accent-text, var(--vscode-textLink-foreground));
+  font: inherit;
+  font-size: 0.8em;
+  font-variant-numeric: tabular-nums;
+  background: color-mix(in srgb, var(--phew-accent, var(--phew-drop)) 12%, transparent);
+  border: none;
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.terminal-port:hover {
+  background: color-mix(in srgb, var(--phew-accent, var(--phew-drop)) 22%, transparent);
+}
+
+.terminal-port .icon {
+  width: 11px;
+  height: 11px;
+}
+
+/* All agents: a header for each chat. */
+.terminal-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 6px;
+  padding: 4px 6px 2px;
+  border-top: 1px solid color-mix(in srgb, var(--vscode-foreground) 10%, transparent);
+}
+
+.terminal-group:first-child {
+  margin-top: 0;
+  border-top: none;
+}
+
+.terminal-group-title {
+  overflow: hidden;
+  min-width: 0;
+  font-size: 0.85em;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.terminal-group-count {
+  flex: none;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.8em;
+}
+
+.terminal-group-open {
+  flex: none;
+  margin-left: auto;
+  padding: 1px 6px;
+  color: var(--phew-accent-text, var(--vscode-textLink-foreground));
+  font: inherit;
+  font-size: 0.8em;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.terminal-group-open:hover {
+  background: var(--vscode-toolbar-hoverBackground);
+}
+
 button.pill.model::after {
   content: " ⌄";
 }

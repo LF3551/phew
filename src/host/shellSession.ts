@@ -6,6 +6,7 @@ import * as vscode from "vscode";
 import { OutputKeeper } from "../core/outputLimit";
 import { healNote, healNotice, nextHealStep, type ShellHealth, startupFilesOf } from "../core/shellHealth";
 import { lastLine, looksLikePrompt, plainTerminalText, type ShellMark, ShellMarkParser } from "../core/shellMarks";
+import { portsIn, type TerminalEvent } from "../core/terminals";
 import { type ShellLaunch, shellLaunch, userShell } from "./shellScripts";
 
 /**
@@ -154,6 +155,15 @@ export class ShellSession implements vscode.Disposable {
   private promptCapture: string | undefined;
   /** Whether the shell loads the user's startup files, and the environment that marks commands of the agent. */
   loadStartupFiles: () => boolean = () => true;
+  /** What the terminal is for, such as "dev server", from the agent. */
+  label: string | undefined;
+  /** The ports that the running program listens on, from its output. */
+  private ports: number[] = [];
+  private portText = "";
+  /** Since when nothing runs, for closing extra terminals that nobody uses. */
+  private idleSince = Date.now();
+  /** Things the agent should hear about between its steps. */
+  onEvent: ((event: TerminalEvent) => void) | undefined;
   /** Tells the chat in one line what self-healing did. */
   onHeal: ((message: string) => void) | undefined;
   private health: ShellHealth | "unknown" = "unknown";
@@ -203,6 +213,11 @@ export class ShellSession implements vscode.Disposable {
     return terminal.name.startsWith("Phew · ") || terminal.name.startsWith("Phew:");
   }
 
+  /** True while a command that the user typed runs here: closing it needs the user's consent. */
+  get runsUserCommand(): boolean {
+    return this.busy && !this.agentOwnsForeground && this.pty !== undefined;
+  }
+
   get started(): boolean {
     return this.pty !== undefined;
   }
@@ -214,9 +229,11 @@ export class ShellSession implements vscode.Disposable {
     cwd?: string;
     state: "idle" | "running" | "waiting" | "stopped";
     command?: string;
+    ports?: number[];
+    idleSince?: number;
   } {
     const shell = this.launch ? path.basename(this.launch.file).replace(/\.exe$/i, "") : "";
-    if (!this.pty) return { shell, cwd: this.cwd, state: "stopped" };
+    if (!this.pty) return { shell, cwd: this.cwd, state: "stopped", idleSince: this.idleSince };
     const state = !this.busy
       ? "idle"
       : this.agentOwnsForeground && this.tail && !this.backgroundJob
@@ -228,6 +245,8 @@ export class ShellSession implements vscode.Disposable {
       cwd: this.cwd,
       state,
       ...(this.busy && this.lastCommand ? { command: this.lastCommand } : {}),
+      ...(this.busy && this.ports.length > 0 ? { ports: [...this.ports] } : {}),
+      ...(this.busy ? {} : { idleSince: this.idleSince }),
     };
   }
 
@@ -310,6 +329,16 @@ export class ShellSession implements vscode.Disposable {
   }
 
   /** Ends the shell and closes its terminal; the next command starts a new one. */
+  /** Finds the ports that the running program listens on, in its latest output. */
+  private watchPorts(text: string): void {
+    this.portText = (this.portText + text).slice(-8_000);
+    const ports = portsIn(plainTerminalText(this.portText));
+    if (ports.join() !== this.ports.join()) {
+      this.ports = ports;
+      this.onChange();
+    }
+  }
+
   kill(): void {
     const terminal = this.terminal;
     if (this.pty) killTree(this.pty.pid);
@@ -348,12 +377,19 @@ export class ShellSession implements vscode.Disposable {
         if (this.replay) this.writer.fire(this.replay);
         this.replay = "";
       },
-      close: () => this.reset(),
+      close: () => {
+        // The user closed the tab of the terminal in VS Code: the agent hears about it at its next step.
+        const had = this.pty !== undefined;
+        this.reset();
+        if (had) this.onEvent?.({ kind: "closed", id: this.terminalId, label: this.label });
+        this.onChange();
+      },
       handleInput: (data) => this.userInput(data),
       setDimensions: (dimensions) => this.resize(dimensions.columns, dimensions.rows),
     };
     this.terminal = vscode.window.createTerminal({
-      name: `Phew · ${this.title()}`.slice(0, 44) + this.nameSuffix,
+      // "Phew · Fix login · dev server": the chat and what the terminal is for, so many terminals stay clear.
+      name: `Phew · ${this.title()}`.slice(0, 44) + (this.label ? ` · ${this.label}` : this.nameSuffix),
       pty,
       // The drop of Phew in the cyan of its logo, so the agent's terminals stand out from the user's own.
       iconPath: this.extensionRoot
@@ -493,6 +529,7 @@ export class ShellSession implements vscode.Disposable {
         if ("text" in piece) {
           this.show(piece.text);
           this.history = (this.history + piece.text).slice(-historyLimit);
+          if (this.busy) this.watchPorts(piece.text);
           if (this.promptCapture !== undefined) this.promptCapture += piece.text;
           if (this.listeners.size === 0) {
             this.tail?.(piece.text);
@@ -500,6 +537,18 @@ export class ShellSession implements vscode.Disposable {
             this.unreadPlainTail = (this.unreadPlainTail + piece.text).slice(-8_000);
           }
         } else if (piece.mark.kind === "prompt") {
+          // A server or watcher that ran in the background ended: the agent hears it at its next step.
+          if (this.backgroundJob && this.lastCommand)
+            this.onEvent?.({
+              kind: "exited",
+              id: this.terminalId,
+              label: this.label,
+              command: this.lastCommand,
+              exitCode: piece.mark.exitCode,
+            });
+          this.ports = [];
+          this.portText = "";
+          this.idleSince = Date.now();
           this.busy = false;
           this.agentOwnsForeground = false;
           this.backgroundJob = false;
@@ -515,6 +564,8 @@ export class ShellSession implements vscode.Disposable {
     });
     pty.onExit(() => {
       if (this.pty !== pty) return;
+      this.onEvent?.({ kind: "closed", id: this.terminalId, label: this.label });
+      this.ports = [];
       this.show("\r\n\x1b[2m[The shell ended. The next command starts a new one.]\x1b[0m\r\n");
       this.pty = undefined;
       this.ready = undefined;
@@ -617,6 +668,11 @@ export class ShellSession implements vscode.Disposable {
       return { state: "busy", output: "", prompt: "" };
     }
     const insideProgram = this.busy;
+    // A new command at the prompt: the ports of the program before it are gone.
+    if (!insideProgram) {
+      this.ports = [];
+      this.portText = "";
+    }
     // The next command has its own view; the previous one stops following the terminal.
     this.tail = undefined;
     this.waitingPrompt = undefined;

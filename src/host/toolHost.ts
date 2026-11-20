@@ -21,6 +21,7 @@ import { limitForModel } from "../core/outputLimit";
 import { type Plan, parsePlanUpdate, parseQuestion } from "../core/plan";
 import type { RootSet } from "../core/roots";
 import { isSensitivePath, redactSecrets } from "../core/secrets";
+import { portConflict } from "../core/terminals";
 import { toolGroup, toolsForMode } from "../core/tools";
 import { type AgentTerminal, toTerminal } from "./agentTerminal";
 import type { ApprovalBroker } from "./approvals";
@@ -74,6 +75,8 @@ export interface ToolHostOptions {
   readonly index: CodeIndexManager;
   readonly memory: MemoryStore;
   readonly log: vscode.LogOutputChannel;
+  /** Who listens on a port: a terminal of this chat or of another chat, for a program that cannot start. */
+  readonly portOwner?: (port: number) => string | undefined;
   /** Rules for some files: they come with the result of a tool that reads or changes a matching file. */
   readonly rulesFor?: (path: string) => string | undefined;
 }
@@ -193,6 +196,9 @@ export class ToolHost {
         break;
       case "read_terminal":
         result = await this.readTerminal(args, signal);
+        break;
+      case "close_terminal":
+        result = await this.closeTerminal(args, signal);
         break;
       case "remember":
         result = await this.remember(args);
@@ -437,6 +443,35 @@ export class ToolHost {
   }
 
   /** New output of a terminal where a program keeps running, and waiting for a text in it. */
+  /** Closes a terminal of the chat; a command that the user typed there needs the user's consent first. */
+  private async closeTerminal(args: Record<string, unknown>, signal: AbortSignal): Promise<ToolResult> {
+    const shells = this.options.settings.commandsTerminal !== "off" ? this.options.shells : undefined;
+    if (!shells) return { content: "The commands of this chat run in processes, so there is no terminal to close." };
+    const id = (stringArgument(args, "terminal") as string).trim().replace(/^#/, "");
+    const session = shells.get(id);
+    if (!session) {
+      const known = shells.list().map((terminal) => terminal.id);
+      throw new Error(`There is no terminal "${id}". The terminals of this chat: ${known.join(", ") || "none"}.`);
+    }
+    const name = `terminal ${id}${session.label ? ` "${session.label}"` : ""}`;
+    if (session.runsUserCommand) {
+      const answer = await this.options.broker.request(
+        {
+          kind: "command",
+          title: "Close a terminal",
+          detail: `Close ${name}?`,
+          reason: "A command that you started runs there, and closing the terminal ends it.",
+        },
+        signal,
+      );
+      if (!answer.allowed) return { content: `The user kept ${name} open.` };
+    }
+    shells.kill(id);
+    this.options.log.info(`[audit] terminal closed: ${id}`);
+    const rest = shells.summary();
+    return { content: `Closed ${name} and ended its programs.${rest ? ` ${rest}` : ""}` };
+  }
+
   private async readTerminal(args: Record<string, unknown>, signal: AbortSignal): Promise<ToolResult> {
     const shells = this.options.settings.commandsTerminal !== "off" ? this.options.shells : undefined;
     if (!shells) return { content: "The commands of this chat run in processes, so there is no terminal to read." };
@@ -492,7 +527,7 @@ export class ToolHost {
     const interrupt = args.interrupt === true;
     const background = args.background === true;
     const shells = this.options.settings.commandsTerminal !== "off" ? this.options.shells : undefined;
-    const picked = shells?.pick(stringArgument(args, "terminal", false));
+    const picked = shells?.pick(stringArgument(args, "terminal", false), args.label);
     let shellSession = picked?.session;
     if (!requested) {
       if (!interrupt) throw new Error("The command is empty.");
@@ -591,6 +626,9 @@ export class ToolHost {
             "The terminal of the chat runs a command that the user started. Wait for it, or ask the user.",
           );
         let note = "";
+        if (picked?.reused)
+          note += `\nThe chat has its limit of ${shells?.limit} terminals, so Phew used terminal ${picked.id}, which was idle the longest.`;
+        note += this.portNote(outcome.output);
         // A chat from an earlier window: its terminals ended with that window.
         if (picked?.fresh && shells?.restoredChat && !shells.restoreNoted) {
           shells.restoreNoted = true;
@@ -669,7 +707,17 @@ export class ToolHost {
       };
     }
     const prefix = notes.length > 0 ? `${notes.join(" ")}\n` : "";
-    return { content: withHealNote(prefix + describeResult(command, result) + cwdNote) };
+    return { content: withHealNote(prefix + describeResult(command, result) + cwdNote + this.portNote(result.output)) };
+  }
+
+  /** When a program could not start because its port is taken, says who has it. */
+  private portNote(output: string): string {
+    const port = portConflict(output);
+    if (port === undefined) return "";
+    const owner = this.options.portOwner?.(port);
+    return owner
+      ? `\nPort ${port} is taken by ${owner}. Use that server, stop it there, or start this one on another port.`
+      : `\nPort ${port} is taken by a program outside the terminals of Phew. Find it with \`lsof -i :${port}\` (or \`netstat -ano | findstr :${port}\` on Windows), or use another port.`;
   }
 
   private async askUser(args: Record<string, unknown>, signal: AbortSignal): Promise<ToolResult> {

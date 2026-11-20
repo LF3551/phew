@@ -213,3 +213,20 @@ test("the input line of a command echoes, edits, and sends like a terminal", asy
   expect(sent.at(-1)).toBe("last");
   expect(ended).toBe(1);
 });
+
+test("terminal actions of other chats and opening a port are validated", () => {
+  expect(parseWebviewMessage({ type: "terminalAction", id: "2", action: "kill", chatId: "c_abc-1" })).toEqual({
+    type: "terminalAction",
+    id: "2",
+    action: "kill",
+    chatId: "c_abc-1",
+  });
+  expect(parseWebviewMessage({ type: "terminalAction", id: "2", action: "show", chatId: "../x" })).toEqual({
+    type: "terminalAction",
+    id: "2",
+    action: "show",
+  });
+  expect(parseWebviewMessage({ type: "openPort", port: 5173 })).toEqual({ type: "openPort", port: 5173 });
+  for (const port of [0, 70000, 3.5, "5173", -1])
+    expect(parseWebviewMessage({ type: "openPort", port })).toBeUndefined();
+});

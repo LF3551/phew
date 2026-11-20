@@ -44,6 +44,7 @@ import {
   subagentToolNames,
 } from "../core/subagents";
 import { type FileChange, fileChange } from "../core/summary";
+import { terminalEventsNote } from "../core/terminals";
 import type { ModelProfile } from "../providers/profile";
 import type { CommandSetting, HostMessage, ReviewSetting } from "../shared/protocol";
 import { AgentTerminal } from "./agentTerminal";
@@ -105,6 +106,8 @@ export interface SessionDependencies {
   readonly memory: MemoryStore;
   readonly skills: SkillStore;
   readonly terminal: TerminalWatcher;
+  /** Who listens on a port, in this chat or another one, for a program that cannot start. */
+  readonly portOwner?: (port: number, sessionId: string) => string | undefined;
   /** The text of another chat of the workspace, for @chat. */
   readonly chatDigest?: (id: string) => Promise<{ title: string; text: string } | undefined>;
   readonly modes: () => readonly ModeDefinition[];
@@ -974,6 +977,17 @@ export class AgentSession {
         () => this.deps.onChange(this),
         () => readSettings().commandsStartupFiles,
         (message) => this.notice("info", message),
+        () => readSettings().commandsMaxTerminals,
+        (event) => {
+          // The person sees at once when a server or a shell ends; the agent hears it at its next step.
+          const name = `Terminal ${event.id}${event.label ? ` "${event.label}"` : ""}`;
+          if (event.kind === "exited" && event.exitCode)
+            this.notice(
+              "warning",
+              `${name}: ${event.command?.split("\n")[0]?.slice(0, 60)} ended with exit code ${event.exitCode}.`,
+            );
+          else if (event.kind === "closed") this.notice("info", `${name}: the shell closed.`);
+        },
       );
       this.shellRegistry.restoredChat = this.restoredFromStore;
     }
@@ -1007,6 +1021,16 @@ export class AgentSession {
   /** The terminals of the chat for the list in the chat. */
   get terminals(): TerminalInfo[] {
     return this.shellRegistry?.list() ?? [];
+  }
+
+  /** Closes extra terminals idle since before `now` minus 15 minutes; the timer of the registry does it each minute. */
+  closeIdleTerminals(now: number): string[] {
+    return this.shellRegistry?.closeIdle(now) ?? [];
+  }
+
+  /** The ports that the programs in the terminals of this chat listen on. */
+  get terminalPorts(): { id: string; label?: string; port: number }[] {
+    return this.shellRegistry?.portsInUse() ?? [];
   }
 
   /** Show, Ctrl+C, or close one terminal of the chat. */
@@ -1439,6 +1463,7 @@ export class AgentSession {
       index: this.deps.index,
       memory: this.deps.memory,
       rulesFor: (path) => rulesForFile(ruleSet.scoped, path, deliveredRules),
+      portOwner: (port) => this.deps.portOwner?.(port, this.id),
       skills: this.deps.skills,
       plan: {
         get: () => this.currentPlan,
@@ -1575,6 +1600,11 @@ export class AgentSession {
       signal,
       requestControl: this.requestControl,
       beforeStep: async () => {
+        // What changed in the terminals since the last step: a server that ended, a shell that closed.
+        const terminalNote = terminalEventsNote(this.shellRegistry?.takeEvents() ?? []);
+        const last = this.history.at(-1);
+        if (terminalNote && last && (last.role === "tool" || last.role === "user") && typeof last.content === "string")
+          this.history[this.history.length - 1] = { ...last, content: `${last.content}\n\n${terminalNote}` };
         for (const item of this.queue.splice(0)) {
           await this.pushUser(
             item.text,

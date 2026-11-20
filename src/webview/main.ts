@@ -449,7 +449,7 @@ function applyState(next: ViewState): void {
     ? `${next.model} (${next.provider})${next.modeModel ? ` · set by the ${currentModeName(next)} mode` : ""}. Click to switch.`
     : "Connect a model";
   modelMenu.update(next.models, next.busy, next.modeModel, currentModeName(next));
-  terminalsPanel.update(next.terminals ?? []);
+  terminalsPanel.update(next.terminals ?? [], next.otherTerminals ?? []);
   setupCard.update(next.configured);
   // Without a model, the welcome makes room for the setup card; suggested tasks need a model.
   $("welcome").classList.toggle("needs-model", !next.configured);

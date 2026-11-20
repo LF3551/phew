@@ -135,7 +135,12 @@ export const changeTools: readonly ToolDefinition[] = [
         terminal: {
           type: "string",
           description:
-            'Which terminal of this chat: "1" by default, "new" to open another one (for example for a server while you run tests), or the number of one that you opened before.',
+            'Which terminal of this chat: "1" by default, "new" to open another one (for example for a server while you run tests), or the number of one that you opened before. A chat has a limited number of terminals: reuse them, and close the ones you no longer need.',
+        },
+        label: {
+          type: "string",
+          description:
+            'With terminal "new": a short name for what the terminal is for, 1 to 3 words, for example "dev server", "tests", or "db". The user and you see it in the list of terminals.',
         },
       },
       ["command"],
@@ -161,6 +166,12 @@ export const terminalTools: readonly ToolDefinition[] = [
       },
       [],
     ),
+  },
+  {
+    name: "close_terminal",
+    description:
+      "Close a terminal of this chat that you no longer need, and end every program in it, for example a server after the tests. Terminal 1 starts again at the next command.",
+    parameters: object({ terminal: { type: "string", description: 'The terminal, for example "2".' } }, ["terminal"]),
   },
 ];
 
@@ -264,6 +275,7 @@ const groupOf: Readonly<Record<string, ToolGroup>> = {
   write_file: "edit",
   run_command: "command",
   read_terminal: "command",
+  close_terminal: "command",
   remember: "memory",
   forget: "memory",
 };

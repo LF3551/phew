@@ -24,6 +24,7 @@ import {
   type WorktreeInfo,
 } from "./session";
 import { readSettings, updateSetting } from "./settings";
+import type { TerminalInfo } from "./shellRegistry";
 import type { SuggestionProvider } from "./suggestions";
 
 export type { AgentSession };
@@ -38,6 +39,12 @@ export interface ChatViewHandle {
 }
 
 /** Keeps all chat sessions of the window, the saved history, and the worktree agents. */
+/** A terminal for the view: what the list shows, without the times that only the host needs. */
+const viewTerminal = (terminal: TerminalInfo): ViewState["terminals"][number] => {
+  const { idleSince: _idleSince, ...rest } = terminal;
+  return rest;
+};
+
 export class SessionManager implements vscode.Disposable {
   private readonly sessions = new Map<string, AgentSession>();
   private activeId = "";
@@ -375,7 +382,10 @@ export class SessionManager implements vscode.Disposable {
       })),
       model: profile?.name ?? "No model",
       modelId: profile?.model ?? "",
-      terminals: session?.terminals ?? [],
+      terminals: (session?.terminals ?? []).map(viewTerminal),
+      otherTerminals: [...this.sessions.values()]
+        .filter((other) => other !== session && other.terminals.length > 0)
+        .map((other) => ({ chatId: other.id, title: other.title, terminals: other.terminals.map(viewTerminal) })),
       models: allProfiles.map((item) => ({
         id: item.id,
         name: item.name,
@@ -955,6 +965,7 @@ export class SessionManager implements vscode.Disposable {
         persist: (source) => this.persist(source),
         chatDigest: (chatId) => this.chatDigest(chatId),
         notify: (source, event, seconds) => this.notify(source, event, seconds),
+        portOwner: (port, sessionId) => this.portOwner(port, sessionId),
         claims: {
           claim: (sessionId, path) => this.fileClaims.set(path, sessionId),
           owner: (path, exceptSessionId) => {
@@ -1066,6 +1077,22 @@ export class SessionManager implements vscode.Disposable {
           .then(show);
         return;
     }
+  }
+
+  /** Who listens on a port: a terminal of this chat or of another one. */
+  portOwner(port: number, sessionId: string): string | undefined {
+    for (const session of this.sessions.values()) {
+      const found = session.terminalPorts.find((item) => item.port === port);
+      if (!found) continue;
+      const terminal = `terminal ${found.id}${found.label ? ` "${found.label}"` : ""}`;
+      return session.id === sessionId ? `${terminal} of this chat` : `${terminal} of the chat "${session.title}"`;
+    }
+    return undefined;
+  }
+
+  /** An open chat by its id, for actions from "All agents". */
+  sessionById(id: string): AgentSession | undefined {
+    return this.sessions.get(id);
   }
 
   private changed(session: AgentSession): void {
