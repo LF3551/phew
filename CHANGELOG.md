@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-20
+
 ### Added
 
 - **Terminals that agents and people can follow.** The agent names a terminal when it opens one (`label`, for example "dev server"), and the name shows in the list, in the summary for the agent, and in the tab of VS Code ("Phew · Fix login · dev server"). Phew notices the ports that a program listens on: the list shows them, and a click opens one in the browser. Between its steps, the agent hears what changed in its terminals: a server that ended (with its exit code), a shell that closed, or an idle terminal that Phew closed; the chat shows a server that failed at once. When a program cannot start because its port is taken, the agent learns which terminal of which chat has it, or how to find the program outside Phew. A chat keeps at most six terminals (`phew.commands.maxTerminals`): at the limit, a new terminal reuses the one that is idle the longest, the new `close_terminal` tool closes one, and extra terminals that stay idle for 15 minutes close themselves, never terminal 1. **All agents** in the list of terminals shows the terminals of every chat, grouped by chat, with **Open chat**.
@@ -274,7 +276,8 @@ The first public preview of Phew.
 - Phew Wrapped: a weekly or monthly card with bugs fixed, time saved, tasks, and the streak, which you can save as an image, and eight local achievements.
 - A getting started walkthrough and a settings page.
 
-[Unreleased]: https://github.com/LF3551/phew/compare/v1.1.3...HEAD
+[Unreleased]: https://github.com/LF3551/phew/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/LF3551/phew/compare/v1.1.3...v1.2.0
 [1.1.3]: https://github.com/LF3551/phew/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/LF3551/phew/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/LF3551/phew/compare/v1.1.0...v1.1.1
