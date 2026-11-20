@@ -7,6 +7,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- **Phew: Report a Problem…** (also in the ⋯ menu of the chat): a bug report with the versions, the system, the shell and its self-healing, the model, safe settings, and the last 80 lines of the log. Secrets, the user name, the home folder, and the folders of the project are removed. You read and can change it in the editor, and only then it opens the bug form on GitHub with its fields filled in; a long report goes to the clipboard.
 - **The terminal heals itself.** When a shell sends no marks, because a heavy prompt theme takes over the prompt or a startup file waits for an answer, Phew starts it again without the startup files, and the exit codes are exact again. When even that does not help, the commands of the chat run in processes. The chat says what happened in one line, the agent learns which aliases are missing, and the next terminals of the window start the right way at once.
 
 ## [1.1.3] - 2026-11-20

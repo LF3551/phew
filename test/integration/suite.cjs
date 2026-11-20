@@ -1055,8 +1055,23 @@ async function run() {
       fs.rmSync(counter, { force: true });
     }
 
+    console.log("[it] report a problem");
+    // A bug report with what a maintainer needs, and without the folders of the project or the home folder.
+    const report = await api.reportProblem("The terminal hangs.");
+    assert.match(report, /## What happened\n\nThe terminal hangs\./);
+    assert.match(report, new RegExp(`- Phew ${extension.packageJSON.version.replaceAll(".", "\\.")}`));
+    assert.match(report, new RegExp(`${vscode.version.replaceAll(".", "\\.")}`), "the editor version");
+    assert.match(report, /- Shell: `[^`]+`, terminal: \w+, startup files: (on|off)/);
+    assert.match(report, /\| `commands\.approval` \| \w+ \|/);
+    assert.match(report, /## Recent log\n\n```text\n.+/, "with the recent log");
+    if (process.platform !== "win32")
+      assert.match(report, /Self-healing: bash: (without startup files|commands in processes)/, "and self-healing");
+    for (const folder of vscode.workspace.workspaceFolders.map((item) => item.uri.fsPath))
+      assert.ok(!report.includes(folder), `no project folder: ${folder}`);
+    assert.ok(!report.includes(os.homedir()), "no home folder");
+
     console.log(
-      "PHEW_INTEGRATION_OK: fix, review, commit, checkpoint, ask_user, skills, MCP HTTP, multi-root, plan, queue, btw, parallel chats, rename, approvals, context, Phew it!, handoff, summary, suggestions, fork and edit, rating, retry, models of chats, fallback, chat status, quiet model, subagents, worktree agent model, memory from many chats, self-healing terminal, key command",
+      "PHEW_INTEGRATION_OK: fix, review, commit, checkpoint, ask_user, skills, MCP HTTP, multi-root, plan, queue, btw, parallel chats, rename, approvals, context, Phew it!, handoff, summary, suggestions, fork and edit, rating, retry, models of chats, fallback, chat status, quiet model, subagents, worktree agent model, memory from many chats, self-healing terminal, report a problem, key command",
     );
   } finally {
     server.close();

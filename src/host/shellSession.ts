@@ -87,6 +87,14 @@ export interface RunOptions {
  */
 const healedShells = new Map<string, "without-startup" | "processes">();
 
+/** What self-healing did in this window, for a bug report: "bash: without startup files". */
+export function shellHealingSummary(): string[] {
+  return [...healedShells].map(
+    ([shell, step]) =>
+      `${path.basename(shell)}: ${step === "without-startup" ? "without startup files" : "commands in processes"}`,
+  );
+}
+
 /** Forgets what self-healing learned, for tests and after the user changes the shell settings. */
 export function forgetShellHealing(): void {
   healedShells.clear();

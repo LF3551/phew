@@ -13,11 +13,13 @@ import { describeResult, runShellCommand } from "./host/commandRunner";
 import { CommitAssistant } from "./host/commitAssistant";
 import { CompletionProvider, NextEditPredictor } from "./host/completions";
 import { HandoffService } from "./host/handoffs";
+import { rememberLog } from "./host/logMemory";
 import { McpManager } from "./host/mcpManager";
 import { MemoryStore } from "./host/memoryStore";
 import { ModelManager } from "./host/models";
 import { fileProblemsRequest, fixProblemCommand, PhewItCodeActionProvider, problemContext } from "./host/phewIt";
 import { RatingService } from "./host/rating";
+import { reportProblem } from "./host/reportProblem";
 import { ReviewManager } from "./host/reviewManager";
 import type { TaskRequest } from "./host/session";
 import { SessionManager } from "./host/sessionManager";
@@ -41,12 +43,15 @@ export interface PhewTestApi {
   models: ModelManager;
   /** The memory files, to test writes from several chats at once. */
   memory: MemoryStore;
+  /** The text of a bug report, without the editor and the questions. */
+  reportProblem(description: string): Promise<string | undefined>;
 }
 
 let disposeAll: (() => void) | undefined;
 
 export async function activate(context: vscode.ExtensionContext): Promise<PhewTestApi | undefined> {
-  const log = vscode.window.createOutputChannel("Phew", { log: true });
+  // The log keeps its latest lines for Phew: Report a Problem.
+  const { channel: log, recent: recentLog } = rememberLog(vscode.window.createOutputChannel("Phew", { log: true }));
   const diffs = new DiffContentProvider();
   const stats = new StatsStore(context.globalState);
   const rating = new RatingService(context.globalState, stats);
@@ -260,6 +265,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<PhewTe
       ),
     ),
     vscode.commands.registerCommand("phew.showLog", () => log.show()),
+    vscode.commands.registerCommand("phew.reportProblem", () =>
+      reportProblem(models, recentLog, String(context.extension.packageJSON.version)),
+    ),
     vscode.commands.registerCommand("phew.showAppearance", async () => {
       await view.reveal();
       view.post({ type: "showAppearance" });
@@ -507,6 +515,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<PhewTe
     globalState: context.globalState,
     models,
     memory: memory,
+    reportProblem: (description: string) =>
+      reportProblem(models, recentLog, String(context.extension.packageJSON.version), { description }),
   };
 }
 

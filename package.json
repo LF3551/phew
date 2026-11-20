@@ -373,6 +373,12 @@
         "category": "Phew"
       },
       {
+        "command": "phew.reportProblem",
+        "title": "Report a Problem…",
+        "category": "Phew",
+        "icon": "$(report)"
+      },
+      {
         "command": "phew.editAssistant",
         "title": "Customize Assistant…",
         "category": "Phew",
@@ -504,6 +510,11 @@
           "command": "phew.showLog",
           "when": "view == phew.chatView",
           "group": "5_help@2"
+        },
+        {
+          "command": "phew.reportProblem",
+          "when": "view == phew.chatView",
+          "group": "5_help@3"
         }
       ],
       "editor/context": [
