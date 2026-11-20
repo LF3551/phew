@@ -5,11 +5,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Fixed
+
+- **The prompt cache works in a folder with many projects.** With more nested `AGENTS.md`, `CLAUDE.md`, or `GEMINI.md` files than Phew lists (60), each request listed a different subset, so the system prompt changed at every message and only the tools came from the cache. Phew now takes the files closest to the root in a fixed order.
+
 ### Changed
 
 - **Fewer extra terminals.** A plain command with `terminal: "new"` runs in a free extra terminal instead of opening one more, so "run it again" no longer adds terminal after terminal; terminal 1 keeps its folder and variables. The tool now says that "new" is for programs that keep running, with a name.
 - The short result of a folded command is as wide as its text, not a bar to the edge, and a command faster than a second shows its time in milliseconds ("40 ms", not "0.0 s").
 - The agent answers in the language of the latest message of the user and switches with the user, without remarks about the language.
+- **The log shows what fills each request:** the estimated tokens of the system prompt with a short fingerprint, the tools, and the history, and the tokens read from and written to the prompt cache. A fingerprint that changes between messages shows a broken cache.
 - **Fewer tokens for the same work.**
   - **Prompt caching with Anthropic:** the tools, the system prompt, and the conversation so far are marked for the cache, so each later step of a task reads them at 10% of the price. A gateway that rejects the marks gets the request again without them. The cost of a task now counts cached input at its own price with every provider (Anthropic, OpenAI, the Responses API, and Gemini), and a model can have its own price for cached input (`price.cachedInput`). The log shows the cached share of each task.
   - **Old tool outputs leave the context:** large outputs of reading, searching, commands, terminals, and MCP tools older than the last four steps are replaced with a short note that says what they were, so the agent can run them again. It happens in batches, when enough old output has piled up, so the prompt cache keeps working. Answers of the user, skills, the plan, memory, and reports of subagents stay.

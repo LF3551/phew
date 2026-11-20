@@ -14,6 +14,8 @@ import {
 const maximumRuleFileSize = 64_000;
 /** Nested AGENTS.md files in big repositories: enough for real projects, bounded for huge ones. */
 const maximumNestedFiles = 60;
+/** How many nested rule files the search may find; only the first ones in a fixed order are used. */
+const maximumNestedSearch = 5000;
 
 async function readSmallText(uri: vscode.Uri): Promise<string | undefined> {
   try {
@@ -75,12 +77,19 @@ export async function loadRuleSet(root: vscode.Uri): Promise<RuleSet> {
       for (const file of await readFolder(root, folder.dir, folder.pattern, folder.dir))
         rules.push(ruleFrom(file.path, file.content, folder.plain));
     // AGENTS.md (and CLAUDE.md, GEMINI.md) in a subfolder applies to the files of that folder.
+    // All of them first, then a fixed order (the closest to the root first) and only then the limit: a folder
+    // with many projects gives the same rules at every request. A different subset at each request would change
+    // the system prompt, and the prompt cache would break at every message.
     const nested = await vscode.workspace.findFiles(
       new vscode.RelativePattern(root, "*/**/{AGENTS,CLAUDE,GEMINI}.md"),
       "**/{node_modules,.git,dist,build,out,vendor,target,.venv,venv}/**",
-      maximumNestedFiles,
+      maximumNestedSearch,
     );
-    for (const uri of nested.sort((a, b) => a.fsPath.localeCompare(b.fsPath))) {
+    const depth = (uri: vscode.Uri) => uri.fsPath.split(/[\\/]/).length;
+    const ordered = nested
+      .sort((a, b) => depth(a) - depth(b) || a.fsPath.localeCompare(b.fsPath))
+      .slice(0, maximumNestedFiles);
+    for (const uri of ordered) {
       if (!uri.fsPath.startsWith(root.fsPath)) continue;
       const relative = uri.fsPath.slice(root.fsPath.length + 1).replace(/\\/g, "/");
       const content = await readSmallText(uri);

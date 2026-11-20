@@ -1022,17 +1022,41 @@ async function run() {
     await config.update("activeModel", "fake", global);
 
     console.log("[it] a stable start of the request");
-    // The prompt cache only helps when the start of the request stays the same from message to message.
+    // The prompt cache only helps when the start of the request stays the same from message to message. A folder
+    // with more nested rule files than Phew lists (60) once gave a different subset at each request.
+    const manyRules = path.join(mainFolder, "many-projects");
+    for (let index = 0; index < 70; index++) {
+      fs.mkdirSync(path.join(manyRules, `project-${String(index).padStart(2, "0")}`), { recursive: true });
+      fs.writeFileSync(
+        path.join(manyRules, `project-${String(index).padStart(2, "0")}`, "AGENTS.md"),
+        `Rule ${index}.\n`,
+      );
+    }
     sessions.newSession();
     const steady = sessions.active;
     await sessions.useModel("fake");
-    await steady.run({ text: "Hello there", kind: "chat", mode: "code" });
-    await steady.run({ text: "Test again", kind: "chat", mode: "code" });
+    try {
+      await steady.run({ text: "Hello there", kind: "chat", mode: "code" });
+      await steady.run({ text: "Test again", kind: "chat", mode: "code" });
+    } finally {
+      fs.rmSync(manyRules, { recursive: true, force: true });
+    }
     const systemOf = (text) =>
       requests.findLast((request) =>
         request.messages.some((message) => message.role === "user" && message.content === text),
       )?.messages[0]?.content;
     const firstSystem = systemOf("Hello there");
+    // The same rules every time: the ones closest to the root, in order, not whatever the search finds first.
+    const listed = [...firstSystem.matchAll(/- many-projects\/project-(\d\d)\/AGENTS\.md/g)].map((match) =>
+      Number(match[1]),
+    );
+    assert.ok(listed.length > 10, `many nested rules are listed: ${listed.length}`);
+    assert.deepEqual(
+      listed,
+      listed.map((_, index) => index),
+      "they are the first ones in order, from project-00 without gaps",
+    );
+    assert.ok(!listed.includes(69), "and the last ones beyond the limit are not");
     const secondSystem = systemOf("Test again");
     if (firstSystem !== secondSystem) {
       const at = [...firstSystem].findIndex((char, index) => char !== secondSystem[index]);

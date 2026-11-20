@@ -84,7 +84,8 @@
 - **You decide how far it goes.** **Careful**, **Balanced**, or **Autopilot** in one click, or set edits, commands, and MCP tools one by one. By default, commands that only read (`ls`, `cat`, `grep`, `find`, `git status`, `git diff`…) run without asking, also in pipes and chains; **All** runs everything except dangerous commands; **Always allow** on a request adds a command to your allowlist.
 - **Safe by default.** Phew does not read `.env` files and keys, removes secrets from tool output, and always asks before dangerous commands such as `git push --force`, `terraform apply`, or `kubectl delete`.
 - **Any model.** GitHub Copilot without a key or with a GitHub token, OpenAI, Anthropic, Google Gemini, Azure OpenAI, Mistral, xAI, DeepSeek, Groq, Cerebras, Together AI, Fireworks AI, OpenRouter, LiteLLM, local models with Ollama, LM Studio, or vLLM, and company sign-in for Google Vertex AI, Azure with Entra ID, or a gateway.
-- **Know the cost.** Tokens and cost per task, with optional budget limits.
+- **Know the cost.** Tokens and cost per task, with optional budget limits. The log shows what fills each request (the system prompt, the tools, and the history) and how much came from the prompt cache.
+- **Fewer tokens for the same work.** With Anthropic, the tools, the instructions, and the conversation so far go to the prompt cache, so each later step reads them at 10% of the price; the cost counts cached input at its own price with every provider. Large outputs of old steps leave the context in batches, with a note of what they were, and a large file without a range comes as its outline and its first lines. The start of every request stays the same from message to message, so the cache keeps working, also in a folder with many projects.
 - **Open source.** Apache 2.0, no telemetry.
 
 <p align="center">

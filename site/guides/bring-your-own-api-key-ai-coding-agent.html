@@ -37,4 +37,6 @@
           <li>Enter the price of a model per million tokens in <b>⋯ → Price</b>. Phew then shows the cost of each task.</li>
           <li>Set <code>phew.budget.maxCostPerTask</code> or <code>phew.budget.maxTokensPerTask</code>. A task stops when it reaches the limit.</li>
           <li>Give research to subagents with a cheaper model: set <code>phew.subagents.model</code>.</li>
+          <li>Keep chatting within a few minutes: with Anthropic, Phew puts the instructions and the conversation in the prompt cache, so the next messages read them at 10% of the price. OpenAI and Gemini cache by themselves, and Phew counts their discount too. For an exact cost, add the price of cached input in <b>⋯ → Price</b> (<code>price.cachedInput</code>).</li>
+          <li>Open the folder of one project, not a folder with many: its rules then fit the task, and every request is smaller. <b>Phew: Show Log</b> shows what fills each request.</li>
         </ul>

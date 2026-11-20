@@ -250,6 +250,10 @@
           <p>Yes. Phew signs in through your company with short-lived tokens (Google Vertex AI, Azure with Entra ID, or a gateway), follows the rules of your team from <code>AGENTS.md</code> and the rule files of other agents, and collects no telemetry. Commands that change something ask first, and you can block commands for good.</p>
         </details>
         <details>
+          <summary>How many tokens does it use?</summary>
+          <p>As few as the task needs. Phew keeps the start of each request the same, so the prompt cache of the provider works: with Anthropic, later steps read the instructions and the conversation at 10% of the price. Old outputs leave the context, and large files come as an outline first. Each task shows its tokens and cost, and you can set a budget per task.</p>
+        </details>
+        <details>
           <summary>Does my code leave my computer?</summary>
           <p>Only to the model provider that you choose: your prompts, the files that the agent reads, and the output of tools. Use Ollama, LM Studio, or vLLM to keep everything local.</p>
         </details>

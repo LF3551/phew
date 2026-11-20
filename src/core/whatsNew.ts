@@ -4,6 +4,12 @@
  */
 
 const notes: Readonly<Record<string, readonly string[]>> = {
+  "1.3": [
+    "Fewer tokens: with Anthropic, later steps read the instructions and the chat from the prompt cache at 10% of the price, and the cost counts the discounts of every provider.",
+    "Old outputs leave the context in batches, and a large file comes as its outline and its first lines.",
+    "The start of each request stays the same, also in a folder with many projects, so the cache keeps working. Phew: Show Log shows what fills each request.",
+    "Fewer extra terminals: running a script again reuses a free terminal.",
+  ],
   "1.2": [
     "Agents name their terminals, close the ones they no longer need, and hear when a server ends. All agents in the list of terminals shows every chat.",
     "Ports of servers show in the list: click one to open it in the browser. When a port is taken, the agent learns which chat has it.",
