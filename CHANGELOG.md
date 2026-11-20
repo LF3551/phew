@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-20
+
 ### Changed
 
 - Automatic handoff notes are written quietly: the line "Handoff note updated" no longer shows in the chat after each task, also in older chats. A note that you ask for with `/handoff` still shows its link.
@@ -254,7 +256,8 @@ The first public preview of Phew.
 - Phew Wrapped: a weekly or monthly card with bugs fixed, time saved, tasks, and the streak, which you can save as an image, and eight local achievements.
 - A getting started walkthrough and a settings page.
 
-[Unreleased]: https://github.com/LF3551/phew/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/LF3551/phew/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/LF3551/phew/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/LF3551/phew/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/LF3551/phew/compare/v0.5.0...v1.0.0
 [0.5.0]: https://github.com/LF3551/phew/compare/v0.4.0...v0.5.0
