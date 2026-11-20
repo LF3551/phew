@@ -1823,8 +1823,10 @@ function handle(message: HostMessage): void {
       );
       break;
     case "handoff": {
+      // Older chats keep the lines of automatic notes; they stay quiet now too.
+      if (!message.manual) break;
       const node = element("p", "notice handoff-note");
-      node.append(element("span", undefined, message.manual ? "Handoff note saved: " : "Handoff note updated: "));
+      node.append(element("span", undefined, "Handoff note saved: "));
       const link = element("button", "link", message.path);
       link.type = "button";
       link.addEventListener("click", () => vscode.postMessage({ type: "openFile", path: message.path }));

@@ -886,9 +886,12 @@ export class AgentSession {
           controller.signal,
         );
         if (relative) {
-          this.emit({ type: "handoff", path: relative, manual });
-          if (manual)
+          // An automatic note is written quietly; only a note that you asked for shows in the chat.
+          this.deps.log.info(`Handoff note ${manual ? "saved" : "updated"}: ${relative}`);
+          if (manual) {
+            this.emit({ type: "handoff", path: relative, manual });
             await vscode.window.showTextDocument(vscode.Uri.joinPath(this.root.uri, relative), { preview: true });
+          }
         }
         return relative;
       } catch (error) {

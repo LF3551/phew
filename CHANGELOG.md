@@ -5,6 +5,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Changed
+
+- Automatic handoff notes are written quietly: the line "Handoff note updated" no longer shows in the chat after each task, also in older chats. A note that you ask for with `/handoff` still shows its link.
+
 ## [1.1.0] - 2026-11-19
 
 ### Added
