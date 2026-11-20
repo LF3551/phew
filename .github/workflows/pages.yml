@@ -31,9 +31,16 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-      - run: node scripts/site.mjs --url "https://lf3551.github.io/phew/"
+      # The address of the website: a custom domain from the SITE_URL variable, or GitHub Pages.
+      - run: node scripts/site.mjs --url "${SITE_URL:-https://lf3551.github.io/phew/}"
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
+          GOOGLE_SITE_VERIFICATION: ${{ vars.GOOGLE_SITE_VERIFICATION }}
+          BING_SITE_VERIFICATION: ${{ vars.BING_SITE_VERIFICATION }}
       # Titles, descriptions, one h1, canonical URLs, JSON-LD, links, pictures, and the sitemap.
-      - run: node scripts/site-check.mjs --url "https://lf3551.github.io/phew/"
+      - run: node scripts/site-check.mjs --url "${SITE_URL:-https://lf3551.github.io/phew/}"
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
       - uses: actions/upload-pages-artifact@v5
         with:
           path: _site

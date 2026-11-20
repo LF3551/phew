@@ -54,6 +54,13 @@ function head(page) {
     `<title>${escapeHtml(page.title)}</title>`,
     `<meta name="description" content="${escapeHtml(page.description)}">`,
     `<meta name="author" content="Aleksei Aleinikov">`,
+    // Ownership for Google Search Console and Bing Webmaster Tools, from repository variables.
+    page.path === "" && process.env.GOOGLE_SITE_VERIFICATION
+      ? `<meta name="google-site-verification" content="${escapeHtml(process.env.GOOGLE_SITE_VERIFICATION)}">`
+      : "",
+    page.path === "" && process.env.BING_SITE_VERIFICATION
+      ? `<meta name="msvalidate.01" content="${escapeHtml(process.env.BING_SITE_VERIFICATION)}">`
+      : "",
     `<meta name="robots" content="${page.robots ?? "index, follow, max-image-preview:large"}">`,
     `<meta name="color-scheme" content="light dark">`,
     `<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">`,

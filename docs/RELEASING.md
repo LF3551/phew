@@ -55,6 +55,7 @@ Build and check it locally with `npm run site`.
 - `site/index.html` is the home page, `site/guides/*.html` are the guides (a JSON comment on top gives the title, the description, and the order), and `site/partials/` has the header, the footer, and the layouts.
 - `scripts/site.mjs` adds the head of each page (title, description, canonical URL, Open Graph, and JSON-LD), and writes `sitemap.xml`, `robots.txt`, and `404.html`. With `--url` on another domain, it also writes `CNAME`.
 - `scripts/site-check.mjs` fails on a missing or too long title or description, a page without one h1, a wrong canonical URL, invalid JSON-LD, a broken link, anchor, or picture, and a page missing from the sitemap. CI and the Website workflow run it.
+- Repository variables of the **Website** workflow: `SITE_URL` for a custom domain (for example `https://phew.alekseialeinikov.com/`), and `GOOGLE_SITE_VERIFICATION` and `BING_SITE_VERIFICATION` for the HTML tags of Google Search Console and Bing Webmaster Tools.
 - After a picture in `docs/images/` changes, run `python3 scripts/site-images.py` to make its WebP versions in `site/images/`. `scripts/site-font.py` makes the light font from the full Recursive font.
 
 ### Optional: approve each publication
