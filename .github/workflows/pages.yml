@@ -9,6 +9,7 @@ on:
       - docs/images/**
       - resources/**
       - scripts/site.mjs
+      - scripts/site-check.mjs
       - package.json
       - .github/workflows/pages.yml
   workflow_dispatch:
@@ -31,6 +32,8 @@ jobs:
         with:
           node-version: 22
       - run: node scripts/site.mjs --url "https://lf3551.github.io/phew/"
+      # Titles, descriptions, one h1, canonical URLs, JSON-LD, links, pictures, and the sitemap.
+      - run: node scripts/site-check.mjs --url "https://lf3551.github.io/phew/"
       - uses: actions/upload-pages-artifact@v5
         with:
           path: _site

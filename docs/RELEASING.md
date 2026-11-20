@@ -49,7 +49,13 @@ If a store was turned off or failed, publish the same release later without a ne
 
 ## Website
 
-The website in `site/` is published to <https://lf3551.github.io/phew/> by the **Website** workflow after each change on `main` to `site/`, `docs/images/`, `resources/`, or `package.json`, so it shows the version of the latest release. Build it locally with `npm run site`.
+The website in `site/` is published to <https://lf3551.github.io/phew/> by the **Website** workflow after each change on `main` to `site/`, `docs/images/`, `resources/`, or `package.json`, so it shows the version of the latest release.
+Build and check it locally with `npm run site`.
+
+- `site/index.html` is the home page, `site/guides/*.html` are the guides (a JSON comment on top gives the title, the description, and the order), and `site/partials/` has the header, the footer, and the layouts.
+- `scripts/site.mjs` adds the head of each page (title, description, canonical URL, Open Graph, and JSON-LD), and writes `sitemap.xml`, `robots.txt`, and `404.html`. With `--url` on another domain, it also writes `CNAME`.
+- `scripts/site-check.mjs` fails on a missing or too long title or description, a page without one h1, a wrong canonical URL, invalid JSON-LD, a broken link, anchor, or picture, and a page missing from the sitemap. CI and the Website workflow run it.
+- After a picture in `docs/images/` changes, run `python3 scripts/site-images.py` to make its WebP versions in `site/images/`. `scripts/site-font.py` makes the light font from the full Recursive font.
 
 ### Optional: approve each publication
 

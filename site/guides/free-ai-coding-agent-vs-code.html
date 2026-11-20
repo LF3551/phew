@@ -1,0 +1,60 @@
+<!--
+{
+  "order": 1,
+  "title": "Free AI coding agent for VS Code: 4 ways to start",
+  "h1": "A free AI coding agent in VS Code: four ways to start",
+  "description": "Use an AI coding agent in VS Code for free: GitHub Copilot Free, a free Gemini key, free OpenRouter models, or a local model. Set up in a few minutes.",
+  "summary": "GitHub Copilot Free, a free Gemini key, free OpenRouter models, or a local model.",
+  "lead": "An AI coding agent does not have to cost money. Phew is free and open source, and it works with free models too. Here are four ways to start, what each one gives you, and what to watch for.",
+  "updated": "2026-11-20",
+  "steps": ["Install Phew in VS Code", "Choose a free model", "Connect and test it", "Ask, or click Phew it! on an error"]
+}
+-->
+        <h2>First, install Phew</h2>
+        <p>Install Phew from the <a href="{{marketplace}}">Visual Studio Marketplace</a>, or from <a href="{{openVsx}}">Open VSX</a> in VSCodium, Cursor, Windsurf, and other editors. Open the Phew view in the activity bar. The first card shows what is ready on your computer and what is free to start.</p>
+
+        <figure>
+          <img src="{{base}}images/connect-1600.webp" srcset="{{base}}images/connect-800.webp 800w, {{base}}images/connect-1600.webp 1600w" sizes="(max-width: 800px) 100vw, 760px" width="1600" height="900" loading="lazy" decoding="async" alt="The first card of Phew: OpenAI is ready with a key from an environment variable; GitHub Copilot, Google Gemini, and OpenRouter are free to start; Ollama is private">
+          <figcaption>The first card shows what is ready on your computer, what is free to start, and the private option.</figcaption>
+        </figure>
+
+        <h2>1. GitHub Copilot Free: no key at all</h2>
+        <p>If you sign in to GitHub in VS&nbsp;Code, Phew can use the models of your Copilot plan, also of the free one. There is no key to copy: choose <b>GitHub Copilot</b> on the first card and pick a model.</p>
+        <ul>
+          <li><b>Good for:</b> a quick start in VS&nbsp;Code itself.</li>
+          <li><b>Watch for:</b> the free plan has monthly limits. Forks of VS&nbsp;Code do not offer Copilot models, so there you need one of the other ways.</li>
+        </ul>
+
+        <h2>2. A free Gemini key from Google AI Studio</h2>
+        <ol>
+          <li>Open Google AI Studio, sign in, and create an API key. No card is needed.</li>
+          <li>In Phew, choose <b>Google Gemini</b>, paste the key, and click <b>Connect and test</b>.</li>
+          <li>Pick a Flash model for everyday work: it is fast and has a generous free quota.</li>
+        </ol>
+        <p><b>Watch for:</b> on the free tier, Google may use your requests to improve its products. Do not use it for code that must stay private.</p>
+
+        <h2>3. Free models on OpenRouter</h2>
+        <p>OpenRouter has free versions of several open models. A free key gives about 50 requests a day: enough to try Phew, not for a full working day. Choose <b>OpenRouter</b> in Phew, paste the key, and pick a model whose name ends with <code>:free</code>.</p>
+
+        <h2>4. A local model: free and private</h2>
+        <p>With <a href="{{base}}guides/local-ai-coding-agent-ollama/">Ollama, LM Studio, or vLLM</a>, the model runs on your computer. It costs nothing per request, and your code never leaves your machine. You need a good computer, and small models are weaker than the big cloud models.</p>
+
+        <h2>Which one to choose</h2>
+        <div class="table">
+          <table>
+            <thead><tr><th>Way</th><th>Setup</th><th>Limits</th><th>Privacy</th></tr></thead>
+            <tbody>
+              <tr><td>Copilot Free</td><td>Sign in to GitHub</td><td>Monthly limits</td><td>GitHub's terms</td></tr>
+              <tr><td>Gemini free key</td><td>One key</td><td>Daily limits</td><td>Requests may be used</td></tr>
+              <tr><td>OpenRouter free</td><td>One key</td><td>About 50 requests a day</td><td>Depends on the model host</td></tr>
+              <tr><td>Local model</td><td>Install and download</td><td>Your hardware</td><td>Stays on your computer</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2>Make a free quota last</h2>
+        <ul>
+          <li><b>Connect two of them.</b> In Settings → Models, give your main model a <b>fallback model</b>: when its quota runs out, the fallback goes on with the task.</li>
+          <li><b>Keep the chat short.</b> Start a new chat for a new task. Phew compacts long chats on its own.</li>
+          <li><b>Use a fast model for research.</b> Set <code>phew.subagents.model</code> to a fast free model, so subagents that read the code do not spend the quota of your main model.</li>
+        </ul>

@@ -1,0 +1,40 @@
+<!--
+{
+  "order": 3,
+  "title": "Use your own API key with an AI coding agent in VS Code",
+  "h1": "Use your own API key with an AI coding agent in VS Code",
+  "description": "Connect OpenAI, Gemini, Mistral, OpenRouter, Azure, or any OpenAI-compatible API to Phew with your own key. Keys stay in the VS Code secret storage.",
+  "summary": "OpenAI, Gemini, Mistral, OpenRouter, Azure, or a gateway, with keys in the secret storage.",
+  "lead": "With your own API key, you choose the model, pay the provider directly for what you use, and need no extra subscription. Phew connects to the big providers, to gateways, and to any OpenAI-compatible API.",
+  "updated": "2026-11-20",
+  "steps": ["Create a key at your provider", "Connect a model in Phew", "Set a price and a budget", "Add a second key or a fallback model"]
+}
+-->
+        <h2>Connect a model</h2>
+        <ol>
+          <li>Create an API key in the console of your provider.</li>
+          <li>Run <b>Phew: Connect a Model</b>, or open Settings → Models, and pick the provider.</li>
+          <li>Paste the key. Phew loads the list of models from the provider; pick one.</li>
+          <li>Click <b>Connect and test</b>. Phew checks the key, the model, and that tool calls work.</li>
+        </ol>
+        <p>Phew has presets for OpenAI, Anthropic, Google Gemini, Azure OpenAI, Mistral, xAI, DeepSeek, Groq, Cerebras, Together AI, Fireworks AI, OpenRouter, and LiteLLM. For anything else, choose <b>Custom OpenAI-compatible API</b> and enter its address.</p>
+
+
+        <h2>Where the key is kept</h2>
+        <p>Phew keeps keys in the secret storage of VS&nbsp;Code, never in <code>settings.json</code>. You can also read a key from an environment variable. Model settings come only from your user settings, so a project that you open cannot send your key to another server.</p>
+
+        <h2>Company sign-in with short-lived tokens</h2>
+        <p>Some companies give no long-lived keys. A model can get its token from a command that you trust, for example <code>gcloud auth print-access-token</code> for Google Vertex AI, or the Azure CLI for Azure with Entra ID. Phew runs the command again when the token expires.</p>
+
+        <h2>Two keys, or several models at once</h2>
+        <p>Connect a provider twice to use two keys, for example a work key and a personal key. Each chat keeps its own model: choose it in the menu under the input. Two chats, or two windows, can work at the same time with different keys, and a choice in one never changes another.</p>
+
+        <h2>When a key runs out of quota</h2>
+        <p>Open <b>⋯</b> on the card of a model and choose a <b>Fallback model</b>. When the model runs out of quota or credit, or stays rate limited after all retries, the fallback goes on with the same task, and the chat says why. A wrong key never falls back: that needs a fix, not a quiet switch.</p>
+
+        <h2>Keep the cost under control</h2>
+        <ul>
+          <li>Enter the price of a model per million tokens in <b>⋯ → Price</b>. Phew then shows the cost of each task.</li>
+          <li>Set <code>phew.budget.maxCostPerTask</code> or <code>phew.budget.maxTokensPerTask</code>. A task stops when it reaches the limit.</li>
+          <li>Give research to subagents with a cheaper model: set <code>phew.subagents.model</code>.</li>
+        </ul>

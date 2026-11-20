@@ -1,0 +1,40 @@
+<!--
+{
+  "order": 6,
+  "title": "Fix failing tests with AI in VS Code, in one click",
+  "h1": "Fix failing tests and errors with AI in VS Code",
+  "description": "Let an AI agent fix failing tests and errors in VS Code: Phew it! finds the cause, edits the code, runs your tests again, and shows each change to keep.",
+  "summary": "Phew it! finds the cause, fixes it, and runs your tests until they pass.",
+  "lead": "Phew it! turns an error into a fix: the agent reads the error, finds the cause, changes the code, and runs your check again until it passes. You review each change before you keep it.",
+  "updated": "2026-11-20",
+  "steps": ["Set the check command", "Click Phew it! on an error or a failed command", "Let the agent fix and check again", "Keep or undo each change"]
+}
+-->
+        <h2>1. Tell Phew how to check</h2>
+        <p>Set <code>phew.verify.command</code> to the command that proves a fix, for example <code>npm test</code>, <code>pytest -q</code>, or <code>go test ./...</code>. After the agent changes code, Phew runs it. If it fails, the agent gets the output and tries again, up to <code>phew.verify.maxAttempts</code> times.</p>
+
+        <h2>2. Start from the error</h2>
+        <ul>
+          <li><b>An error in the editor:</b> put the cursor on it and press <code>Ctrl+Alt+.</code> (<code>Cmd+Alt+.</code> on macOS), or click the light bulb and choose <b>Phew it!</b></li>
+          <li><b>All errors in a file:</b> run <b>Phew it! Fix All Errors in File</b>.</li>
+          <li><b>A failed command in the terminal:</b> Phew offers <b>Phew it!</b> when a command fails, or run <b>Phew it! Fix Last Failed Terminal Command</b>.</li>
+          <li><b>In the chat:</b> describe it, for example “The login tests fail after my refactor. Fix them.”</li>
+        </ul>
+
+        <h2>3. Watch it work</h2>
+        <p>The agent reads the code, runs the tests in your own terminal, changes what is wrong, and runs the check again. You see each command live and can type at any time. When the check passes, the task ends with a summary of the changed files.</p>
+
+        <figure>
+          <img src="{{base}}images/bug-fixed-1600.webp" srcset="{{base}}images/bug-fixed-800.webp 800w, {{base}}images/bug-fixed-1600.webp 1600w" sizes="(max-width: 800px) 100vw, 760px" width="1600" height="900" loading="lazy" decoding="async" alt="Phew fixed a login bug: the tests pass, and a summary card shows two changed files with Keep all and Undo all">
+          <figcaption>When the check passes, the task ends with the changed files, ready to keep or undo.</figcaption>
+        </figure>
+
+        <h2>4. Keep or undo</h2>
+        <p>Each change shows in the editor with Keep and Undo. The bar above the input lists the files to review. If a fix goes the wrong way, <b>Restore checkpoint</b> brings back the files as they were before the request.</p>
+
+        <h2>Tips for better fixes</h2>
+        <ul>
+          <li>Keep the check fast: run the failing test file instead of the whole suite.</li>
+          <li>Put the conventions of your project in <code>AGENTS.md</code>. Phew follows it, and <code>/init</code> writes one for you.</li>
+          <li>Use <b>Debug</b> mode when the cause is unclear: the agent looks for the cause before it changes code.</li>
+        </ul>

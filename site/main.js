@@ -14,7 +14,8 @@ const statuses = [
   "Checking the fix",
   "Bug fixed. Phew.",
 ];
-const delays = [700, 900, 1300, 1300, 1300, 900];
+// Quick at the start, so the first screen is never empty for long.
+const delays = [350, 600, 1100, 1200, 1200, 900];
 let timer;
 
 function show(step) {
@@ -71,6 +72,7 @@ function select(tab, focus) {
     other.tabIndex = selected ? 0 : -1;
   }
   panel.setAttribute("aria-labelledby", tab.id);
+  image.srcset = tab.dataset.srcset;
   image.src = tab.dataset.image;
   image.alt = tab.dataset.alt;
   caption.textContent = tab.querySelector("span").textContent;
@@ -93,9 +95,14 @@ for (const tab of tabs) {
   });
 }
 
-// Loads the other pictures after the page, so switching tabs is instant.
+// Loads the other pictures after the page, in the size that this screen needs, so switching tabs is instant.
 window.addEventListener("load", () => {
-  for (const tab of tabs) new Image().src = tab.dataset.image;
+  for (const tab of tabs) {
+    const next = new Image();
+    next.sizes = image.sizes;
+    next.srcset = tab.dataset.srcset;
+    next.src = tab.dataset.image;
+  }
 });
 
 // The header gets a line once the page scrolls.

@@ -1,0 +1,47 @@
+<!--
+{
+  "order": 4,
+  "title": "Run AI coding agents in parallel in VS Code",
+  "h1": "Run AI coding agents in parallel in VS Code",
+  "description": "Run several AI coding agents at once in VS Code: parallel chats, agents on their own Git branches in worktrees, and subagents, each with its own model.",
+  "summary": "Parallel chats, agents in Git worktrees, and subagents, each with its own model.",
+  "lead": "One agent at a time is slow when the work splits well. Phew runs agents in parallel on three levels: chats side by side, agents on their own branches, and subagents that research for an agent. Here is when to use which.",
+  "updated": "2026-11-20"
+}
+-->
+        <h2>Three ways to work in parallel</h2>
+        <div class="table">
+          <table>
+            <thead><tr><th>Way</th><th>Files</th><th>Best for</th></tr></thead>
+            <tbody>
+              <tr><td>Parallel chats</td><td>The same folder</td><td>Separate tasks in different parts of the code</td></tr>
+              <tr><td>Worktree agents</td><td>Their own branch and folder</td><td>Bigger changes that must not meet</td></tr>
+              <tr><td>Subagents</td><td>Read only</td><td>Research for one task: find, map, collect</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2>Parallel chats</h2>
+        <p>Open a second chat in an editor tab with <b>⧉</b> or <code>Ctrl+Alt+Shift+P</code> (<code>Cmd+Alt+Shift+P</code> on macOS). Each chat has its own model, its own terminals, and its own history. If two chats try to change the same file, Phew stops the second one and says why.</p>
+
+        <figure>
+          <img src="{{base}}images/terminals-1600.webp" srcset="{{base}}images/terminals-800.webp 800w, {{base}}images/terminals-1600.webp 1600w" sizes="(max-width: 800px) 100vw, 760px" width="1600" height="900" loading="lazy" decoding="async" alt="The terminals of a chat: an idle terminal, a dev server, and an ssh session that waits for a password">
+          <figcaption>Each chat has its own terminals, so agents never type into each other's shells.</figcaption>
+        </figure>
+
+        <h2>Agents in Git worktrees</h2>
+        <p>Run <b>Phew: New Agent in Worktree</b>. Describe the task, choose the model of the agent, and name the branch. The agent works in a separate folder on its own branch, so your files do not change. When it is done, compare, merge, or remove the branch from the chat.</p>
+
+        <h2>Subagents</h2>
+        <p>An agent can give research tasks to subagents with the <code>delegate</code> tool: for example, one finds every caller of a function while another maps how a feature works. Up to three run at once by default (<code>phew.subagents.maxParallel</code>). Each one only reads: it cannot change files, run commands, or ask you. Its card in the chat shows the model, the current step, and the report.</p>
+        <p>Ask for it in plain words: “Use subagents to find where network errors are handled and how the tests are set up, then plan the fix.”</p>
+
+        <h2>Different models for different agents</h2>
+        <ul>
+          <li>Choose a strong model for the chat that writes the code, and a fast one for subagents with <code>phew.subagents.model</code>.</li>
+          <li>An agent may also name one of your models for a subagent.</li>
+          <li>Two keys of one provider work side by side, each in its own chat.</li>
+        </ul>
+
+        <h2>Know what each agent is doing</h2>
+        <p>The list of chats shows the state of each one: <b>Needs input</b>, <b>Model quiet</b> when a model has sent nothing for a minute, <b>On</b> and the name of a fallback model, <b>Failed</b>, and <b>Done</b>. When a chat that you do not look at fails or waits for you, VS&nbsp;Code shows a notification with the reason.</p>

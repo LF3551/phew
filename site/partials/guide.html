@@ -1,0 +1,29 @@
+  <main id="main" class="guide">
+    <div class="wrap narrow">
+      <nav class="crumbs" aria-label="Breadcrumb">
+        <a href="{{base}}">Phew</a><span aria-hidden="true">/</span><a href="{{base}}guides/">Guides</a>
+      </nav>
+      <article class="prose">
+        <h1>{{h1}}</h1>
+        <p class="meta">Updated <time datetime="{{updated}}">{{updatedText}}</time> · {{minutes}} min read</p>
+        <p class="lead">{{lead}}</p>
+{{article}}
+      </article>
+      <aside class="cta" aria-label="Install Phew">
+        <div>
+          <h2>Try it in VS Code</h2>
+          <p>Phew is free and open source. It works with the model you choose, and shows every change for you to keep or undo.</p>
+        </div>
+        <div class="actions">
+          <a class="button" href="vscode:extension/alekseialeinikov.phew">Install in VS&nbsp;Code</a>
+          <a class="button quiet" href="{{openVsx}}">Open VSX</a>
+        </div>
+      </aside>
+      <section class="related" aria-labelledby="related-title">
+        <h2 id="related-title">More guides</h2>
+        <ul class="guide-list">
+          {{related}}
+        </ul>
+      </section>
+    </div>
+  </main>

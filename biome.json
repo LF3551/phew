@@ -18,9 +18,7 @@
   },
   "overrides": [
     {
-      "includes": [
-        "test/**"
-      ],
+      "includes": ["test/**"],
       "linter": {
         "rules": {
           "suspicious": {
@@ -30,9 +28,7 @@
       }
     },
     {
-      "includes": [
-        "media/**"
-      ],
+      "includes": ["media/**", "site/**"],
       "linter": {
         "rules": {
           "style": {

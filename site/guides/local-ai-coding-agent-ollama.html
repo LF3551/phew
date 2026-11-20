@@ -1,0 +1,55 @@
+<!--
+{
+  "order": 2,
+  "title": "Local AI coding agent in VS Code with Ollama",
+  "h1": "Run a local AI coding agent in VS Code with Ollama",
+  "description": "Run an AI coding agent on your own computer: connect Ollama, LM Studio, or vLLM to Phew in VS Code. Your code never leaves your machine, and it is free.",
+  "summary": "Ollama, LM Studio, or vLLM: the agent runs on your computer, and your code stays there.",
+  "lead": "A local model keeps your code on your computer and costs nothing per request. This guide connects Ollama to Phew in VS Code, with the settings that make a local model work well as an agent.",
+  "updated": "2026-11-20",
+  "steps": ["Install Ollama", "Download a model with tool calling", "Give the model a larger context", "Connect Ollama in Phew and test it"]
+}
+-->
+        <h2>What you need</h2>
+        <p>A coding agent reads files, runs commands, and calls tools, so it needs a model that supports <b>tool calling</b>. Models of about 20 to 30 billion parameters work well on a computer with a modern GPU or with 32&nbsp;GB of unified memory. Smaller models run on less, but make more mistakes. Be honest with yourself: a local model is slower and weaker than the best cloud models, and great for privacy and cost.</p>
+
+        <h2>1. Install Ollama</h2>
+        <p>Download Ollama from ollama.com for macOS, Windows, or Linux, and start it. It serves an API on <code>http://localhost:11434</code>.</p>
+
+        <h2>2. Download a model with tool calling</h2>
+        <p>In the Ollama library, models that can call tools have the <b>tools</b> tag. For example:</p>
+        <pre><code>ollama pull gpt-oss:20b
+ollama pull qwen3-coder</code></pre>
+
+        <h2>3. Give the model a larger context</h2>
+        <p>An agent sends the files it reads, the tool results, and the chat. The default context of Ollama is small for that. Start Ollama with a larger one:</p>
+        <pre><code>OLLAMA_CONTEXT_LENGTH=32768 ollama serve</code></pre>
+        <p>On Windows, set <code>OLLAMA_CONTEXT_LENGTH</code> as an environment variable and restart Ollama.</p>
+
+        <h2>4. Connect it in Phew</h2>
+        <ol>
+          <li>Open the Phew view and choose <b>Ollama</b> on the first card, or run <b>Phew: Connect a Model</b>.</li>
+          <li>The address is <code>http://localhost:11434/v1</code>. Phew loads the list of your models; pick one.</li>
+          <li>Click <b>Connect and test</b>. Phew checks that the model answers and that tool calls work.</li>
+          <li>In Settings → Models, open <b>⋯</b> on the card of the model and set <b>Context window</b> to the same number, for example 32768, so the context meter and compaction fit.</li>
+        </ol>
+
+        <h2>LM Studio and vLLM</h2>
+        <ul>
+          <li><b>LM Studio:</b> load a model, start the server in the Developer tab, and choose <b>LM Studio</b> in Phew (<code>http://localhost:1234/v1</code>).</li>
+          <li><b>vLLM</b> or another OpenAI-compatible server: choose <b>vLLM or another local server</b> (<code>http://localhost:8000/v1</code> by default).</li>
+        </ul>
+
+        <h2>Keep it private</h2>
+        <ul>
+          <li>Phew allows plain HTTP only for localhost and private networks, and collects no telemetry.</li>
+          <li>A <b>fallback model</b> in the cloud would send your code there when the local model fails. For private code, give a local model no cloud fallback.</li>
+          <li>Phew never reads <code>.env</code> files and keys, with a local model or not.</li>
+        </ul>
+
+        <h2>Tips for local models</h2>
+        <ul>
+          <li>Use <b>Ask</b> or <b>Plan</b> mode for questions: they never change a file.</li>
+          <li>Give clear, small tasks. Local models do better with one step at a time.</li>
+          <li>Set a check command, such as <code>npm test</code>, in <code>phew.verify.command</code>. Phew runs it after each change and lets the model fix what fails.</li>
+        </ul>

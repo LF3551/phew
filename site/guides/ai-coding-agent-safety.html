@@ -1,0 +1,43 @@
+<!--
+{
+  "order": 5,
+  "title": "How to use an AI coding agent safely in VS Code",
+  "h1": "How to use an AI coding agent safely in VS Code",
+  "description": "Review every change, approve risky commands, keep secrets away from the model, and undo anything: a practical safety setup for AI coding agents in VS Code.",
+  "summary": "Review every change, approve risky commands, keep secrets out, and undo anything.",
+  "lead": "An agent that edits files and runs commands needs limits. Here is how Phew keeps you in control, which settings to choose, and what no agent can fully prevent.",
+  "updated": "2026-11-20"
+}
+-->
+        <h2>Review every change</h2>
+        <ul>
+          <li><b>Keep and Undo in the editor.</b> Each change of the agent shows in the file, with Keep and Undo for each part, each file, or all.</li>
+          <li><b>Ask first.</b> Set <b>Edits</b> to <b>Ask first</b> in the approvals panel under the input to approve each change before it is written.</li>
+          <li><b>Checkpoints.</b> Each request is a checkpoint. <b>Restore checkpoint</b> reverts all changes after it, also after a restart.</li>
+        </ul>
+
+        <h2>Approve commands</h2>
+        <p>Choose <b>Careful</b>, <b>Balanced</b>, or <b>Autopilot</b> in the approvals panel under the input. In the default <b>Smart</b> mode for commands (<code>phew.commands.approval</code>), commands that only read run at once, and the rest ask first. A chain such as <code>git status &amp;&amp; git log</code> runs without asking only when every part only reads.</p>
+        <p>Some commands always ask, whatever you allowed: <code>rm -rf</code>, <code>sudo</code>, <code>git push --force</code>, <code>terraform apply</code>, scripts piped from the internet into a shell, and any command that names a file with secrets. Add prefixes to <code>phew.commands.deny</code> to block commands for good.</p>
+
+        <figure>
+          <img src="{{base}}images/approvals-1600.webp" srcset="{{base}}images/approvals-800.webp 800w, {{base}}images/approvals-1600.webp 1600w" sizes="(max-width: 800px) 100vw, 760px" width="1600" height="900" loading="lazy" decoding="async" alt="The approvals panel: Careful, Balanced, and Autopilot, with rows for edits, commands, and MCP tools">
+          <figcaption>One click sets how far the agent may go with edits, commands, and MCP tools.</figcaption>
+        </figure>
+
+        <h2>Keep secrets away from the model</h2>
+        <ul>
+          <li>Phew does not read <code>.env</code> files, SSH keys, cloud credentials, <code>.npmrc</code>, and similar files. Add your own names in <code>phew.privacy.sensitiveNames</code>.</li>
+          <li>A command such as <code>cat ~/.aws/credentials</code> always asks first.</li>
+          <li>Phew removes known kinds of keys and tokens from command output before it goes to the model.</li>
+          <li>Passwords that a program asks for go from you to the program, never to the model.</li>
+        </ul>
+
+        <h2>Open unknown code safely</h2>
+        <p>In a folder that VS&nbsp;Code does not trust, Phew only answers questions: it does not change files, run commands, start MCP servers, or read the rules of the project. Model settings come only from your user settings, so a project cannot redirect your API key.</p>
+
+        <h2>Limit the cost</h2>
+        <p>Set <code>phew.budget.maxCostPerTask</code> or <code>phew.budget.maxTokensPerTask</code>. A task stops when it reaches the limit, subagents included.</p>
+
+        <h2>What no agent can fully prevent</h2>
+        <p>Text in a file or a web page can try to talk a model into something harmful. This is called prompt injection. Approvals, the protection of secrets, and review limit the damage, but they cannot make a model immune. Read what a command does before you approve it, and keep <b>Autopilot</b> for projects that you trust.</p>

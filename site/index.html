@@ -1,55 +1,19 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Phew: an open-source AI coding agent for VS Code</title>
-  <meta name="description" content="Bug fixed. Phew. An open-source AI coding agent for VS Code that fixes errors in one click, shows every change, and works with any model.">
-  <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#1e2127" media="(prefers-color-scheme: dark)">
-  <link rel="canonical" href="{{url}}">
-  <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="icon-512.png">
-  <meta property="og:type" content="website">
-  <meta property="og:title" content="Phew: bug fixed. Phew.">
-  <meta property="og:description" content="An open-source AI coding agent for VS Code that fixes errors in one click, shows every change, and works with any model.">
-  <meta property="og:url" content="{{url}}">
-  <meta property="og:image" content="{{url}}social-preview.png">
-  <meta name="twitter:card" content="summary_large_image">
-  <link rel="preload" href="fonts/recursive.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css">
-  <script src="main.js" defer></script>
-</head>
-<body>
-  <a class="skip" href="#main">Skip to content</a>
-
-  <header class="top">
-    <div class="wrap top-row">
-      <a class="brand" href="#main" aria-label="Phew, back to the top">
-        <img src="icon.svg" alt="" width="32" height="32">
-        <span>Phew</span>
-      </a>
-      <nav aria-label="Sections">
-        <a href="#features">Features</a>
-        <a href="#start">Get started</a>
-        <a href="#faq">Questions</a>
-        <a href="https://github.com/LF3551/phew">GitHub</a>
-      </nav>
-      <a class="button small" href="#start">Install</a>
-    </div>
-  </header>
-
   <main id="main">
     <section class="hero">
       <div class="wrap hero-row">
         <div class="hero-text">
-          <h1>Bug fixed. Phew.</h1>
-          <p class="lead">Phew is an open-source AI coding agent for VS&nbsp;Code. Click an error, and it finds the cause, fixes it, runs your tests, and shows each change for you to keep or undo.</p>
+          <h1><span class="eyebrow">Free, open-source AI coding agent for VS&nbsp;Code</span> Bug fixed. Phew.</h1>
+          <p class="lead">Click an error, and Phew finds the cause, fixes it, runs your tests, and shows each change for you to keep or undo. With the model you choose, in the cloud or on your computer.</p>
           <div class="actions">
             <a class="button" href="vscode:extension/alekseialeinikov.phew">Install in VS&nbsp;Code</a>
             <a class="button quiet" href="https://open-vsx.org/extension/alekseialeinikov/phew">Get it from Open VSX</a>
           </div>
+          <ul class="badges" aria-label="Highlights">
+            <li>Any model</li>
+            <li>Local or cloud</li>
+            <li>Agents in parallel</li>
+            <li>Free</li>
+          </ul>
           <p class="fine">Free and open source under Apache&nbsp;2.0, with no telemetry. Version {{version}}, for VS&nbsp;Code {{engine}} or newer, also on the <a href="https://marketplace.visualstudio.com/items?itemName=alekseialeinikov.phew">Visual Studio Marketplace</a>.</p>
         </div>
 
@@ -97,47 +61,82 @@
       </div>
     </section>
 
+    <section class="why" aria-labelledby="why-title">
+      <div class="wrap">
+        <h2 id="why-title" class="visually-hidden">Why Phew</h2>
+        <ul class="why-list">
+          <li>
+            <h3>Any model, your keys</h3>
+            <p>GitHub Copilot without a key, OpenAI, Gemini, Mistral, OpenRouter, your company gateway, or a local model. Each chat keeps its own model, and a fallback takes over when a quota runs out.</p>
+            <a href="{{base}}guides/bring-your-own-api-key-ai-coding-agent/">Use your own key</a>
+          </li>
+          <li>
+            <h3>Agents in parallel</h3>
+            <p>Run chats side by side, agents on their own branches in worktrees, and subagents that research in parallel. The list shows which one needs you, failed, or is done.</p>
+            <a href="{{base}}guides/parallel-ai-agents-vs-code/">Run agents in parallel</a>
+          </li>
+          <li>
+            <h3>Every change in your hands</h3>
+            <p>Keep or undo each change in the editor, restore any checkpoint, and approve risky commands. Files with secrets never reach the model.</p>
+            <a href="{{base}}guides/ai-coding-agent-safety/">Stay safe</a>
+          </li>
+          <li>
+            <h3>Free and private</h3>
+            <p>Open source under Apache&nbsp;2.0, no account, no telemetry. With a local model, your code never leaves your computer.</p>
+            <a href="{{base}}guides/free-ai-coding-agent-vs-code/">Start for free</a>
+          </li>
+        </ul>
+        <ul class="proof" aria-label="Facts">
+          <li>Open source</li>
+          <li>Signed releases</li>
+          <li>No telemetry</li>
+          <li>Linux, macOS, Windows</li>
+          <li>VS&nbsp;Code, VSCodium, Cursor, Windsurf</li>
+        </ul>
+      </div>
+    </section>
+
     <section id="features" class="features">
       <div class="wrap">
         <h2>What it does</h2>
         <p class="section-lead">Pick a topic to see it in the editor.</p>
         <div class="gallery">
           <div class="tabs" role="tablist" aria-label="Features" aria-orientation="vertical">
-            <button type="button" role="tab" id="tab-fix" aria-controls="panel" aria-selected="true" data-image="images/bug-fixed.png" data-alt="Phew fixed a login bug: the tests pass, and a summary card shows two changed files with Keep all and Undo all">
+            <button type="button" role="tab" id="tab-fix" aria-controls="panel" aria-selected="true" data-image="images/bug-fixed-1600.webp" data-srcset="images/bug-fixed-800.webp 800w, images/bug-fixed-1600.webp 1600w" data-alt="Phew fixed a login bug: the tests pass, and a summary card shows two changed files with Keep all and Undo all">
               <strong>Fixes until the tests pass</strong>
               <span>Click an error, a failed command, or failing tests. Phew finds the cause, fixes it, and runs your checks again.</span>
             </button>
-            <button type="button" role="tab" id="tab-terminal" aria-controls="panel" aria-selected="false" tabindex="-1" data-image="images/terminal.png" data-alt="Commands in the chat: a sudo prompt that waits for an answer, failing tests with Phew it!, and a build that runs live">
+            <button type="button" role="tab" id="tab-terminal" aria-controls="panel" aria-selected="false" tabindex="-1" data-image="images/terminal-1600.webp" data-srcset="images/terminal-800.webp 800w, images/terminal-1600.webp 1600w" data-alt="Commands in the chat: a sudo prompt that waits for an answer, failing tests with Phew it!, and a build that runs live">
               <strong>Uses your real terminal</strong>
               <span>The agent works in your own shell. You see every command live and can type at any time. Passwords go from you to the program, never to the model.</span>
             </button>
-            <button type="button" role="tab" id="tab-terminals" aria-controls="panel" aria-selected="false" tabindex="-1" data-image="images/terminals.png" data-alt="The Terminals panel: an idle terminal, a dev server, and an ssh session that waits for a password">
+            <button type="button" role="tab" id="tab-terminals" aria-controls="panel" aria-selected="false" tabindex="-1" data-image="images/terminals-1600.webp" data-srcset="images/terminals-800.webp 800w, images/terminals-1600.webp 1600w" data-alt="The Terminals panel: an idle terminal, a dev server, and an ssh session that waits for a password">
               <strong>Leaves nothing running</strong>
               <span>Servers get their own terminal, and the agent waits until they are ready. Closing a chat ends every process it started.</span>
             </button>
-            <button type="button" role="tab" id="tab-calm" aria-controls="panel" aria-selected="false" tabindex="-1" data-image="images/chat.png" data-alt="A calm chat: short commands fold into one line with their result, and a long output shows its end with Show all lines">
+            <button type="button" role="tab" id="tab-calm" aria-controls="panel" aria-selected="false" tabindex="-1" data-image="images/chat-1600.webp" data-srcset="images/chat-800.webp 800w, images/chat-1600.webp 1600w" data-alt="A calm chat: short commands fold into one line with their result, and a long output shows its end with Show all lines">
               <strong>Keeps the chat calm</strong>
               <span>Commands read as plain words. Short results fold into one line, and long output shows its end. Long chats open fast.</span>
             </button>
-            <button type="button" role="tab" id="tab-modes" aria-controls="panel" aria-selected="false" tabindex="-1" data-image="images/modes.png" data-alt="The mode menu: Ask, Plan, Code, Debug, and Review, each with a color and a description">
+            <button type="button" role="tab" id="tab-modes" aria-controls="panel" aria-selected="false" tabindex="-1" data-image="images/modes-1600.webp" data-srcset="images/modes-800.webp 800w, images/modes-1600.webp 1600w" data-alt="The mode menu: Ask, Plan, Code, Debug, and Review, each with a color and a description">
               <strong>Asks, plans, codes, debugs, reviews</strong>
               <span>Five modes and your own. Ask, Plan, and Review never change a file.</span>
             </button>
-            <button type="button" role="tab" id="tab-approvals" aria-controls="panel" aria-selected="false" tabindex="-1" data-image="images/approvals.png" data-alt="The approvals panel: Careful, Balanced, and Autopilot, with rows for edits, commands, and MCP tools">
+            <button type="button" role="tab" id="tab-approvals" aria-controls="panel" aria-selected="false" tabindex="-1" data-image="images/approvals-1600.webp" data-srcset="images/approvals-800.webp 800w, images/approvals-1600.webp 1600w" data-alt="The approvals panel: Careful, Balanced, and Autopilot, with rows for edits, commands, and MCP tools">
               <strong>Goes only as far as you allow</strong>
               <span>Careful, Balanced, or Autopilot in one click. Dangerous commands always ask.</span>
             </button>
-            <button type="button" role="tab" id="tab-handoff" aria-controls="panel" aria-selected="false" tabindex="-1" data-image="images/handoff.png" data-alt="A new chat continues from a handoff note and notices that a file changed after it">
+            <button type="button" role="tab" id="tab-handoff" aria-controls="panel" aria-selected="false" tabindex="-1" data-image="images/handoff-1600.webp" data-srcset="images/handoff-800.webp 800w, images/handoff-1600.webp 1600w" data-alt="A new chat continues from a handoff note and notices that a file changed after it">
               <strong>Picks up where it stopped</strong>
               <span>A short note after each task lets any chat, or another agent, continue the work tomorrow.</span>
             </button>
-            <button type="button" role="tab" id="tab-family" aria-controls="panel" aria-selected="false" tabindex="-1" data-image="images/family.png" data-alt="The assistant card and the Phew family of looks: drop, cat, bot, ghost, sprout, nerd, night owl, angel, ninja">
+            <button type="button" role="tab" id="tab-family" aria-controls="panel" aria-selected="false" tabindex="-1" data-image="images/family-1600.webp" data-srcset="images/family-800.webp 800w, images/family-1600.webp 1600w" data-alt="The assistant card and the Phew family of looks: drop, cat, bot, ghost, sprout, nerd, night owl, angel, ninja">
               <strong>Feels like yours</strong>
               <span>Give your assistant a name, a look, and a character. It blinks, sweats while it works, and sighs when the bug is fixed.</span>
             </button>
           </div>
           <div class="panel" id="panel" role="tabpanel" aria-labelledby="tab-fix">
-            <img src="images/bug-fixed.png" alt="Phew fixed a login bug: the tests pass, and a summary card shows two changed files with Keep all and Undo all" width="1600" height="900">
+            <img src="images/bug-fixed-1600.webp" srcset="images/bug-fixed-800.webp 800w, images/bug-fixed-1600.webp 1600w" sizes="(max-width: 960px) 100vw, 760px" loading="lazy" decoding="async" alt="Phew fixed a login bug: the tests pass, and a summary card shows two changed files with Keep all and Undo all" width="1600" height="900">
             <p class="caption">Click an error, a failed command, or failing tests. Phew finds the cause, fixes it, and runs your checks again.</p>
           </div>
         </div>
@@ -225,6 +224,16 @@
       </div>
     </section>
 
+    <section id="guides" class="guides">
+      <div class="wrap">
+        <h2>Guides</h2>
+        <p class="section-lead">Step by step, from your first free model to agents that work in parallel.</p>
+        <ul class="guide-list">
+          {{guides}}
+        </ul>
+      </div>
+    </section>
+
     <section id="faq" class="faq">
       <div class="wrap narrow">
         <h2>Questions</h2>
@@ -259,22 +268,3 @@
       </div>
     </section>
   </main>
-
-  <footer class="foot">
-    <div class="wrap foot-row">
-      <div class="foot-brand">
-        <img src="icon.svg" alt="" width="28" height="28">
-        <p>Phew is made by <a href="https://www.alekseialeinikov.com">Aleksei Aleinikov</a>.</p>
-      </div>
-      <nav aria-label="Project">
-        <a href="https://github.com/LF3551/phew">Source code</a>
-        <a href="https://github.com/LF3551/phew/blob/main/CHANGELOG.md">Changelog</a>
-        <a href="https://github.com/LF3551/phew/releases/latest">Downloads</a>
-        <a href="https://github.com/LF3551/phew/blob/main/LICENSE">License</a>
-        <a href="https://marketplace.visualstudio.com/items?itemName=alekseialeinikov.phew&amp;ssr=false#review-details">Rate Phew</a>
-      </nav>
-      <p class="legal">“Phew” and the Phew logo are trademarks of Aleksei Aleinikov. “Visual Studio Code” is a trademark of Microsoft Corporation.</p>
-    </div>
-  </footer>
-</body>
-</html>
