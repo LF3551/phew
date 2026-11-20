@@ -290,7 +290,7 @@ export class ModelsSection {
     header.append(badge, title);
     const actions = el("div", "model-actions");
     if (!model.active) {
-      const use = button("Use", () => this.post({ type: "useModel", id: model.id }), "primary small");
+      const use = button("Use", () => this.post({ type: "useModel", id: model.id }), "ghost small");
       use.title = "Use it in the chat in front and in new chats";
       actions.append(use);
     }
