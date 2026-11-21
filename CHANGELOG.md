@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-11-21
+
 ### Added
 
 - **Prices fill themselves, and yours stay.** Phew takes the price of a model from the public list of OpenRouter, which has the prices of Anthropic, OpenAI, Google, Mistral, and xAI models at the price of the provider, with the price of cached input. It needs an exact match of the model (a dated snapshot counts as its model), downloads the list at most once a day and only when a model needs it, and sends nothing but that download. A price that you type is yours: Phew never changes it, also a price from before this version; **Use the catalog price** gives the choice back. The settings show where each price came from and its day. Models on this computer are free; Copilot has no price per token.
@@ -305,7 +307,8 @@ The first public preview of Phew.
 - Phew Wrapped: a weekly or monthly card with bugs fixed, time saved, tasks, and the streak, which you can save as an image, and eight local achievements.
 - A getting started walkthrough and a settings page.
 
-[Unreleased]: https://github.com/LF3551/phew/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/LF3551/phew/compare/v1.4.1...HEAD
+[1.4.1]: https://github.com/LF3551/phew/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/LF3551/phew/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/LF3551/phew/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/LF3551/phew/compare/v1.1.3...v1.2.0
