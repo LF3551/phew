@@ -49,16 +49,19 @@ class ChatController implements ChatViewHandle {
   connect(webview: vscode.Webview): void {
     this.webview = webview;
     this.ready = false;
-    webview.onDidReceiveMessage((value: unknown) => {
-      const message = parseWebviewMessage(value);
-      if (!message) {
-        this.log.warn("Ignored an invalid message from the chat view.");
-        return;
-      }
-      void this.handle(message).catch((error: unknown) =>
-        this.post({ type: "notice", level: "error", text: error instanceof Error ? error.message : String(error) }),
-      );
-    });
+    webview.onDidReceiveMessage((value: unknown) => void this.receive(value));
+  }
+
+  /** A message from the page of the chat, checked first. Tests send messages here like the page does. */
+  async receive(value: unknown): Promise<void> {
+    const message = parseWebviewMessage(value);
+    if (!message) {
+      this.log.warn("Ignored an invalid message from the chat view.");
+      return;
+    }
+    await this.handle(message).catch((error: unknown) =>
+      this.post({ type: "notice", level: "error", text: error instanceof Error ? error.message : String(error) }),
+    );
   }
 
   disconnect(): void {

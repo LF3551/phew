@@ -36,6 +36,8 @@ export interface ChatViewHandle {
   readonly pinnedId?: string;
   readonly visible: boolean;
   post(message: HostMessage): void;
+  /** A message from the page, as the page sends it. */
+  receive?(value: unknown): Promise<void>;
 }
 
 /** Keeps all chat sessions of the window, the saved history, and the worktree agents. */
@@ -64,7 +66,21 @@ export class SessionManager implements vscode.Disposable {
     const storage = deps.context.storageUri ?? vscode.Uri.joinPath(deps.context.globalStorageUri, "no-workspace");
     this.store = new ConversationStore(vscode.Uri.joinPath(storage, "chats"), () => readSettings().historyLimit);
     this.reloadModes();
-    deps.context.subscriptions.push(deps.models.onDidChoose((id) => this.active?.setModel(id)));
+    deps.context.subscriptions.push(
+      deps.models.onDidChoose((id) => {
+        const session = this.active;
+        const before = session?.chatModelId;
+        session?.setModel(id);
+        this.deps.log.info(
+          `Model of the chat "${session?.title ?? "none"}": ${before ?? "default"} → ${id} (from the settings or a command).`,
+        );
+      }),
+    );
+  }
+
+  /** The connected chat views, for tests that click like a person. */
+  get viewsForTest(): ChatViewHandle[] {
+    return [...this.views];
   }
 
   /** Connects a chat view. Returns a function that disconnects it. */
@@ -838,9 +854,14 @@ export class SessionManager implements vscode.Disposable {
   async useModel(id: string, view?: ChatViewHandle): Promise<void> {
     if (!this.deps.models.profiles().profiles.some((profile) => profile.id === id)) return;
     const session = view ? this.sessionFor(view) : this.active;
+    const before = session?.chatModelId;
     session?.setModel(id);
     await this.deps.models.setActive(id, false);
     this.postState();
+    const shown = view ? this.state(view).models.find((model) => model.active)?.id : undefined;
+    this.deps.log.info(
+      `Model of the chat "${session?.title ?? "none"}": ${before ?? "default"} → ${id} (from the menu)${shown && shown !== id ? `; the menu shows ${shown}` : ""}.`,
+    );
   }
 
   /** Sets all three approvals of a chat at once from a level such as Careful or Autopilot. */

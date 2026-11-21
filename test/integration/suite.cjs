@@ -1021,6 +1021,52 @@ async function run() {
     await config.update("models", baseModels, global);
     await config.update("activeModel", "fake", global);
 
+    console.log("[it] choose a model like a person");
+    // Through the real chat view, as a click in the menu sends it, and through Use on the settings page.
+    await vscode.commands.executeCommand("phew.openChat");
+    let chatView;
+    for (let index = 0; index < 40 && !chatView; index++) {
+      chatView = sessions.viewsForTest.find((view) => !view.pinnedId && view.receive);
+      if (!chatView) await delay(250);
+    }
+    assert.ok(chatView, "the chat view is open");
+    const modelsBefore = current("models");
+    await vscode.workspace.getConfiguration("phew").update(
+      "models",
+      [
+        ...modelsBefore.filter((model) => model.id !== "other"),
+        {
+          id: "other",
+          name: "Other",
+          provider: "openai",
+          baseUrl: `http://127.0.0.1:${port}/personal/v1`,
+          model: "other-model",
+          auth: "none",
+        },
+      ],
+      global,
+    );
+    try {
+      sessions.newSession();
+      const picker = sessions.active;
+      await sessions.useModel("fake");
+      await picker.run({ text: "Pick a model", kind: "chat", mode: "ask" });
+      assert.equal(picker.chatModelId, "fake", "the chat works with its model");
+      await chatView.receive({ type: "useModel", id: "other" });
+      assert.equal(picker.chatModelId, "other", "a click in the menu changes the model of the chat");
+      const shown = sessions.state(chatView);
+      assert.equal(shown.models.find((model) => model.active)?.id, "other", "the menu marks it");
+      assert.equal(shown.modelId, "other-model", "the button under the input shows it");
+      await picker.run({ text: "Pick a model again", kind: "chat", mode: "ask" });
+      assert.deepEqual([...new Set(routesOf("Pick a model again"))], ["personal"], "and the next request goes to it");
+      // Use on the settings page: the chat in front takes the model, and it becomes the default.
+      await api.models.setActive("fake");
+      assert.equal(picker.chatModelId, "fake", "Use on the settings page changes the chat in front");
+      assert.equal(current("activeModel"), "fake", "and the default");
+    } finally {
+      await vscode.workspace.getConfiguration("phew").update("models", modelsBefore, global);
+    }
+
     console.log("[it] a stable start of the request");
     // The prompt cache only helps when the start of the request stays the same from message to message. A folder
     // with more nested rule files than Phew lists (60) once gave a different subset at each request.
