@@ -37,7 +37,8 @@
 
         <h2>Keep the cost under control</h2>
         <ul>
-          <li>Enter the price of a model per million tokens in <b>⋯ → Price</b>. Phew then shows the cost of each task.</li>
+          <li>Phew fills the price of a model by itself from the public price list of OpenRouter, which has the prices of Anthropic, OpenAI, Google, Mistral, and xAI models. A price that you type in <b>⋯ → Price</b> is yours, and Phew never changes it.</li>
+          <li>Set a <b>Monthly budget</b> in the settings of a model: a small ring next to it shows what Phew spent of it this month.</li>
           <li>With OpenRouter or DeepSeek, turn on <b>Show what is left of the plan</b> in the settings of the model: a click on the small ring next to it shows your credits or balance. Anthropic, OpenAI, and Gemini do not share it with an API key.</li>
           <li>Set <code>phew.budget.maxCostPerTask</code> or <code>phew.budget.maxTokensPerTask</code>. A task stops when it reaches the limit.</li>
           <li>Give research to subagents with a cheaper model: set <code>phew.subagents.model</code>.</li>
