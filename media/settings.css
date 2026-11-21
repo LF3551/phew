@@ -907,10 +907,10 @@ button.model-option {
   height: auto;
   min-height: 40px;
   padding: 6px 10px;
-  line-height: 1.35;
   width: 100%;
   color: inherit;
   font: inherit;
+  line-height: 1.35;
   text-align: left;
   background: none;
   border: none;
