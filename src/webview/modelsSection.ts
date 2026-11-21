@@ -145,6 +145,11 @@ export class ModelsSection {
     filter: "",
   };
   private loaded: ModelInfo[] | undefined;
+  /** The models of a connected provider, to choose another one in the card of a model. */
+  private catalogs = new Map<
+    string,
+    { state: "loading" | "ready" | "error"; models: ModelInfo[]; filter: string; error?: string; choosing?: string }
+  >();
   private loading = false;
   private connecting = false;
   private error = "";
@@ -171,6 +176,21 @@ export class ModelsSection {
       case "selectProvider":
         if (typeof message.id === "string") this.selectProvider(message.id);
         return true;
+      case "profileModels": {
+        const id = String(message.id ?? "");
+        const catalog = this.catalogs.get(id);
+        if (!catalog) return true;
+        if (message.ok) {
+          catalog.state = "ready";
+          catalog.models = (message.models as ModelInfo[]) ?? [];
+        } else {
+          catalog.state = "error";
+          catalog.choosing = undefined;
+          catalog.error = String(message.error ?? "Phew could not load the models.");
+        }
+        this.render();
+        return true;
+      }
       case "models":
         if (message.requestId !== this.pending) return true;
         this.loading = false;
@@ -382,7 +402,27 @@ export class ModelsSection {
       return control;
     };
     field("Name", text("name", model.name));
-    field("Model", text("model", model.model), "The exact model name of the provider.");
+    // The model: typed, or chosen from the list of the provider with the saved key.
+    const modelRow = el("div", "pair model-pick");
+    const choose = button(
+      this.catalogs.has(model.id) ? "Hide list" : "Choose…",
+      () => {
+        if (this.catalogs.has(model.id)) this.catalogs.delete(model.id);
+        else {
+          this.catalogs.set(model.id, { state: "loading", models: [], filter: "" });
+          this.post({ type: "loadProfileModels", id: model.id });
+        }
+        this.render();
+      },
+      "ghost small",
+    );
+    choose.title = "Load the models of the provider and choose one";
+    modelRow.append(text("model", model.model), choose);
+    field("Model", modelRow, "The exact model name of the provider, or choose it from the list.");
+    const catalog = this.catalogs.get(model.id);
+    // After a switch, the card shows the new model and its test; the list closes.
+    if (catalog?.choosing && catalog.choosing === model.model) this.catalogs.delete(model.id);
+    else if (catalog) box.append(this.catalogView(model, catalog));
     field(
       "Context window",
       number("contextWindow", model.contextWindow, "Default", "1000"),
@@ -794,6 +834,77 @@ export class ModelsSection {
       }),
     );
     if (items.length === 0) list.append(el("p", "hint", "No models match."));
+  }
+
+  /** The models of the provider of a connected model, with search; a click switches the model and tests it. */
+  private catalogView(
+    model: ModelItem,
+    catalog: {
+      state: "loading" | "ready" | "error";
+      models: ModelInfo[];
+      filter: string;
+      error?: string;
+      choosing?: string;
+    },
+  ): HTMLElement {
+    const wrap = el("div", "model-catalog");
+    if (catalog.state === "loading") {
+      wrap.append(el("p", "hint", "Loading the models of the provider…"));
+      return wrap;
+    }
+    if (catalog.state === "error") {
+      wrap.append(el("p", "error", catalog.error ?? "Phew could not load the models."));
+      return wrap;
+    }
+    if (catalog.models.length === 0) {
+      wrap.append(el("p", "hint", "The provider lists no models. Type the name above."));
+      return wrap;
+    }
+    const search = input("search", catalog.filter, `Search ${catalog.models.length} models`);
+    search.dataset.focusKey = `catalog-${model.id}`;
+    search.setAttribute("aria-label", "Search the models");
+    const list = el("div", "model-list");
+    const fill = () => {
+      const query = catalog.filter.toLowerCase();
+      const items = catalog.models
+        .filter((item) => `${item.id} ${item.label ?? ""}`.toLowerCase().includes(query))
+        .slice(0, 200);
+      list.replaceChildren(
+        ...items.map((item) => {
+          const current = item.id === model.model;
+          const row = el("button", `model-option${current ? " chosen" : ""}`);
+          row.type = "button";
+          row.disabled = current || catalog.choosing !== undefined;
+          row.setAttribute("aria-pressed", String(current));
+          row.append(el("span", "model-id", item.id));
+          if (item.label && item.label !== item.id) row.append(el("span", "hint", item.label));
+          if (item.contextWindow) row.append(el("span", "hint", `${formatTokens(item.contextWindow)} context`));
+          if (current) row.append(el("span", "tag ok", "In use"));
+          if (catalog.choosing === item.id) row.append(el("span", "hint", "Switching and testing…"));
+          row.addEventListener("click", () => {
+            catalog.choosing = item.id;
+            this.tests.set(model.id, "running");
+            this.post({
+              type: "switchProfileModel",
+              id: model.id,
+              model: item.id,
+              ...(item.contextWindow ? { contextWindow: item.contextWindow } : {}),
+              ...(item.endpoints ? { endpoints: item.endpoints } : {}),
+            });
+            fill();
+          });
+          return row;
+        }),
+      );
+      if (items.length === 0) list.append(el("p", "hint", "No models match."));
+    };
+    search.addEventListener("input", () => {
+      catalog.filter = search.value;
+      fill();
+    });
+    fill();
+    wrap.append(search, list);
+    return wrap;
   }
 
   private toggle(key: string): void {

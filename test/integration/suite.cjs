@@ -236,6 +236,12 @@ function startServer() {
       body += chunk;
     });
     request.on("end", async () => {
+      // The list of models of the provider, for choosing another model of a connected one.
+      if (request.method === "GET" && /\/models(\?|$)/.test(request.url)) {
+        response.writeHead(200, { "Content-Type": "application/json" });
+        response.end(JSON.stringify({ object: "list", data: [{ id: "fake-model" }, { id: "fake-model-2" }] }));
+        return;
+      }
       if (request.url === "/mcp") {
         if (request.method !== "POST") {
           response.writeHead(204).end();
@@ -1065,6 +1071,49 @@ async function run() {
       assert.equal(current("activeModel"), "fake", "and the default");
     } finally {
       await vscode.workspace.getConfiguration("phew").update("models", modelsBefore, global);
+    }
+
+    console.log("[it] choose another model of a connected provider");
+    // On the settings page: the list of the provider with the saved key, a click, and the name follows the model.
+    const swapModels = current("models");
+    await vscode.workspace.getConfiguration("phew").update(
+      "models",
+      [
+        ...swapModels.filter((model) => model.id !== "swap"),
+        {
+          id: "swap",
+          name: "Fake · fake-model",
+          provider: "openai",
+          baseUrl: `http://127.0.0.1:${port}/v1`,
+          model: "fake-model",
+          auth: "none",
+        },
+      ],
+      global,
+    );
+    try {
+      await api.settings.receiveForTest({ type: "loadProfileModels", id: "swap" });
+      const catalog = api.settings.sentForTest.findLast((message) => message.type === "profileModels");
+      assert.ok(
+        catalog?.ok && catalog.models.some((model) => model.id === "fake-model-2"),
+        `the page gets the models of the provider: ${JSON.stringify(catalog)}`,
+      );
+      await api.settings.receiveForTest({
+        type: "switchProfileModel",
+        id: "swap",
+        model: "fake-model-2",
+        contextWindow: 64000,
+      });
+      const swapped = current("models").find((model) => model.id === "swap");
+      assert.equal(swapped.model, "fake-model-2", "a click switches the model");
+      assert.equal(swapped.name, "Fake · fake-model-2", "a name that Phew made follows the model");
+      assert.equal(swapped.contextWindow, 64000, "with the context window of the list");
+      const tested = api.settings.sentForTest.findLast(
+        (message) => message.type === "testResult" && message.id === "swap",
+      );
+      assert.ok(tested?.result?.ok, `and the new model is tested: ${JSON.stringify(tested)}`);
+    } finally {
+      await vscode.workspace.getConfiguration("phew").update("models", swapModels, global);
     }
 
     console.log("[it] a stable start of the request");

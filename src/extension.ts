@@ -43,6 +43,8 @@ export interface PhewTestApi {
   models: ModelManager;
   /** The memory files, to test writes from several chats at once. */
   memory: MemoryStore;
+  /** The settings page, to click through it in tests. */
+  settings: SettingsPanel;
   /** The text of a bug report, without the editor and the questions. */
   reportProblem(description: string): Promise<string | undefined>;
 }
@@ -515,6 +517,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<PhewTe
     globalState: context.globalState,
     models,
     memory: memory,
+    settings: settingsPanel,
     reportProblem: (description: string) =>
       reportProblem(models, recentLog, String(context.extension.packageJSON.version), { description }),
   };

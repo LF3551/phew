@@ -100,6 +100,7 @@ export class SettingsPanel implements vscode.Disposable {
   }
 
   private post(message: unknown): void {
+    if (this.sentForTest.length < 200) this.sentForTest.push(message);
     void this.panel?.webview.postMessage(message);
   }
 
@@ -134,6 +135,36 @@ export class SettingsPanel implements vscode.Disposable {
           const probe = text("baseUrl") ? [] : (preset?.probeBaseUrls ?? []);
           const result = await this.models.modelsFor(draft(), await key(), probe);
           this.post({ type: "models", requestId, ok: true, models: result.models, baseUrl: result.baseUrl });
+          return true;
+        }
+        case "loadProfileModels":
+          // The models of a connected provider, with its saved key, to choose another one.
+          if (profile) {
+            const result = await this.models.modelsFor(profile, await this.models.apiKey(profile));
+            this.post({ type: "profileModels", id: profile.id, ok: true, models: result.models });
+          }
+          return true;
+        case "switchProfileModel": {
+          if (!profile) return true;
+          const model = text("model", 300)?.trim();
+          if (!model) throw new Error("Choose a model.");
+          const contextWindow =
+            typeof message.contextWindow === "number" && message.contextWindow >= 1000
+              ? Math.round(message.contextWindow)
+              : undefined;
+          // A name that Phew made ("Anthropic · claude-haiku-5-5") follows the model; a name of the user stays.
+          const name = profile.name.endsWith(profile.model)
+            ? `${profile.name.slice(0, -profile.model.length)}${model}`
+            : profile.name;
+          await this.models.update(profile.id, {
+            model,
+            name,
+            ...(contextWindow ? { contextWindow } : {}),
+            ...(profile.provider === "openai" && endpoints ? { api: apiFor({ id: "", endpoints }) } : {}),
+          });
+          await this.refresh();
+          const updated = this.models.profiles().profiles.find((item) => item.id === profile.id);
+          if (updated) this.post({ type: "testResult", id: updated.id, result: await this.models.check(updated) });
           return true;
         }
         case "createModel": {
@@ -215,6 +246,10 @@ export class SettingsPanel implements vscode.Disposable {
       }
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
+      if (message.type === "loadProfileModels" || message.type === "switchProfileModel") {
+        this.post({ type: "profileModels", id, ok: false, error: reason });
+        return true;
+      }
       this.post({
         type: requestId ? (message.type === "loadModels" ? "models" : "created") : "error",
         requestId,
@@ -224,6 +259,14 @@ export class SettingsPanel implements vscode.Disposable {
       });
       return true;
     }
+  }
+
+  /** Messages that the page posts back, for tests: they take the place of the page. */
+  readonly sentForTest: unknown[] = [];
+
+  /** A message from the page, as the page sends it. Tests click through here. */
+  receiveForTest(raw: unknown): Promise<void> {
+    return this.handle(raw);
   }
 
   private async handle(raw: unknown): Promise<void> {
