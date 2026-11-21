@@ -2,6 +2,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import type { ModelClient } from "../core/chat";
+import type { Usage } from "../core/cost";
 import {
   type ConnectionTestResult,
   createHttpClient,
@@ -105,7 +106,22 @@ export class ModelManager {
     return profile.apiKeyEnv ? process.env[profile.apiKeyEnv] : undefined;
   }
 
+  /** Called with the usage of each answer of a model, to count what each model cost this month. */
+  onUsage: ((profile: ModelProfile, usage: Usage) => void) | undefined;
+
   async client(profile: ModelProfile): Promise<ModelClient> {
+    const client = await this.rawClient(profile);
+    // Every answer of the model, also of subagents, titles, and compaction, counts for its month.
+    return {
+      complete: async (request, onText) => {
+        const result = await client.complete(request, onText);
+        if (result.usage) this.onUsage?.(profile, result.usage);
+        return result;
+      },
+    };
+  }
+
+  private async rawClient(profile: ModelProfile): Promise<ModelClient> {
     if (profile.provider === "vscode") return new VsCodeLanguageModelClient(profile.model);
     const command = this.keyCommand(profile);
     // With a key command, each request gets the current key, and a 401 gets a new one.

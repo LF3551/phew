@@ -34,7 +34,10 @@ export interface ModelItem {
   temperature: number | null;
   maxTokens: number | null;
   contextWindow: number | null;
-  price: { input: number; output: number } | null;
+  price: { input: number; output: number; source?: "user" | "provider" | "catalog" | "local"; checked?: string } | null;
+  /** A monthly budget in US dollars, and what Phew spent of it this month. */
+  budget?: number | null;
+  spent?: number;
   api: "chat" | "responses" | null;
   /** The id of the model that takes over when this one runs out of quota. */
   fallback: string | null;
@@ -519,11 +522,48 @@ export class ModelsSection {
     priceIn.addEventListener("change", savePrice);
     priceOut.addEventListener("change", savePrice);
     const prices = el("div", "pair");
-    prices.append(priceIn, priceOut);
+    // Each field says what it is, also when it is filled.
+    const priced = (caption: string, control: HTMLInputElement) => {
+      const part = el("label", "price-part");
+      part.append(el("span", "price-caption", caption), control);
+      return part;
+    };
+    prices.append(priced("Input, $ per 1M", priceIn), priced("Output, $ per 1M", priceOut));
+    // Where the price came from: a price of the user is never changed; one of the catalog is updated daily.
+    const priceNote = el("p", "hint price-note");
+    const source = model.price ? (model.price.source ?? "user") : undefined;
+    const day = model.price?.checked
+      ? new Date(`${model.price.checked}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+      : "";
+    priceNote.append(
+      source === "user"
+        ? "Your price: Phew never changes it. "
+        : source === "catalog"
+          ? `From the catalog of OpenRouter${day ? `, ${day}` : ""}. Phew updates it once a day; type a price to use your own.`
+          : source === "provider"
+            ? `From OpenRouter${day ? `, ${day}` : ""}, updated once a day.`
+            : source === "local"
+              ? "A model on this computer: free."
+              : "No price found for this model. Type it from the pricing page of the provider, in US dollars per million tokens.",
+    );
+    if (source === "user") {
+      const auto = button(
+        "Use the catalog price",
+        () => this.post({ type: "updateModel", id: model.id, field: "priceAuto", value: null }),
+        "link",
+      );
+      auto.title = "Let Phew fill the price from the catalog of OpenRouter, when it has this model";
+      priceNote.append(auto);
+    }
+    field("Price", prices);
+    box.append(priceNote);
+    const budget = number("budget", model.budget ?? null, "No budget", "1");
     field(
-      "Price",
-      prices,
-      "US dollars per million tokens, for the cost display and budget. Check the current prices of your provider.",
+      "Monthly budget, US dollars",
+      budget,
+      model.budget
+        ? `The ring next to the model shows what Phew spent of it this month: $${(model.spent ?? 0).toFixed(2)} so far.`
+        : "With a budget, a ring next to the model shows what Phew spent of it this month.",
     );
     box.append(
       el("p", "hint", "Headers, query parameters, and extra request fields are in settings.json (phew.models)."),

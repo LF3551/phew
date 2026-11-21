@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+  budgetRing,
   describeQuota,
   parseCopilotUser,
   parseDeepSeekBalance,
@@ -142,5 +143,36 @@ describe("the ring", () => {
     expect(describeQuota({ name: "Chat messages", unit: "requests", limit: 200, remaining: 190.5 })).toBe(
       "Chat messages: 190.5 of 200 left",
     );
+  });
+});
+
+describe("the budget ring", () => {
+  const today = new Date(2026, 10, 21, 12);
+
+  test("shows what Phew spent of the budget this month", () => {
+    expect(budgetRing({ name: "Claude", budget: 20, spent: 7.4, priced: true, today })).toEqual({
+      plan: "Budget",
+      left: 0.63,
+      short: "$7.40/$20",
+      details: [
+        "Budget of Claude: $20 a month",
+        "Spent through Phew: $7.40, $12.60 left",
+        "Counted by Phew from the tokens of each answer and the price of the model. Use of the same key elsewhere is not counted.",
+        "Starts again on Dec 1 (in 10 days)",
+      ],
+    });
+  });
+
+  test("an overspent budget is an empty ring", () => {
+    const ring = budgetRing({ name: "Claude", budget: 5, spent: 6.2, priced: true, today });
+    expect(ring.left).toBe(0);
+    expect(ring.details[1]).toBe("Spent through Phew: $6.20, $0.00 left");
+  });
+
+  test("without a price, Phew says that it cannot count money", () => {
+    const ring = budgetRing({ name: "Claude", budget: 20, spent: 0, priced: false, today });
+    expect(ring.left).toBeUndefined();
+    expect(ring.short).toBe("?/$20");
+    expect(ring.details[1]).toMatch(/no price/);
   });
 });

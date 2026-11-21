@@ -8,6 +8,10 @@ const activityKey = "phew.activity";
 const seenKey = "phew.achievementsSeen";
 
 /** Stores the local statistics in the global state of the extension. */
+/** The money that each model cost, by month: { "2026-11": { "profile-id": 7.4 } }. */
+const spendKey = "phew.spend";
+const monthOf = (at: Date) => `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, "0")}`;
+
 export class StatsStore {
   constructor(private readonly memento: vscode.Memento) {}
 
@@ -33,6 +37,27 @@ export class StatsStore {
   }
 
   /** Records a finished task and returns the achievements that the user earned now. */
+  /** Adds what one answer of a model cost to its month, by the id of the model. Three months are kept. */
+  async recordSpend(profileId: string, cost: number, at = new Date()): Promise<void> {
+    if (!(cost > 0)) return;
+    const month = monthOf(at);
+    const spend = this.memento.get<Record<string, Record<string, number>>>(spendKey) ?? {};
+    const current = spend[month] ?? {};
+    const next = { ...spend, [month]: { ...current, [profileId]: (current[profileId] ?? 0) + cost } };
+    const kept = Object.fromEntries(
+      Object.entries(next)
+        .sort(([a], [b]) => b.localeCompare(a))
+        .slice(0, 3),
+    );
+    await this.memento.update(spendKey, kept);
+  }
+
+  /** What a model cost this month, as Phew counted it. */
+  spentThisMonth(profileId: string, at = new Date()): number {
+    const spend = this.memento.get<Record<string, Record<string, number>>>(spendKey) ?? {};
+    return spend[monthOf(at)]?.[profileId] ?? 0;
+  }
+
   async recordTask(task: TaskRecord): Promise<string[]> {
     await this.memento.update(activityKey, recordActivity(this.activity(), task));
     const earned = earnedAchievements(this.get(), this.activity(), task.date);

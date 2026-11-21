@@ -733,6 +733,11 @@
                   "type": "string",
                   "description": "Environment variable with the API key. A key in the secret storage wins."
                 },
+                "budget": {
+                  "type": "number",
+                  "minimum": 0.01,
+                  "description": "A monthly budget in US dollars. The ring next to the model shows what Phew spent of it this month, from the tokens of each answer and the price of the model."
+                },
                 "showPlan": {
                   "type": "boolean",
                   "description": "Show the plan of this model (what is left of it) next to it. Phew asks the provider only when you click it. For GitHub Copilot, Phew reads the address that Copilot itself uses, which has no official API."
@@ -787,6 +792,20 @@
                     "output": {
                       "type": "number",
                       "minimum": 0
+                    },
+                    "source": {
+                      "type": "string",
+                      "enum": [
+                        "user",
+                        "provider",
+                        "catalog",
+                        "local"
+                      ],
+                      "description": "Where the price came from. Phew updates prices from the provider or the catalog of OpenRouter once a day, and never changes a price of the user (also one without a source)."
+                    },
+                    "checked": {
+                      "type": "string",
+                      "description": "The day when Phew took the price from the provider or the catalog."
                     },
                     "cachedInput": {
                       "type": "number",

@@ -164,3 +164,46 @@ export function planRing(usage: PlanUsage, today = new Date()): PlanRing | undef
   ].filter(Boolean);
   return { ...(usage.plan ? { plan: usage.plan } : {}), ...(left !== undefined ? { left } : {}), short, details };
 }
+
+/**
+ * The ring of a monthly budget that the user set for a model: what Phew spent of it this month, from the tokens of
+ * each answer and the price of the model. It is the count of Phew, not the balance of the provider.
+ */
+export function budgetRing(input: {
+  readonly name: string;
+  readonly budget: number;
+  readonly spent: number;
+  /** False when the model has no price: then Phew can count no money. */
+  readonly priced: boolean;
+  readonly today?: Date;
+}): PlanRing {
+  const today = input.today ?? new Date();
+  const next = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+  const days = Math.ceil((next.getTime() - today.getTime()) / 86_400_000);
+  // Short for the ring, exact in the details.
+  const money = (value: number) => `$${value < 10 ? value.toFixed(2) : value.toFixed(0)}`;
+  const exact = (value: number) => `$${value.toFixed(2)}`;
+  const reset = `Starts again on ${next.toLocaleDateString("en-US", { month: "short", day: "numeric" })} (in ${days} day${days === 1 ? "" : "s"})`;
+  if (!input.priced)
+    return {
+      plan: "Budget",
+      short: `?/${money(input.budget)}`,
+      details: [
+        `Budget of ${input.name}: ${money(input.budget)} a month`,
+        "The model has no price, so Phew cannot count money. Add the price in the settings of the model.",
+        reset,
+      ],
+    };
+  const left = Math.max(0, input.budget - input.spent);
+  return {
+    plan: "Budget",
+    left: Math.min(1, left / input.budget),
+    short: `${money(input.spent)}/${money(input.budget)}`,
+    details: [
+      `Budget of ${input.name}: ${money(input.budget)} a month`,
+      `Spent through Phew: ${exact(input.spent)}, ${exact(left)} left`,
+      "Counted by Phew from the tokens of each answer and the price of the model. Use of the same key elsewhere is not counted.",
+      reset,
+    ],
+  };
+}

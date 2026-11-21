@@ -9,7 +9,7 @@ import { conversationToMarkdown } from "../core/export";
 import { chooseModelId, modelPicks } from "../core/modelChoice";
 import { builtInModes, type ModeDefinition, parseCustomModes } from "../core/modes";
 import { type Assistant, defaultAssistant, parseAssistant } from "../core/persona";
-import { planRing } from "../core/planUsage";
+import { budgetRing, planRing } from "../core/planUsage";
 import { type SetupOption, setupOptions } from "../core/setupOptions";
 import { type WhatsNew, whatsNewFor } from "../core/whatsNew";
 import { branchName, isValidBranch, worktreeFolder } from "../core/worktree";
@@ -393,7 +393,18 @@ export class SessionManager implements vscode.Disposable {
     const planOf = (item: (typeof allProfiles)[number]) => {
       const last = item.showPlan ? this.deps.plans?.last(item) : undefined;
       const ring = last ? planRing(last.usage) : undefined;
-      return ring ? { plan: { ...ring, checked: clockTime(last?.at ?? Date.now()) } } : {};
+      if (ring) return { plan: { ...ring, checked: clockTime(last?.at ?? Date.now()) } };
+      // A monthly budget of the user: what Phew spent of it this month, counted on this computer.
+      if (item.budget)
+        return {
+          plan: budgetRing({
+            name: item.name,
+            budget: item.budget,
+            spent: this.deps.stats.spentThisMonth(item.id),
+            priced: item.price !== undefined,
+          }),
+        };
+      return {};
     };
     return {
       sessionId: session?.id ?? "",
@@ -410,7 +421,7 @@ export class SessionManager implements vscode.Disposable {
       model: profile?.name ?? "No model",
       modelId: profile?.model ?? "",
       ...(profile && planOf(profile).plan ? { modelPlan: planOf(profile).plan } : {}),
-      ...(profile?.showPlan && planSource(profile) ? { planCheckable: true } : {}),
+      ...((profile?.showPlan && planSource(profile)) || profile?.budget ? { planCheckable: true } : {}),
       terminals: (session?.terminals ?? []).map(viewTerminal),
       otherTerminals: [...this.sessions.values()]
         .filter((other) => other !== session && other.terminals.length > 0)
@@ -1118,7 +1129,21 @@ export class SessionManager implements vscode.Disposable {
   async checkPlan(view: ChatViewHandle): Promise<void> {
     const session = this.sessionFor(view);
     const profile = session?.currentProfile;
-    if (!profile?.showPlan || !this.deps.plans) return;
+    if (!profile) return;
+    // A budget without a plan of the provider: the report is the count of Phew, with no request.
+    if (profile.budget && !(profile.showPlan && planSource(profile))) {
+      view.post({
+        type: "planReport",
+        plan: budgetRing({
+          name: profile.name,
+          budget: profile.budget,
+          spent: this.deps.stats.spentThisMonth(profile.id),
+          priced: profile.price !== undefined,
+        }),
+      });
+      return;
+    }
+    if (!profile.showPlan || !this.deps.plans) return;
     try {
       const usage = await this.deps.plans.check(profile);
       const ring = usage ? planRing(usage) : undefined;

@@ -234,9 +234,16 @@ export class SettingsPanel implements vscode.Disposable {
                 typeof price.output === "number" &&
                 price.input >= 0 &&
                 price.output >= 0
-                  ? { input: price.input, output: price.output }
+                  ? // A price that the user types is the price of the user: Phew never changes it.
+                    { input: price.input, output: price.output, source: "user" }
                   : undefined,
             };
+          }
+          // Back to the price of the catalog: the next update fills it again.
+          if (field === "priceAuto") changes = { price: undefined };
+          if (field === "budget") {
+            const budget = number(0.01, 1_000_000);
+            changes = { budget };
           }
           if (!changes || Object.values(changes).some((item) => typeof item === "number" && Number.isNaN(item))) {
             this.post({ type: "error", key: `model:${profile.id}:${field}`, text: "This value is not valid." });
@@ -390,6 +397,8 @@ export class SettingsPanel implements vscode.Disposable {
             return last ? (planRing(last.usage) ?? null) : null;
           })(),
           showPlan: profile.showPlan === true,
+          budget: profile.budget ?? null,
+          spent: this.stats.spentThisMonth(profile.id),
           planSource: (() => {
             const source = planSource(profile);
             return source === "copilot" || source === "copilot-vscode" ? "copilot" : source ? "official" : null;

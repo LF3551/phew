@@ -1,3 +1,4 @@
+import type { PriceSource } from "../core/priceCatalog";
 /** The API protocol of a model provider. */
 export type ProviderKind = "openai" | "anthropic" | "gemini" | "vscode";
 
@@ -44,7 +45,17 @@ export interface ModelProfile {
   /** Maximum output tokens. Anthropic needs a value; other providers use their default when empty. */
   readonly maxTokens?: number;
   /** Price in US dollars per one million tokens, for the cost display and budget. */
-  readonly price?: { readonly input: number; readonly output: number; readonly cachedInput?: number };
+  readonly price?: {
+    readonly input: number;
+    readonly output: number;
+    readonly cachedInput?: number;
+    /** Where the price came from; a price of the user is never changed by Phew. Missing means the user. */
+    readonly source?: PriceSource;
+    /** The day of a price from the catalog or the provider, YYYY-MM-DD. */
+    readonly checked?: string;
+  };
+  /** A monthly budget in US dollars: the ring next to the model shows what Phew spent of it this month. */
+  readonly budget?: number;
   /** Size of the context window in tokens, for the context meter and automatic compaction. */
   readonly contextWindow?: number;
   /** For OpenAI-compatible providers: Chat Completions (`chat`) or the Responses API (`responses`). */
@@ -113,6 +124,12 @@ export function parseProfile(value: unknown): ModelProfile | string {
   const input = finiteNumber(price.input, 0, 1_000_000);
   const output = finiteNumber(price.output, 0, 1_000_000);
   const cachedInput = finiteNumber(price.cachedInput, 0, 1_000_000);
+  const priceSource = ["user", "provider", "catalog", "local"].includes(String(price.source))
+    ? (price.source as PriceSource)
+    : undefined;
+  const priceChecked =
+    typeof price.checked === "string" && /^\d{4}-\d{2}-\d{2}$/.test(price.checked) ? price.checked : undefined;
+  const budget = finiteNumber(raw.budget, 0.01, 1_000_000);
   const maxTokens = finiteNumber(raw.maxTokens, 1, 10_000_000);
   const contextWindow = finiteNumber(raw.contextWindow, 1000, 100_000_000);
   return {
@@ -141,9 +158,16 @@ export function parseProfile(value: unknown): ModelProfile | string {
     maxTokens: maxTokens === undefined ? undefined : Math.round(maxTokens),
     price:
       input !== undefined && output !== undefined
-        ? { input, output, ...(cachedInput !== undefined ? { cachedInput } : {}) }
+        ? {
+            input,
+            output,
+            ...(cachedInput !== undefined ? { cachedInput } : {}),
+            ...(priceSource ? { source: priceSource } : {}),
+            ...(priceChecked ? { checked: priceChecked } : {}),
+          }
         : undefined,
     contextWindow: contextWindow === undefined ? undefined : Math.round(contextWindow),
+    budget,
     api: kind === "openai" && raw.api === "responses" ? "responses" : undefined,
   };
 }
@@ -184,6 +208,7 @@ export function serializeProfile(profile: ModelProfile): Record<string, unknown>
   if (profile.apiKeyCommand) result.apiKeyCommand = profile.apiKeyCommand;
   if (profile.fallback) result.fallback = profile.fallback;
   if (profile.showPlan) result.showPlan = true;
+  if (profile.budget) result.budget = profile.budget;
   if (Object.keys(profile.headers).length > 0) result.headers = profile.headers;
   if (Object.keys(profile.query).length > 0) result.query = profile.query;
   if (Object.keys(profile.extraBody).length > 0) result.extraBody = profile.extraBody;

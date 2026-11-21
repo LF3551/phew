@@ -5,6 +5,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- **Prices fill themselves, and yours stay.** Phew takes the price of a model from the public list of OpenRouter, which has the prices of Anthropic, OpenAI, Google, Mistral, and xAI models at the price of the provider, with the price of cached input. It needs an exact match of the model (a dated snapshot counts as its model), downloads the list at most once a day and only when a model needs it, and sends nothing but that download. A price that you type is yours: Phew never changes it, also a price from before this version; **Use the catalog price** gives the choice back. The settings show where each price came from and its day. Models on this computer are free; Copilot has no price per token.
+- **A monthly budget per model.** Set it in the settings of the model, and a ring next to it shows what Phew spent of it this month, from the tokens of each answer (also of subagents, titles, and compaction) and the price of the model; a click shows the report. It is the count of Phew, not the balance of the provider, and says so.
+
 ## [1.4.0] - 2026-11-21
 
 ### Added

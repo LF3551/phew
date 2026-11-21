@@ -1116,6 +1116,55 @@ async function run() {
       await vscode.workspace.getConfiguration("phew").update("models", swapModels, global);
     }
 
+    console.log("[it] prices and a monthly budget");
+    // A price of the user stays; each answer counts for the month; the ring shows the budget; the catalog price
+    // comes back on request (a model on this computer is free).
+    const priceModels = current("models");
+    const userPrice = { input: 3000, output: 15000, source: "user" };
+    await vscode.workspace.getConfiguration("phew").update(
+      "models",
+      [
+        ...priceModels.filter((model) => model.id !== "budgeted"),
+        {
+          id: "budgeted",
+          name: "Budgeted",
+          provider: "openai",
+          baseUrl: `http://127.0.0.1:${port}/v1`,
+          model: "fake-model",
+          auth: "none",
+          price: userPrice,
+          budget: 100,
+        },
+      ],
+      global,
+    );
+    try {
+      await api.prices.apply();
+      assert.deepEqual(
+        current("models").find((model) => model.id === "budgeted").price,
+        userPrice,
+        "the price of the user is never changed",
+      );
+      sessions.newSession();
+      const spender = sessions.active;
+      await sessions.useModel("budgeted");
+      await spender.run({ text: "Spend a little", kind: "chat", mode: "ask" });
+      const budgetView = sessions.state().modelPlan;
+      assert.equal(budgetView?.plan, "Budget", "the ring shows the budget");
+      assert.match(budgetView.details[1], /^Spent through Phew: \$\d+\.\d\d, \$\d+\.\d\d left$/);
+      assert.ok(budgetView.left < 1 && budgetView.left > 0, `part of the budget is spent: ${budgetView.left}`);
+      assert.ok(sessions.state().planCheckable, "and a click shows its report");
+      await api.settings.receiveForTest({ type: "updateModel", id: "budgeted", field: "priceAuto", value: null });
+      await api.prices.apply();
+      assert.deepEqual(
+        current("models").find((model) => model.id === "budgeted").price,
+        { input: 0, output: 0, source: "local", checked: new Date().toLocaleDateString("sv-SE") },
+        "Use the catalog price gives a model on this computer its free price",
+      );
+    } finally {
+      await vscode.workspace.getConfiguration("phew").update("models", priceModels, global);
+    }
+
     console.log("[it] a stable start of the request");
     // The prompt cache only helps when the start of the request stays the same from message to message. A folder
     // with more nested rule files than Phew lists (60) once gave a different subset at each request.

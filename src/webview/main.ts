@@ -477,12 +477,11 @@ function applyState(next: ViewState): void {
     const check = element("button", `plan-check${plan ? "" : " empty"}`);
     check.type = "button";
     check.append(plan ? planRingNode(plan) : element("span", "plan-ring-dial"));
-    check.title = plan
-      ? `${plan.details.join("\n")}\nChecked at ${plan.checked}. Click to check again.`
-      : "Check the plan of this model";
+    const when = plan?.checked ? `\nChecked at ${plan.checked}. Click to check again.` : "";
+    check.title = plan ? `${plan.details.join("\n")}${when}` : "Check the plan of this model";
     check.setAttribute(
       "aria-label",
-      plan ? `${planLabel(plan)}. Checked at ${plan.checked}. Check again` : "Check the plan of this model",
+      plan ? `${planLabel(plan)}${plan.checked ? `. Checked at ${plan.checked}` : ""}` : "Check the plan of this model",
     );
     check.addEventListener("click", () => {
       check.classList.add("checking");
@@ -1394,7 +1393,7 @@ function showPlanReport(plan: ModelPlanView | undefined, error: string | undefin
       report.append(bar);
     }
     for (const line of lines) report.append(element("p", "plan-report-line", line));
-    report.append(element("p", "plan-report-time", `Checked at ${plan.checked ?? ""}`));
+    if (plan.checked) report.append(element("p", "plan-report-time", `Checked at ${plan.checked}`));
   } else report.append(element("p", "plan-report-line", error ?? "No plan."));
   const close = () => {
     report.remove();

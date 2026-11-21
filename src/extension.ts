@@ -3,6 +3,7 @@ import { activityBadge } from "./core/activity";
 import type { Attachment } from "./core/attachments";
 import { attachmentLabel } from "./core/attachments";
 import { truncateMiddle } from "./core/chat";
+import { usageCost } from "./core/cost";
 import { findMode } from "./core/modes";
 import { buildCommandFixRequest, buildFixRequest } from "./core/prompts";
 import { MentionProvider } from "./host/attachments";
@@ -19,6 +20,7 @@ import { MemoryStore } from "./host/memoryStore";
 import { ModelManager } from "./host/models";
 import { fileProblemsRequest, fixProblemCommand, PhewItCodeActionProvider, problemContext } from "./host/phewIt";
 import { PlanUsageService } from "./host/planUsage";
+import { PriceCatalogService } from "./host/priceCatalog";
 import { RatingService } from "./host/rating";
 import { reportProblem } from "./host/reportProblem";
 import { ReviewManager } from "./host/reviewManager";
@@ -46,6 +48,8 @@ export interface PhewTestApi {
   memory: MemoryStore;
   /** The settings page, to click through it in tests. */
   settings: SettingsPanel;
+  /** The prices from the catalog, updated by hand in tests. */
+  prices: PriceCatalogService;
   /** The text of a bug report, without the editor and the questions. */
   reportProblem(description: string): Promise<string | undefined>;
 }
@@ -130,6 +134,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<PhewTe
   updateStatus();
 
   const settingsPanel = new SettingsPanel(context, models, index, memory, stats, plans);
+  // Prices: filled from the public catalog of OpenRouter once a day; a price of the user is never changed.
+  const prices = new PriceCatalogService(context.globalState, models, log);
+  const updatePrices = () => void prices.apply().catch(() => undefined);
+  // Tests update the prices themselves, so the settings never change under them.
+  const automatic = context.extensionMode !== vscode.ExtensionMode.Test;
+  const firstPrices = automatic ? setTimeout(updatePrices, 5000) : undefined;
+  const dailyPrices = automatic ? setInterval(updatePrices, 6 * 60 * 60_000) : undefined;
+  context.subscriptions.push({ dispose: () => (clearTimeout(firstPrices), clearInterval(dailyPrices)) });
+  // Each answer of a model counts for its month, at its price, for the budget ring.
+  models.onUsage = (profile, usage) => {
+    const current = models.profiles().profiles.find((item) => item.id === profile.id) ?? profile;
+    if (current.price) void stats.recordSpend(current.id, usageCost(usage, current.price));
+  };
   const commits = new CommitAssistant(models, log);
   const completions = new CompletionProvider(models);
   const nextEdit = new NextEditPredictor(models, reviews);
@@ -502,6 +519,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<PhewTe
       if (event.affectsConfiguration("phew.modes")) manager.reloadModes();
       if (event.affectsConfiguration("phew.autocomplete")) completions.update();
       if (event.affectsConfiguration("phew.mcp")) void mcp.restartAll();
+      if (event.affectsConfiguration("phew.models") && automatic) updatePrices();
       manager.postState();
       updateStatus();
     }),
@@ -530,6 +548,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<PhewTe
     models,
     memory: memory,
     settings: settingsPanel,
+    prices,
     reportProblem: (description: string) =>
       reportProblem(models, recentLog, String(context.extension.packageJSON.version), { description }),
   };

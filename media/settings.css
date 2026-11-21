@@ -1096,3 +1096,19 @@ button.model-option:focus-visible {
 .check-row input {
   margin: 0;
 }
+
+/* The price of a model: two named fields, and where the price came from below them. */
+.price-part {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.price-caption {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.price-note {
+  margin: -4px 0 14px;
+}
