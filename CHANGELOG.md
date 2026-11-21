@@ -7,6 +7,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- **What is left of the plan of a model, on request.** In the settings of a model (⋯), **Show what is left of the plan** puts a small ring next to the model under the input. A click asks the provider once and shows a short report: the plan, what is used and left, when it starts again, and when it was checked; nothing is asked on a timer. It works with GitHub Copilot (by token, or the GitHub sign-in of VS Code that you already have), whose quotas come from the address that Copilot itself uses, without an official API; and with the official APIs of OpenRouter (credits) and DeepSeek (balance). Other providers do not share their plan. The menu of models and the card of the model show the last check. Off by default.
 - **Choose another model of a connected provider.** In the card of a model on the settings page, **⋯ → Model → Choose…** loads the models of the provider with the saved key, with search and their context windows. The list shows readable names with the exact id below, the model in use first, and names in natural order (4.1, 4.5, 4.10). When the provider reports another context window for the model in use than the setting, one click takes it. A click switches the model, takes its context window, renames a name that Phew made ("Anthropic · claude-haiku-5-5" becomes "Anthropic · claude-sonnet-…"), and tests the connection. Before, the model of a connected provider could only be typed.
 
 ## [1.3.0] - 2026-11-20

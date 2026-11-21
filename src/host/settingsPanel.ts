@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import * as vscode from "vscode";
 import { describeCommitIdentity } from "../core/commit";
+import { planRing } from "../core/planUsage";
 import { apiFor } from "../providers/factory";
 import { providerPresets } from "../providers/presets";
 import type { CodeIndexManager } from "./codeIndexManager";
@@ -8,6 +9,7 @@ import { gitIdentity } from "./git";
 import { escapeHtml } from "./html";
 import type { MemoryStore } from "./memoryStore";
 import { type ModelManager, piCopilotToken, providerNames } from "./models";
+import { type PlanUsageService, planSource } from "./planUsage";
 import { readSettings, updateSetting } from "./settings";
 import type { StatsStore } from "./statsStore";
 
@@ -55,6 +57,7 @@ export class SettingsPanel implements vscode.Disposable {
     private readonly index: CodeIndexManager,
     private readonly memory: MemoryStore,
     private readonly stats: StatsStore,
+    private readonly plans?: PlanUsageService,
   ) {
     this.subscription = vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("phew")) void this.refresh();
@@ -214,6 +217,7 @@ export class SettingsPanel implements vscode.Disposable {
           if (field === "contextWindow") changes = { contextWindow: number(1000, 100_000_000) };
           if (field === "api" && (value === "chat" || value === "responses"))
             changes = { api: value === "responses" ? "responses" : undefined };
+          if (field === "showPlan" && typeof value === "boolean") changes = { showPlan: value || undefined };
           if (field === "fallback" && (value === null || typeof value === "string")) {
             const target = typeof value === "string" ? value.trim() : "";
             const valid =
@@ -340,6 +344,11 @@ export class SettingsPanel implements vscode.Disposable {
     return map;
   }
 
+  /** Shows new plan numbers when the page is open. */
+  async refreshIfOpen(): Promise<void> {
+    if (this.panel) await this.refresh();
+  }
+
   private async refresh(): Promise<void> {
     if (!this.panel) return;
     const config = vscode.workspace.getConfiguration();
@@ -376,6 +385,15 @@ export class SettingsPanel implements vscode.Disposable {
           price: profile.price ?? null,
           api: profile.provider === "openai" ? (profile.api ?? "chat") : null,
           fallback: profile.fallback ?? null,
+          plan: (() => {
+            const last = profile.showPlan ? this.plans?.last(profile) : undefined;
+            return last ? (planRing(last.usage) ?? null) : null;
+          })(),
+          showPlan: profile.showPlan === true,
+          planSource: (() => {
+            const source = planSource(profile);
+            return source === "copilot" || source === "copilot-vscode" ? "copilot" : source ? "official" : null;
+          })(),
         })),
       ),
       identity: folder

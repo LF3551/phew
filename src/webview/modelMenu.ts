@@ -1,6 +1,7 @@
 import { modelMaker, modelTitle, providerLabels } from "../core/modelLabels";
 import { icon } from "../shared/icons";
 import type { ModelOption, WebviewMessage } from "../shared/protocol";
+import { planRingNode } from "./planRing";
 
 /**
  * The model menu opens right above the model button, not at the top of the window.
@@ -82,6 +83,8 @@ export function createModelMenu(options: {
     const text = el("span", "model-text");
     text.append(el("span", "model-name", title));
     if (detail) text.append(el("span", "model-detail", detail));
+    // The plan of this model: each model can have its own, with what is left of it.
+    if (model.plan) text.append(planRingNode(model.plan, true));
     const end = el("span", "model-end");
     if (model.active) end.append(iconNode("check"));
     else if (index < 9 && !filter) end.append(el("kbd", undefined, String(index + 1)));

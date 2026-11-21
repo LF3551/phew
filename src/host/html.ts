@@ -203,6 +203,7 @@ export function renderChatHtml(options: ChatHtmlOptions): string {
           <input type="file" id="imageInput" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
           <span class="spacer"></span>
           <button type="button" class="context-ring" id="context" hidden title="Context"><span id="contextLabel"></span></button>
+          <span class="plan-slot" id="planSlot" role="img" tabindex="0" hidden></span>
           <button type="button" class="pill model" id="model" title="Switch model" aria-haspopup="menu" aria-expanded="false" aria-controls="modelMenu"></button>
           <button type="submit" class="send" id="send" title="Send" aria-label="Send">${icon("send")}</button>
           <button type="button" class="send stop" id="stop" title="Stop (Esc)" aria-label="Stop" hidden>${icon("stop")}</button>

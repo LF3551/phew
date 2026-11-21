@@ -1,4 +1,6 @@
 import { modelMaker } from "../core/modelLabels";
+import type { ModelPlanView } from "../shared/protocol";
+import { planRingNode } from "./planRing";
 import { iconNode, sectionHeader } from "./settingsParts";
 /** The Models section of the settings page: connected models and a guided form to connect a new one. */
 
@@ -36,6 +38,12 @@ export interface ModelItem {
   api: "chat" | "responses" | null;
   /** The id of the model that takes over when this one runs out of quota. */
   fallback: string | null;
+  /** The plan of the model, when its provider tells it. */
+  plan?: ModelPlanView | null;
+  /** Show the plan next to the model. */
+  showPlan?: boolean;
+  /** How the provider tells its plan: an official API, the address of Copilot, or not at all. */
+  planSource?: "official" | "copilot" | null;
 }
 
 interface TestResult {
@@ -289,6 +297,13 @@ export class ModelsSection {
     const parts = [model.model, model.provider];
     if (model.contextWindow) parts.push(`${formatTokens(model.contextWindow)} context`);
     facts.append(el("span", undefined, parts.join(" · ")));
+    // The plan: a ring with what is left, and the details in its tooltip.
+    if (model.plan) {
+      const plan = planRingNode(model.plan, true);
+      plan.setAttribute("role", "img");
+      plan.setAttribute("aria-label", model.plan.details.join(". "));
+      facts.append(plan);
+    }
     const fallback = this.models.find((item) => item.id === model.fallback && item.id !== model.id);
     if (fallback) {
       const line = el("span", "fallback-fact", `Fallback: ${fallback.name}`);
@@ -434,6 +449,26 @@ export class ModelsSection {
       "0 to 2. Empty uses the provider default.",
     );
     field("Max output tokens", number("maxTokens", model.maxTokens, "Provider default", "1"));
+    // The plan: off by default; checked only when the user clicks it next to the model.
+    if (model.planSource) {
+      const row = el("label", "check-row");
+      const box2 = input("checkbox", "");
+      box2.checked = model.showPlan === true;
+      box2.addEventListener("change", () =>
+        this.post({ type: "updateModel", id: model.id, field: "showPlan", value: box2.checked }),
+      );
+      row.append(box2, el("span", undefined, "Show what is left of the plan next to the model"));
+      box.append(row);
+      box.append(
+        el(
+          "p",
+          "hint",
+          model.planSource === "copilot"
+            ? "Phew checks only when you click the plan next to the model. GitHub has no official API for the quotas of Copilot, so Phew reads them from the address that Copilot itself uses, with your token."
+            : "Phew checks only when you click the plan next to the model, through the official API of the provider.",
+        ),
+      );
+    } else box.append(el("p", "hint", "This provider does not share its plan or what is left of it."));
     const others = this.models.filter((item) => item.id !== model.id);
     if (others.length > 0) {
       const select = el("select");

@@ -362,6 +362,9 @@ class ChatController implements ChatViewHandle {
           message.action,
         );
         return;
+      case "checkPlan":
+        await this.sessions.checkPlan(this);
+        return;
       case "openPort":
         // Only the own computer: the port of a server that an agent started.
         await vscode.env.openExternal(vscode.Uri.parse(`http://localhost:${message.port}/`));

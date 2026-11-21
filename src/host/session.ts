@@ -59,6 +59,7 @@ import type { HandoffService } from "./handoffs";
 import type { McpManager } from "./mcpManager";
 import type { MemoryStore } from "./memoryStore";
 import type { ModelManager } from "./models";
+import type { PlanUsageService } from "./planUsage";
 import { projectBrief } from "./projectBrief";
 import type { RatingService } from "./rating";
 import type { ReviewManager } from "./reviewManager";
@@ -95,6 +96,8 @@ export type NotifyEvent = "done" | "failed" | "input" | "fallback" | "stalled";
 
 export interface SessionDependencies {
   readonly context: vscode.ExtensionContext;
+  /** The plans of the models, when their providers tell them. */
+  readonly plans?: PlanUsageService;
   readonly log: vscode.LogOutputChannel;
   readonly diffs: DiffContentProvider;
   readonly mcp: McpManager;

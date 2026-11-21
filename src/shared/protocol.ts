@@ -76,6 +76,10 @@ export interface ViewState {
   readonly onboarding: boolean;
   /** The model id of the active profile, for example gpt-5.1. */
   readonly modelId: string;
+  /** The plan of the model of the chat, for the ring next to the model; missing when its provider tells none. */
+  readonly modelPlan?: ModelPlanView;
+  /** The model has Show plan on: the ring checks its plan when clicked, also before the first check. */
+  readonly planCheckable?: boolean;
   /** The terminals of the chat, for the list in the chat. */
   readonly terminals: readonly {
     readonly id: string;
@@ -172,6 +176,19 @@ export interface ModelOption {
   readonly model: string;
   readonly contextWindow?: number;
   readonly active: boolean;
+  /** The plan of the model, when its provider tells it. */
+  readonly plan?: ModelPlanView;
+}
+
+/** The plan of a model for the ring: the share that is left, a short text, and the details. */
+export interface ModelPlanView {
+  readonly plan?: string;
+  /** From 0 to 1, what is left; missing when there is no limit to compare with. */
+  readonly left?: number;
+  readonly short: string;
+  readonly details: readonly string[];
+  /** When the plan was checked, for example "04:31". */
+  readonly checked?: string;
 }
 
 /** Context that the attach menu offers in one click, from the state of the editor. */
@@ -225,6 +242,8 @@ export type HostMessage = (
   | { readonly type: "plan"; readonly plan: PlanView }
   | { readonly type: "queue"; readonly items: readonly QueuedView[] }
   | { readonly type: "sound"; readonly style: "phew" | "chime"; readonly event: "done" | "failed" | "input" }
+  /** The answer to a click on the plan of the model: the report, or why there is none. */
+  | { readonly type: "planReport"; readonly plan?: ModelPlanView; readonly error?: string }
   | { readonly type: "achievement"; readonly achievement: Achievement }
   | {
       readonly type: "wrapped";
@@ -384,6 +403,7 @@ export type WebviewMessage =
       readonly chatId?: string;
     }
   | { readonly type: "openPort"; readonly port: number }
+  | { readonly type: "checkPlan" }
   | { readonly type: "commandInput"; readonly id: string; readonly data: string }
   | { readonly type: "copyText"; readonly text: string }
   | { readonly type: "setApproval"; readonly key: "review"; readonly value: ReviewSetting }
@@ -656,6 +676,8 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
         ? { type: "terminalAction", id: terminal, action, ...(chatId ? { chatId } : {}) }
         : undefined;
     }
+    case "checkPlan":
+      return { type: "checkPlan" };
     case "openPort": {
       const port = message.port;
       return typeof port === "number" && Number.isInteger(port) && port >= 1 && port <= 65535

@@ -3322,6 +3322,126 @@ button.pill.model::after {
   color: var(--vscode-errorForeground);
 }
 
+/* The plan of the model: a hollow ring whose arc is what is left, and a short text. */
+.plan-slot {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 11px;
+}
+
+.plan-slot[hidden] {
+  display: none;
+}
+
+.plan-slot:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+
+.plan-ring {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 4px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.8em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.plan-ring-dial {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  background: conic-gradient(var(--phew-accent, var(--phew-drop)) var(--left), var(--vscode-panel-border, #8885) 0);
+  border-radius: 50%;
+  /* A hole in the middle: the context of the chat is a filled circle, the plan is a ring. */
+  mask: radial-gradient(circle, transparent 2.5px, #000 3px);
+}
+
+/* The plan of a model with Show plan on: a button with the last check; empty and dashed before the first one. */
+.plan-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  background: none;
+  border: none;
+  border-radius: 11px;
+  cursor: pointer;
+}
+
+.plan-check.empty .plan-ring-dial {
+  background: none;
+  border: 1.5px dashed var(--vscode-descriptionForeground);
+  mask: none;
+}
+
+.plan-check:hover {
+  background: var(--vscode-toolbar-hoverBackground, #8883);
+}
+
+.plan-check:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+}
+
+.plan-check.checking .plan-ring-dial {
+  animation: chat-pulse 1.2s ease-in-out infinite;
+}
+
+/* The report of one check, above the input. */
+.popover.plan-report {
+  right: 0;
+  left: auto;
+  gap: 4px;
+  width: min(300px, calc(100vw - 24px));
+  padding: 10px 12px;
+}
+
+.plan-report-title {
+  font-size: 0.95em;
+}
+
+.plan-report-bar {
+  height: 4px;
+  margin: 2px 0 4px;
+  background: linear-gradient(
+    to right,
+    var(--phew-accent, var(--phew-drop)) var(--left),
+    var(--vscode-panel-border, #8885) var(--left)
+  );
+  border-radius: 2px;
+}
+
+.plan-report-line,
+.plan-report-time {
+  margin: 0;
+  font-size: 0.88em;
+}
+
+.plan-report-time {
+  color: var(--vscode-descriptionForeground);
+}
+
+.plan-ring.compact {
+  height: auto;
+  padding: 0;
+  margin-top: 2px;
+  font-size: 0.85em;
+}
+
+/* On a narrow side bar the ring stays and the numbers go to its tooltip. */
+@media (max-width: 340px) {
+  .plan-slot .plan-ring-text {
+    display: none;
+  }
+}
+
 /* Popovers */
 
 .popover {

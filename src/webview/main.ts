@@ -9,6 +9,7 @@ import type {
   HistoryItem,
   HostMessage,
   MentionItem,
+  ModelPlanView,
   PlanView,
   QueuedView,
   SessionSummary,
@@ -42,6 +43,7 @@ import {
   showAssistantCard,
   showWrapped,
 } from "./persona";
+import { planLabel, planRingNode } from "./planRing";
 import { createSetupCard } from "./setupCard";
 import { renderSubagent } from "./subagentCard";
 import { appendCommandOutput, renderCommandTerminal, setCommandWhere, setTerminalLook } from "./terminalBlock";
@@ -466,6 +468,28 @@ function applyState(next: ViewState): void {
   approvalsPanel.update(next.approvals, currentMode && !currentMode.changes ? currentMode.name : undefined);
   $("approvalsButton").hidden = !next.trusted;
   $("restricted").hidden = next.trusted;
+
+  // The plan of the model, for a model with Show plan on: the last check, and a click checks it again.
+  const planSlot = $("planSlot");
+  planSlot.hidden = !next.planCheckable;
+  if (next.planCheckable) {
+    const plan = next.modelPlan;
+    const check = element("button", `plan-check${plan ? "" : " empty"}`);
+    check.type = "button";
+    check.append(plan ? planRingNode(plan) : element("span", "plan-ring-dial"));
+    check.title = plan
+      ? `${plan.details.join("\n")}\nChecked at ${plan.checked}. Click to check again.`
+      : "Check the plan of this model";
+    check.setAttribute(
+      "aria-label",
+      plan ? `${planLabel(plan)}. Checked at ${plan.checked}. Check again` : "Check the plan of this model",
+    );
+    check.addEventListener("click", () => {
+      check.classList.add("checking");
+      vscode.postMessage({ type: "checkPlan" });
+    });
+    planSlot.replaceChildren(check);
+  }
 
   const context = $("context");
   const percent = Math.round(next.context * 100);
@@ -1352,6 +1376,45 @@ const statusTone: Record<ChatStatusKind, string> = {
   idle: "",
 };
 
+/** The report of one check of the plan, next to the ring; it closes on a click elsewhere or on Escape. */
+function showPlanReport(plan: ModelPlanView | undefined, error: string | undefined): void {
+  const slot = $("planSlot");
+  slot.querySelector(".plan-check")?.classList.remove("checking");
+  document.getElementById("planReport")?.remove();
+  const report = element("div", "popover plan-report");
+  report.id = "planReport";
+  report.setAttribute("role", "dialog");
+  report.setAttribute("aria-label", "Plan of the model");
+  if (plan) {
+    const [title, ...lines] = plan.details;
+    report.append(element("strong", "plan-report-title", title ?? "Plan"));
+    if (plan.left !== undefined) {
+      const bar = element("div", "plan-report-bar");
+      bar.style.setProperty("--left", `${Math.round(plan.left * 100)}%`);
+      report.append(bar);
+    }
+    for (const line of lines) report.append(element("p", "plan-report-line", line));
+    report.append(element("p", "plan-report-time", `Checked at ${plan.checked ?? ""}`));
+  } else report.append(element("p", "plan-report-line", error ?? "No plan."));
+  const close = () => {
+    report.remove();
+    document.removeEventListener("mousedown", outside, true);
+    document.removeEventListener("keydown", onEscape, true);
+  };
+  const outside = (event: MouseEvent) => {
+    if (!report.contains(event.target as Node)) close();
+  };
+  const onEscape = (event: KeyboardEvent) => {
+    if (event.key !== "Escape") return;
+    event.stopPropagation();
+    close();
+    slot.querySelector<HTMLElement>(".plan-check")?.focus();
+  };
+  document.addEventListener("mousedown", outside, true);
+  document.addEventListener("keydown", onEscape, true);
+  $("composer").append(report);
+}
+
 // Sessions panel
 
 interface ChatRow {
@@ -1806,6 +1869,9 @@ function handle(message: HostMessage): void {
       break;
     case "queue":
       renderQueue(message.items);
+      break;
+    case "planReport":
+      showPlanReport(message.plan, message.error);
       break;
     case "sound":
       playSound(message.style, message.event);

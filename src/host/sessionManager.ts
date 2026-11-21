@@ -9,6 +9,7 @@ import { conversationToMarkdown } from "../core/export";
 import { chooseModelId, modelPicks } from "../core/modelChoice";
 import { builtInModes, type ModeDefinition, parseCustomModes } from "../core/modes";
 import { type Assistant, defaultAssistant, parseAssistant } from "../core/persona";
+import { planRing } from "../core/planUsage";
 import { type SetupOption, setupOptions } from "../core/setupOptions";
 import { type WhatsNew, whatsNewFor } from "../core/whatsNew";
 import { branchName, isValidBranch, worktreeFolder } from "../core/worktree";
@@ -16,6 +17,7 @@ import type { HostMessage, MentionItem, SessionSummary, ViewState } from "../sha
 import { ConversationStore, type StoredConversation } from "./conversationStore";
 import { git, gitOrThrow, repositoryRoot } from "./git";
 import { providerNames } from "./models";
+import { planSource } from "./planUsage";
 import {
   AgentSession,
   type NotifyEvent,
@@ -46,6 +48,9 @@ const viewTerminal = (terminal: TerminalInfo): ViewState["terminals"][number] =>
   const { idleSince: _idleSince, ...rest } = terminal;
   return rest;
 };
+
+/** A time of the day such as 04:31, for "checked at". */
+const clockTime = (at: number) => new Date(at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 
 export class SessionManager implements vscode.Disposable {
   private readonly sessions = new Map<string, AgentSession>();
@@ -384,6 +389,12 @@ export class SessionManager implements vscode.Disposable {
     const modeModelId = session?.mode.model;
     const modeProfile = modeModelId ? allProfiles.find((item) => item.id === modeModelId) : undefined;
     const profile = modeProfile ?? chatProfile;
+    // The last plan that the user checked, for models with Show plan on; nothing is asked here.
+    const planOf = (item: (typeof allProfiles)[number]) => {
+      const last = item.showPlan ? this.deps.plans?.last(item) : undefined;
+      const ring = last ? planRing(last.usage) : undefined;
+      return ring ? { plan: { ...ring, checked: clockTime(last?.at ?? Date.now()) } } : {};
+    };
     return {
       sessionId: session?.id ?? "",
       title: session?.title ?? "New chat",
@@ -398,6 +409,8 @@ export class SessionManager implements vscode.Disposable {
       })),
       model: profile?.name ?? "No model",
       modelId: profile?.model ?? "",
+      ...(profile && planOf(profile).plan ? { modelPlan: planOf(profile).plan } : {}),
+      ...(profile?.showPlan && planSource(profile) ? { planCheckable: true } : {}),
       terminals: (session?.terminals ?? []).map(viewTerminal),
       otherTerminals: [...this.sessions.values()]
         .filter((other) => other !== session && other.terminals.length > 0)
@@ -409,6 +422,7 @@ export class SessionManager implements vscode.Disposable {
         model: item.model,
         ...(item.contextWindow ? { contextWindow: item.contextWindow } : {}),
         active: item.id === chatProfile?.id,
+        ...planOf(item),
       })),
       ...(modeProfile ? { modeModel: modeProfile.name } : {}),
       provider: profile ? providerNames[profile.provider] : "Not configured",
@@ -1098,6 +1112,28 @@ export class SessionManager implements vscode.Disposable {
           .then(show);
         return;
     }
+  }
+
+  /** Checks the plan of the model of a chat once, because the user clicked it, and answers with the report. */
+  async checkPlan(view: ChatViewHandle): Promise<void> {
+    const session = this.sessionFor(view);
+    const profile = session?.currentProfile;
+    if (!profile?.showPlan || !this.deps.plans) return;
+    try {
+      const usage = await this.deps.plans.check(profile);
+      const ring = usage ? planRing(usage) : undefined;
+      view.post(
+        ring
+          ? { type: "planReport", plan: { ...ring, checked: clockTime(Date.now()) } }
+          : { type: "planReport", error: `${profile.name} shares no plan.` },
+      );
+    } catch (error) {
+      view.post({
+        type: "planReport",
+        error: `The plan is not available now: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
+    this.postState();
   }
 
   /** Who listens on a port: a terminal of this chat or of another one. */

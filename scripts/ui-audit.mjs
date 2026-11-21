@@ -617,6 +617,81 @@ const states = {
   },
   "menu-mode": { messages: kitchen, click: "#mode" },
   "menu-model": { messages: kitchen, click: "#model" },
+  // Show plan on, before the first check: a dashed ring; after a click, the report of the plan.
+  "plan-check": { messages: [...kitchen, { type: "state", state: state({ planCheckable: true }) }] },
+  "plan-report": {
+    messages: [
+      ...kitchen,
+      {
+        type: "state",
+        state: state({
+          planCheckable: true,
+          modelPlan: {
+            plan: "Business",
+            left: 0.4,
+            short: "120/300",
+            checked: "04:31",
+            details: [
+              "GitHub Copilot Business",
+              "Premium requests: 120 of 300 left (180 used)",
+              "Starts again on Dec 1 (in 10 days)",
+            ],
+          },
+        }),
+      },
+      {
+        type: "planReport",
+        plan: {
+          plan: "Business",
+          left: 0.4,
+          short: "120/300",
+          checked: "04:31",
+          details: [
+            "GitHub Copilot Business",
+            "Premium requests: 120 of 300 left (180 used)",
+            "Starts again on Dec 1 (in 10 days)",
+          ],
+        },
+      },
+    ],
+  },
+  // The plan of each model: a ring under the input for the model of the chat, and one for each model in the menu.
+  "menu-model-plans": {
+    messages: [
+      ...kitchen,
+      {
+        type: "state",
+        state: state({
+          modelPlan: {
+            plan: "Business",
+            left: 0.4,
+            short: "120/300",
+            details: [
+              "GitHub Copilot Business",
+              "Premium requests: 120 of 300 left (180 used)",
+              "Starts again on Dec 1 (in 10 days)",
+            ],
+          },
+          models: state().models.map((model, index) =>
+            index === 0
+              ? {
+                  ...model,
+                  plan: {
+                    plan: "Business",
+                    left: 0.4,
+                    short: "120/300",
+                    details: ["GitHub Copilot Business", "Premium requests: 120 of 300 left (180 used)"],
+                  },
+                }
+              : index === 1
+                ? { ...model, plan: { plan: "Paid", left: 0.62, short: "$6.20/$10.00", details: ["OpenRouter Paid"] } }
+                : model,
+          ),
+        }),
+      },
+    ],
+    click: "#model",
+  },
   "menu-attach": { messages: kitchen, click: "#attachButton" },
   "menu-approvals": { messages: kitchen, click: "#approvalsButton" },
   // In the side bar, VS Code shows these buttons in its own title bar; they send a message to the chat.

@@ -32,6 +32,8 @@ export interface ModelProfile {
    * limited or overloaded after all retries.
    */
   readonly fallback?: string;
+  /** Show the plan of this model next to it, checked when the user clicks it; off by default. */
+  readonly showPlan?: boolean;
   /** Extra HTTP headers. Do not put secrets here; settings are plain text. */
   readonly headers: Readonly<Record<string, string>>;
   /** Extra URL query parameters, for example `api-version` for Azure. */
@@ -121,6 +123,7 @@ export function parseProfile(value: unknown): ModelProfile | string {
     model,
     auth,
     apiKeyEnv: typeof raw.apiKeyEnv === "string" && raw.apiKeyEnv.trim() ? raw.apiKeyEnv.trim() : undefined,
+    showPlan: raw.showPlan === true ? true : undefined,
     fallback:
       typeof raw.fallback === "string" &&
       /^[A-Za-z0-9_.-]{1,64}$/.test(raw.fallback.trim()) &&
@@ -180,6 +183,7 @@ export function serializeProfile(profile: ModelProfile): Record<string, unknown>
   if (profile.apiKeyEnv) result.apiKeyEnv = profile.apiKeyEnv;
   if (profile.apiKeyCommand) result.apiKeyCommand = profile.apiKeyCommand;
   if (profile.fallback) result.fallback = profile.fallback;
+  if (profile.showPlan) result.showPlan = true;
   if (Object.keys(profile.headers).length > 0) result.headers = profile.headers;
   if (Object.keys(profile.query).length > 0) result.query = profile.query;
   if (Object.keys(profile.extraBody).length > 0) result.extraBody = profile.extraBody;

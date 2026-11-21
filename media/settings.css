@@ -1064,3 +1064,35 @@ button.model-option:focus-visible {
     transition: none !important;
   }
 }
+
+/* The plan of a model: a hollow ring whose arc is what is left, the plan, and what is left of it. */
+.plan-ring {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.plan-ring-dial {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  background: conic-gradient(var(--accent) var(--left), var(--soft-line) 0);
+  border-radius: 50%;
+  mask: radial-gradient(circle, transparent 2.5px, #000 3px);
+}
+
+/* A switch in the advanced part of a model card. */
+.check-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 4px;
+  cursor: pointer;
+}
+
+.check-row input {
+  margin: 0;
+}

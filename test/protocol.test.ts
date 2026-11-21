@@ -230,3 +230,7 @@ test("terminal actions of other chats and opening a port are validated", () => {
   for (const port of [0, 70000, 3.5, "5173", -1])
     expect(parseWebviewMessage({ type: "openPort", port })).toBeUndefined();
 });
+
+test("a click on the plan of the model is a plain message", () => {
+  expect(parseWebviewMessage({ type: "checkPlan" })).toEqual({ type: "checkPlan" });
+});

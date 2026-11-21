@@ -733,6 +733,10 @@
                   "type": "string",
                   "description": "Environment variable with the API key. A key in the secret storage wins."
                 },
+                "showPlan": {
+                  "type": "boolean",
+                  "description": "Show the plan of this model (what is left of it) next to it. Phew asks the provider only when you click it. For GitHub Copilot, Phew reads the address that Copilot itself uses, which has no official API."
+                },
                 "fallback": {
                   "type": "string",
                   "description": "The id of another model that takes over a task when this model runs out of quota or credit, or stays rate limited or overloaded after all retries. A wrong key does not fall back."

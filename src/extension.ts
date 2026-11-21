@@ -18,6 +18,7 @@ import { McpManager } from "./host/mcpManager";
 import { MemoryStore } from "./host/memoryStore";
 import { ModelManager } from "./host/models";
 import { fileProblemsRequest, fixProblemCommand, PhewItCodeActionProvider, problemContext } from "./host/phewIt";
+import { PlanUsageService } from "./host/planUsage";
 import { RatingService } from "./host/rating";
 import { reportProblem } from "./host/reportProblem";
 import { ReviewManager } from "./host/reviewManager";
@@ -99,8 +100,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<PhewTe
   mentions.lastExecution = () => terminal.lastExecution;
 
   const handoffs = new HandoffService(context.workspaceState, log, () => sessions?.postState());
+  // The plans of the models: checked only when the user clicks the plan of a model with Show plan on.
+  const plans = new PlanUsageService(
+    (profile) => models.apiKey(profile),
+    log,
+    async () =>
+      (
+        await vscode.authentication
+          .getSession("github", ["read:user"], { silent: true })
+          .then(undefined, () => undefined)
+      )?.accessToken,
+  );
   const manager = new SessionManager(
-    { context, log, diffs, mcp, stats, rating, models, reviews, index, memory, skills, terminal, handoffs },
+    { context, log, diffs, mcp, stats, rating, models, reviews, index, memory, skills, terminal, handoffs, plans },
     (running) => {
       updateStatus();
       chatView?.showActivity(running > 0, activityBadge(manager.activity, readSettings().assistant.name));
@@ -117,7 +129,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<PhewTe
   await manager.initialize();
   updateStatus();
 
-  const settingsPanel = new SettingsPanel(context, models, index, memory, stats);
+  const settingsPanel = new SettingsPanel(context, models, index, memory, stats, plans);
   const commits = new CommitAssistant(models, log);
   const completions = new CompletionProvider(models);
   const nextEdit = new NextEditPredictor(models, reviews);
