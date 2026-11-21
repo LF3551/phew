@@ -903,6 +903,11 @@ button .icon {
 }
 
 button.model-option {
+  /* Two lines, the name and the id: the height follows the text, not the size of other buttons. */
+  height: auto;
+  min-height: 40px;
+  padding: 6px 10px;
+  line-height: 1.35;
   width: 100%;
   color: inherit;
   font: inherit;
@@ -910,6 +915,37 @@ button.model-option {
   background: none;
   border: none;
   border-radius: 0;
+}
+
+.model-option-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.model-option-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.model-option-text .model-id {
+  overflow: hidden;
+  color: var(--muted, var(--vscode-descriptionForeground));
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.model-option-context {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.catalog-note {
+  max-width: 560px;
+  margin: 0 0 8px;
 }
 
 button.model-option:disabled {

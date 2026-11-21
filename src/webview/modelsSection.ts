@@ -860,14 +860,38 @@ export class ModelsSection {
       wrap.append(el("p", "hint", "The provider lists no models. Type the name above."));
       return wrap;
     }
+    // The provider knows the context of the model in use better than an old setting: one click takes it.
+    const inUse = catalog.models.find((item) => item.id === model.model);
+    if (inUse?.contextWindow && inUse.contextWindow !== model.contextWindow) {
+      const note = el("p", "hint catalog-note");
+      note.append(
+        `The provider says ${formatTokens(inUse.contextWindow)} context for ${model.model}, the setting says ${
+          model.contextWindow ? formatTokens(model.contextWindow) : "nothing"
+        }. `,
+      );
+      const take = button(
+        `Use ${formatTokens(inUse.contextWindow)}`,
+        () => this.post({ type: "updateModel", id: model.id, field: "contextWindow", value: inUse.contextWindow }),
+        "link",
+      );
+      note.append(take);
+      wrap.append(note);
+    }
     const search = input("search", catalog.filter, `Search ${catalog.models.length} models`);
     search.dataset.focusKey = `catalog-${model.id}`;
     search.setAttribute("aria-label", "Search the models");
     const list = el("div", "model-list");
     const fill = () => {
       const query = catalog.filter.toLowerCase();
+      // The model in use first, then by name, with numbers in order (4.5, 4.6, 4.10).
+      const name = (item: ModelInfo) => item.label || item.id;
       const items = catalog.models
         .filter((item) => `${item.id} ${item.label ?? ""}`.toLowerCase().includes(query))
+        .sort(
+          (a, b) =>
+            Number(b.id === model.model) - Number(a.id === model.model) ||
+            name(a).localeCompare(name(b), undefined, { numeric: true, sensitivity: "base" }),
+        )
         .slice(0, 200);
       list.replaceChildren(
         ...items.map((item) => {
@@ -876,9 +900,13 @@ export class ModelsSection {
           row.type = "button";
           row.disabled = current || catalog.choosing !== undefined;
           row.setAttribute("aria-pressed", String(current));
-          row.append(el("span", "model-id", item.id));
-          if (item.label && item.label !== item.id) row.append(el("span", "hint", item.label));
-          if (item.contextWindow) row.append(el("span", "hint", `${formatTokens(item.contextWindow)} context`));
+          // The readable name first; the exact id of the provider below it, small.
+          const text = el("span", "model-option-text");
+          const hasLabel = item.label && item.label !== item.id;
+          text.append(el("span", "model-option-name", hasLabel ? (item.label as string) : item.id));
+          if (hasLabel) text.append(el("span", "model-id", item.id));
+          row.append(text);
+          if (item.contextWindow) row.append(el("span", "hint model-option-context", formatTokens(item.contextWindow)));
           if (current) row.append(el("span", "tag ok", "In use"));
           if (catalog.choosing === item.id) row.append(el("span", "hint", "Switching and testing…"));
           row.addEventListener("click", () => {
