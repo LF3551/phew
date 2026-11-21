@@ -20,6 +20,9 @@
         <p>Phew has presets for OpenAI, Anthropic, Google Gemini, Azure OpenAI, Mistral, xAI, DeepSeek, Groq, Cerebras, Together AI, Fireworks AI, OpenRouter, and LiteLLM. For anything else, choose <b>Custom OpenAI-compatible API</b> and enter its address.</p>
 
 
+        <h2>Switch the model later</h2>
+        <p>Open the settings of a model (<b>⋯</b>) and click <b>Choose…</b> next to its name. Phew lists the models of the provider with your saved key, by name and with their context windows. A click switches the model, takes its context window, and tests it.</p>
+
         <h2>Where the key is kept</h2>
         <p>Phew keeps keys in the secret storage of VS&nbsp;Code, never in <code>settings.json</code>. You can also read a key from an environment variable. Model settings come only from your user settings, so a project that you open cannot send your key to another server.</p>
 
@@ -35,6 +38,7 @@
         <h2>Keep the cost under control</h2>
         <ul>
           <li>Enter the price of a model per million tokens in <b>⋯ → Price</b>. Phew then shows the cost of each task.</li>
+          <li>With OpenRouter or DeepSeek, turn on <b>Show what is left of the plan</b> in the settings of the model: a click on the small ring next to it shows your credits or balance. Anthropic, OpenAI, and Gemini do not share it with an API key.</li>
           <li>Set <code>phew.budget.maxCostPerTask</code> or <code>phew.budget.maxTokensPerTask</code>. A task stops when it reaches the limit.</li>
           <li>Give research to subagents with a cheaper model: set <code>phew.subagents.model</code>.</li>
           <li>Keep chatting within a few minutes: with Anthropic, Phew puts the instructions and the conversation in the prompt cache, so the next messages read them at 10% of the price. OpenAI and Gemini cache by themselves, and Phew counts their discount too. For an exact cost, add the price of cached input in <b>⋯ → Price</b> (<code>price.cachedInput</code>).</li>

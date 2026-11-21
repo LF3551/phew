@@ -16,4 +16,6 @@ Each chat keeps its own model, so chats and windows work side by side.
 A model can name a **fallback model** that goes on with the task when its quota or credit runs out.
 
 Phew loads the model list from the provider and tests the connection.
+To switch the model of a connection later, open its settings (**⋯**) and click **Choose…** next to the model.
+**Show what is left of the plan** adds a small ring next to the model: a click shows how much of your Copilot plan, OpenRouter credits, or DeepSeek balance is left.
 The API key goes to the VS Code secret storage, never to the settings.

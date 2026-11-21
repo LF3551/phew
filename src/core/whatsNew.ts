@@ -4,6 +4,10 @@
  */
 
 const notes: Readonly<Record<string, readonly string[]>> = {
+  "1.4": [
+    "Switch the model of a connection from the list of the provider: settings of the model (⋯) → Choose….",
+    "Turn on Show what is left of the plan for a model: a click on the small ring next to it shows your Copilot plan, OpenRouter credits, or DeepSeek balance.",
+  ],
   "1.3": [
     "Fewer tokens: with Anthropic, later steps read the instructions and the chat from the prompt cache at 10% of the price, and the cost counts the discounts of every provider.",
     "Old outputs leave the context in batches, and a large file comes as its outline and its first lines.",
