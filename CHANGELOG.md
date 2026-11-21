@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-21
+
 ### Added
 
 - **What is left of the plan of a model, on request.** In the settings of a model (⋯), **Show what is left of the plan** puts a small ring next to the model under the input. A click asks the provider once and shows a short report: the plan, what is used and left, when it starts again, and when it was checked; nothing is asked on a timer. It works with GitHub Copilot (by token, or the GitHub sign-in of VS Code that you already have), whose quotas come from the address that Copilot itself uses, without an official API; and with the official APIs of OpenRouter (credits) and DeepSeek (balance). Other providers do not share their plan. The menu of models and the card of the model show the last check. Off by default.
@@ -298,7 +300,8 @@ The first public preview of Phew.
 - Phew Wrapped: a weekly or monthly card with bugs fixed, time saved, tasks, and the streak, which you can save as an image, and eight local achievements.
 - A getting started walkthrough and a settings page.
 
-[Unreleased]: https://github.com/LF3551/phew/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/LF3551/phew/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/LF3551/phew/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/LF3551/phew/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/LF3551/phew/compare/v1.1.3...v1.2.0
 [1.1.3]: https://github.com/LF3551/phew/compare/v1.1.2...v1.1.3
